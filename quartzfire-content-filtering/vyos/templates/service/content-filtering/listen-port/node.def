@@ -1,0 +1,4 @@
+type: u32
+help: ICAP server port e2guardian listens on (loopback only, default 1344)
+syntax:expression: $VAR(@) >= 1 && $VAR(@) <= 65535 ; "listen-port must be 1-65535"
+val_help: u32:1-65535; ICAP listener port (default 1344)

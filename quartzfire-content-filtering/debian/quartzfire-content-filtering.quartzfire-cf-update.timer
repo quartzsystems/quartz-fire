@@ -1,0 +1,14 @@
+[Unit]
+Description=Periodic QuartzFire content-filter blocklist update
+
+[Timer]
+# The interval configured under `blocklists update-interval` is advisory for the
+# WebUI; the timer itself refreshes daily with jitter so a fleet doesn't
+# stampede the UT1 mirror. A prompt post-boot run self-heals a fresh image.
+OnBootSec=5min
+OnUnitInactiveSec=1d
+RandomizedDelaySec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

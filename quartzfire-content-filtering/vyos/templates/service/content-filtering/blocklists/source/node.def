@@ -1,0 +1,4 @@
+multi:
+type: txt
+help: Blocklist tarball URL (default: UT1 / Universite Toulouse)
+val_help: url; https URL of a .tar.gz blocklist archive

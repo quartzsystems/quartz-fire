@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!--
+QuartzFire Content Filtering component version.
+
+The postinst feeds this file's directory to vyos-1x's
+xml_ref/generate_cache.py, which registers `quartzfire-content-filtering` in the
+system component-version set. That version is stamped into every saved
+config.boot footer, and the boot-time migrator applies the matching
+config-migrate/migrate/quartzfire-content-filtering/<n>-to-<n+1> scripts to
+bring an older config.boot up to this version.
+
+It MUST live in the same xml-dir as the interface definition and be valid
+interfaceDefinition XML (no nodes — only the syntaxVersion tag).
+
+Bump the version whenever the `service content-filtering` CLI grammar changes
+incompatibly, and ship a matching <old>-to-<new> migration script.
+
+History:
+  1  initial schema (service content-filtering: filter-group, blocklists,
+     block-page, log).
+-->
+<interfaceDefinition>
+  <syntaxVersion component="quartzfire-content-filtering" version="1"/>
+</interfaceDefinition>

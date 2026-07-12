@@ -156,6 +156,20 @@ pub fn read_service(conf: &dyn ConfigRead) -> Model {
     model.ca_download_interfaces =
         conf.return_values(&join(&BASE, &["ca-download", "interface"]));
 
+    model.content_filter = read_content_filter(conf);
+
+    model
+}
+
+/// The ICAP seam, from the explicit ssl-inspection `content-filter` node
+/// (advanced / non-e2guardian engines) OR, failing that, cross-read from the
+/// QuartzFire Content Filtering feature (`service content-filtering`) when it is
+/// enabled. Content Filtering drives Squid through THIS seam (per the feature's
+/// architecture decision), so the ICAP block appears exactly while one of the
+/// two is active — and disappears when both are gone. Recomputed from the active
+/// config by the standalone resync so enabling/disabling Content Filtering
+/// (committed independently) is reflected in Squid.
+pub fn read_content_filter(conf: &dyn ConfigRead) -> Option<ContentFilter> {
     if conf.exists(&join(&BASE, &["content-filter"])) {
         let cf_base = join(&BASE, &["content-filter"]);
         let mut cf = ContentFilter::default();
@@ -174,10 +188,23 @@ pub fn read_service(conf: &dyn ConfigRead) -> Model {
         if let Some(f) = conf.return_value(&join(&cf_base, &["fail-mode"])) {
             cf.fail_mode = f;
         }
-        model.content_filter = Some(cf);
+        return Some(cf);
     }
-
-    model
+    // Cross-read the Content Filtering feature. Its e2guardian listener uses the
+    // ContentFilter defaults (127.0.0.1:1344, request/response, fail-closed) —
+    // e2guardian's proven ICAP endpoints — so only the port is threaded through.
+    let cf_enable = ["service", "content-filtering", "enable"];
+    if conf.exists(&cf_enable) {
+        let mut cf = ContentFilter::default();
+        if let Some(p) = conf
+            .return_value(&["service", "content-filtering", "listen-port"])
+            .and_then(|v| v.parse().ok())
+        {
+            cf.icap_port = p;
+        }
+        return Some(cf);
+    }
+    None
 }
 
 /// The bits of one firewall rule the SSL match replication needs, or None when

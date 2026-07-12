@@ -89,6 +89,12 @@ fn icap_block(cf: &ContentFilter) -> String {
          icap_preview_size 1024\n\
          icap_send_client_ip on\n\
          icap_send_client_username off\n\
+         # e2guardian is STATEFUL REQMOD→RESPMOD: it stamps an X-ICAP-E2G header\n\
+         # on the REQMOD reply and rejects any RESPMOD lacking it (\"418 Bad\n\
+         # composition\"). Share it across the master transaction, else every\n\
+         # allowed site dies on RESPMOD with ERR_ICAP_FAILURE. Proven in\n\
+         # tests/e2guardian-icap. Harmless for engines that don't set it.\n\
+         adaptation_masterx_shared_names X-ICAP-E2G\n\
          icap_service qf_filter_req reqmod_precache icap://{host}:{port}/{req} bypass={bypass}\n\
          icap_service qf_filter_resp respmod_precache icap://{host}:{port}/{resp} bypass={bypass}\n\
          adaptation_access qf_filter_req allow all\n\
@@ -346,6 +352,9 @@ mod tests {
         assert!(s.contains("icap_enable on"));
         assert!(s.contains("icap://127.0.0.1:1344/request bypass=off"));
         assert!(s.contains("icap://127.0.0.1:1344/response bypass=off"));
+        // e2guardian REQMOD→RESPMOD correlation header must be shared, else
+        // allowed traffic dies on RESPMOD (proven in tests/e2guardian-icap).
+        assert!(s.contains("adaptation_masterx_shared_names X-ICAP-E2G"));
     }
 
     #[test]

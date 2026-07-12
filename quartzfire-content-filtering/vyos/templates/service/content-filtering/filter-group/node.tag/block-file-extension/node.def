@@ -1,0 +1,4 @@
+multi:
+type: txt
+help: File extension to block (e.g. .exe, .scr)
+val_help: txt; File extension including the leading dot (e.g. .exe)

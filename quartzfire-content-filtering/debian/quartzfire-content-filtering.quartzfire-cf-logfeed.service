@@ -1,0 +1,19 @@
+[Unit]
+Description=QuartzFire content-filter access-log → JSON feed
+Documentation=file:/usr/share/doc/quartzfire-content-filtering/design.md
+After=e2guardian.service
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/quartzfire/qfcf-logfeed
+Restart=always
+RestartSec=5
+# Tails /var/log/e2guardian/access.log → /var/log/quartzfire/content-filtering.json
+ReadWritePaths=/var/log/quartzfire
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

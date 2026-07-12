@@ -20,7 +20,13 @@ image_format = "iso"
 # --enable-icap-client). Stock `squid` lacks ssl_bump support, so inspection
 # would fail; check-squid-caps and qzssl's commit-time verify() both refuse a
 # non-bump build loudly.
-packages = ["location", "squid-openssl"]
+#
+# Content Filtering (quartzfire-content-filtering, a local .deb) runs e2guardian
+# in ICAP SERVER mode behind the Squid bump. Debian 12's `e2guardian` is built
+# `--enable-icap=yes` (verified), so the stock package suffices — no custom .deb.
+# postinst disables the stock e2guardian unit; qfcf enables it (ICAP mode) only
+# while `service content-filtering enable` is set.
+packages = ["location", "squid-openssl", "e2guardian"]
 
 # Artifact name: quartzfire-<version>-amd64.iso. The version comes from the
 # top-level VERSION file and already carries the quartzfire- prefix (the

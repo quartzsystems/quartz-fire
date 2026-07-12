@@ -1,0 +1,128 @@
+<?xml version="1.0"?>
+<!--
+QuartzFire Content Filtering: vyos-1x XML interface definition.
+
+This does NOT generate the CLI grammar — the hand-written cstore templates
+under vyos/templates/ do that, and this file must be kept in sync with them.
+It exists because vyos-configd resolves every commit diff path through the
+vyos.xml_ref reference cache: a path missing from the cache raises inside
+get_commit_scripts(), configd dies, and the committing vyshim hangs forever.
+postinst feeds this file to vyos-1x's xml_ref/generate_cache.py +
+update_cache.py so `service content-filtering` is a known path (only
+node_type/multi/valueless/owner/priority survive into the cache — help texts are
+cosmetic here).
+
+The owner must match the node.def `end:` script and MUST end in .py: configd
+parses the script path with a regex hard-requiring the suffix and crashes on
+anything else.
+-->
+<interfaceDefinition>
+  <node name="service">
+    <children>
+      <node name="content-filtering" owner="${vyos_conf_scripts_dir}/service_content_filtering.py">
+        <properties>
+          <help>Web content filtering (e2guardian ICAP behind Squid ssl_bump)</help>
+          <priority>992</priority>
+        </properties>
+        <children>
+          <leafNode name="enable">
+            <properties>
+              <help>Enable content filtering</help>
+              <valueless/>
+            </properties>
+          </leafNode>
+          <leafNode name="listen-port">
+            <properties>
+              <help>ICAP server port (loopback only)</help>
+            </properties>
+          </leafNode>
+          <tagNode name="filter-group">
+            <properties>
+              <help>A content-filter group (clients mapped by source-address)</help>
+            </properties>
+            <children>
+              <leafNode name="description">
+                <properties><help>Description</help></properties>
+              </leafNode>
+              <leafNode name="source-address">
+                <properties>
+                  <help>Client source subnet mapped to this group (CIDR)</help>
+                  <multi/>
+                </properties>
+              </leafNode>
+              <leafNode name="blanket-block">
+                <properties><help>Deny all except allow lists</help><valueless/></properties>
+              </leafNode>
+              <leafNode name="category">
+                <properties><help>UT1 category to block</help><multi/></properties>
+              </leafNode>
+              <leafNode name="block-domain">
+                <properties><help>Custom domain to block</help><multi/></properties>
+              </leafNode>
+              <leafNode name="allow-domain">
+                <properties><help>Custom domain to allow / bypass</help><multi/></properties>
+              </leafNode>
+              <leafNode name="block-url-regex">
+                <properties><help>URL regex to block</help><multi/></properties>
+              </leafNode>
+              <leafNode name="phrase-filtering">
+                <properties><help>Enable weighted-phrase scanning</help><valueless/></properties>
+              </leafNode>
+              <leafNode name="naughtyness-limit">
+                <properties><help>Weighted-phrase score threshold</help></properties>
+              </leafNode>
+              <leafNode name="safe-search">
+                <properties><help>Force SafeSearch / Restricted Mode</help><valueless/></properties>
+              </leafNode>
+              <leafNode name="block-file-extension">
+                <properties><help>File extension to block</help><multi/></properties>
+              </leafNode>
+              <leafNode name="block-mime-type">
+                <properties><help>MIME type to block</help><multi/></properties>
+              </leafNode>
+            </children>
+          </tagNode>
+          <node name="blocklists">
+            <properties>
+              <help>Blocklist sources and automatic-update settings</help>
+            </properties>
+            <children>
+              <leafNode name="source">
+                <properties><help>Blocklist tarball URL</help><multi/></properties>
+              </leafNode>
+              <leafNode name="auto-update">
+                <properties><help>Refresh blocklists on a timer</help><valueless/></properties>
+              </leafNode>
+              <leafNode name="update-interval">
+                <properties><help>Hours between automatic updates</help></properties>
+              </leafNode>
+            </children>
+          </node>
+          <node name="block-page">
+            <properties>
+              <help>Customise the block page</help>
+            </properties>
+            <children>
+              <leafNode name="message">
+                <properties><help>Block-page message</help></properties>
+              </leafNode>
+              <leafNode name="contact">
+                <properties><help>Block-page contact</help></properties>
+              </leafNode>
+            </children>
+          </node>
+          <node name="log">
+            <properties>
+              <help>Content-filter access logging</help>
+            </properties>
+            <children>
+              <leafNode name="level">
+                <properties><help>Access-log verbosity</help></properties>
+              </leafNode>
+            </children>
+          </node>
+        </children>
+      </node>
+    </children>
+  </node>
+</interfaceDefinition>

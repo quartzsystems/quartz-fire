@@ -1,0 +1,4 @@
+type: u32
+help: Weighted-phrase score threshold before a page is blocked (default 150)
+syntax:expression: $VAR(@) >= 50 && $VAR(@) <= 500 ; "naughtyness-limit must be 50-500"
+val_help: u32:50-500; Phrase score threshold (lower = stricter; default 150)

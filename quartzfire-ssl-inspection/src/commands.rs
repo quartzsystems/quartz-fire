@@ -99,7 +99,7 @@ pub fn commit() -> i32 {
 /// (deliberately NOT a teardown, so a path-unit run racing the boot commit
 /// cannot yank the redirect the commit is about to install).
 pub fn standalone_apply() -> i32 {
-    let (model, snapshot) = match apply::load_desired() {
+    let (mut model, snapshot) = match apply::load_desired() {
         Ok(Some(pair)) => pair,
         Ok(None) => {
             log("no committed SSL-inspection state yet — nothing to apply");
@@ -115,6 +115,12 @@ pub fn standalone_apply() -> i32 {
     // a bound firewall rule (the reason this runs on /run/nftables.conf change);
     // fall back to the committed snapshot if the config view is unavailable.
     let conf = CliShellApi::active();
+    // Refresh the ICAP seam from the ACTIVE config: Content Filtering
+    // (`service content-filtering`) is committed independently and triggers this
+    // resync via qzssl-apply to add/remove the Squid ICAP block. The SSL
+    // snapshot may predate that change (enable OR disable), so always re-derive
+    // content_filter from the running config. Keeps Squid ownership here.
+    model.content_filter = config::read_content_filter(&conf);
     let resolved = apply::resolve(&model, Some(&conf), Some(&snapshot));
     // Persist the refreshed resolution so the next resync starts from it.
     let _ = apply::save_desired(&model, &resolved);

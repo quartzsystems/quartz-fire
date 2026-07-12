@@ -1,6 +1,7 @@
 mod appcontrol;
 mod auth;
 mod config;
+mod content_filtering;
 mod dashboard;
 mod error;
 mod geolocation;
@@ -112,6 +113,14 @@ async fn main() -> Result<()> {
         .route("/api/ssl-inspection/ca.crt", get(ssl_inspection::ca_crt))
         .route("/api/ssl-inspection/ca.der", get(ssl_inspection::ca_der))
         .route("/api/ssl-inspection/regenerate", post(ssl_inspection::regenerate))
+        // Content Filtering config is real VyOS config (service content-filtering
+        // …) via the /api proxy + commit guard; these cover the
+        // status/categories/update/logs/test-url side (content_filtering.rs).
+        .route("/api/content-filtering/status", get(content_filtering::status))
+        .route("/api/content-filtering/categories", get(content_filtering::categories))
+        .route("/api/content-filtering/update", post(content_filtering::update))
+        .route("/api/content-filtering/logs", get(content_filtering::logs))
+        .route("/api/content-filtering/test-url", post(content_filtering::test_url))
         // Commit-confirm guard: risky changes apply here instead of raw
         // /configure so an unconfirmed change auto-reverts (see guard.rs).
         .route("/api/guard/apply", post(guard::apply))

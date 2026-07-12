@@ -1,0 +1,5 @@
+tag:
+type: txt
+help: A content-filter group (clients mapped by source-address; first group is the default)
+syntax:expression: pattern $VAR(@) "^[A-Za-z0-9][A-Za-z0-9_-]*$" ; "filter-group name: letters, digits, hyphen, underscore"
+val_help: txt; Filter group name
