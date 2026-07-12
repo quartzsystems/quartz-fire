@@ -1,0 +1,61 @@
+# Copyright QuartzFire / Quartz Systems
+#
+# SPDX-License-Identifier: LGPL-2.1-or-later
+
+# quartzfire-ssl-inspection 0 -> 1
+#
+# The interface-scoped SSL-inspection model
+#
+#     service quartzfire ssl-inspection interface <ethX>
+#
+# was replaced by per-firewall-rule policies
+#
+#     service quartzfire ssl-inspection policy <rule-number> { ruleset action }
+#
+# The top-level `interface` node no longer exists in the CLI grammar, so a
+# config.boot carrying it fails to load ("Configuration error" at boot, dropping
+# the stanza and leaving the running config diverged from the saved file).
+# There is no mechanical mapping from an interface to a firewall-rule number, so
+# equivalent policies cannot be synthesised.
+#
+# Strategy (fail safe -- stop intercepting rather than leave a config that
+# cannot commit):
+#   * delete the obsolete `interface` nodes (NOT `ca-download interface`, which
+#     is a different, still-valid node), and
+#   * if that leaves `enable` with no enabled policy -- which the new
+#     commit-time validation rejects ("at least one inspection policy must be
+#     enabled") -- remove `enable`, turning inspection off while PRESERVING
+#     every other setting (do-not-inspect list, CA-download scope,
+#     content-filter, default-action, intercept-port).
+#
+# After upgrade the operator re-scopes inspection by attaching it to
+# forward-filter rules (`... ssl-inspection policy <rule>`) and re-enabling.
+#
+# On an already-new-style config (no `interface` node) this is a no-op beyond
+# stamping the component version, so it is safe to run against any config.
+
+from vyos.configtree import ConfigTree
+
+base = ['service', 'quartzfire', 'ssl-inspection']
+
+
+def _has_enabled_policy(config: ConfigTree) -> bool:
+    policy = base + ['policy']
+    if not config.exists(policy):
+        return False
+    for rule in config.list_nodes(policy):
+        if not config.exists(policy + [rule, 'disable']):
+            return True
+    return False
+
+
+def migrate(config: ConfigTree) -> None:
+    if not config.exists(base):
+        return
+
+    interface = base + ['interface']
+    if config.exists(interface):
+        config.delete(interface)
+
+    if config.exists(base + ['enable']) and not _has_enabled_policy(config):
+        config.delete(base + ['enable'])

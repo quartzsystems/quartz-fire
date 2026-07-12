@@ -1,3 +1,20 @@
+quartzfire-ssl-inspection (0.2.0) unstable; urgency=medium
+
+  * Per-firewall-rule inspection policies replace the interface-scoped model:
+    `service quartzfire ssl-inspection interface <ethX>` is gone, replaced by
+    `service quartzfire ssl-inspection policy <rule-number>`.
+  * Register `quartzfire-ssl-inspection` with the vyos-1x component-version /
+    migration engine (xml-component-version.xml, version 1) and ship a
+    config-migrate 0-to-1 script. Upgrading a box whose config.boot still
+    carries the old `interface` nodes now migrates cleanly at boot instead of
+    failing with "Configuration error" (which left the running config diverged
+    from the saved file). The migrator drops the obsolete `interface` nodes and,
+    since an enabled model with no policy is rejected at commit, turns
+    inspection off while preserving every other setting; the operator re-scopes
+    via `policy <rule>` and re-enables.
+
+ -- QuartzFire <cwellman@quartz.systems>  Sun, 12 Jul 2026 13:30:00 +0000
+
 quartzfire-ssl-inspection (0.1.0) unstable; urgency=medium
 
   * Initial release: WatchGuard-style SSL inspection — Squid ssl_bump as the

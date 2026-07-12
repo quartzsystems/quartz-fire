@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!--
+QuartzFire SSL Inspection component version.
+
+The postinst feeds this file's directory to vyos-1x's
+xml_ref/generate_cache.py, which registers `quartzfire-ssl-inspection` in the
+system component-version set (vyos.component_version.version_info_from_system).
+That version is stamped into every saved config.boot footer, and the boot-time
+migrator (the `migrate activate configure` step run by vyos-router) applies the
+matching config-migrate/migrate/quartzfire-ssl-inspection/<n>-to-<n+1> scripts
+to bring an older config.boot up to this version.
+
+It MUST live in the same xml-dir as the interface definition (the postinst
+passes that directory to generate_cache.py) and be valid interfaceDefinition
+XML (no nodes — only the syntaxVersion tag), exactly as vyos-1x ships its own
+interface-definitions/xml-component-version.xml.
+
+Bump the version whenever the `service quartzfire ssl-inspection` CLI grammar
+changes incompatibly, and ship a matching <old>-to-<new> migration script.
+
+History:
+  1  interface-scoped model (`... ssl-inspection interface <ethX>`) replaced by
+     per-firewall-rule policies (`... ssl-inspection policy <rule-number>`);
+     see migration-scripts/quartzfire-ssl-inspection/0-to-1.
+-->
+<interfaceDefinition>
+  <syntaxVersion component="quartzfire-ssl-inspection" version="1"/>
+</interfaceDefinition>

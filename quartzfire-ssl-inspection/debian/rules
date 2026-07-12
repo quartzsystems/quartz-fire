@@ -49,6 +49,20 @@ override_dh_auto_install:
 	# registers it with the vyos-1x xml_ref cache so configd knows the path.
 	install -D -m0644 vyos/xml/service_quartzfire_ssl-inspection.xml \
 		debian/quartzfire-ssl-inspection/usr/share/quartzfire/xml/service_quartzfire_ssl-inspection.xml
+	# Component version for the vyos-1x migration engine. postinst feeds this
+	# same --xml-dir to generate_cache.py, which registers
+	# `quartzfire-ssl-inspection` in the system component-version set; the value
+	# is stamped into every saved config.boot footer.
+	install -D -m0644 vyos/xml/xml-component-version.xml \
+		debian/quartzfire-ssl-inspection/usr/share/quartzfire/xml/xml-component-version.xml
+	# Config migration scripts (config-migrate/migrate/<component>/<n>-to-<m>).
+	# The boot-time `migrate activate configure` step runs these to upgrade an
+	# older config.boot to the current CLI grammar. The dir name MUST match the
+	# component name in xml-component-version.xml. Installed 0755 per vyos-1x
+	# convention (the migrator imports them, but the exec bit is expected).
+	install -d debian/quartzfire-ssl-inspection/opt/vyatta/etc/config-migrate/migrate/quartzfire-ssl-inspection
+	install -m0755 vyos/migration-scripts/quartzfire-ssl-inspection/0-to-1 \
+		debian/quartzfire-ssl-inspection/opt/vyatta/etc/config-migrate/migrate/quartzfire-ssl-inspection/0-to-1
 	# Docs.
 	install -D -m0644 docs/design.md \
 		debian/quartzfire-ssl-inspection/usr/share/doc/quartzfire-ssl-inspection/design.md
