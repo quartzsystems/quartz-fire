@@ -25,6 +25,7 @@ const commitAndSave = (commands: VyosCommand[]) =>
   guardedCommitAndSave(commands, "SSL Inspection configuration change");
 
 export type SslDefaultAction = "inspect" | "splice";
+export type SslPolicyAction = "inspect" | "splice";
 export type UpstreamInvalid = "block" | "allow";
 export type FailMode = "closed" | "open";
 
@@ -36,10 +37,20 @@ export interface SslContentFilter {
   failMode: FailMode;
 }
 
+/// One inspection binding: attach SSL inspection to a firewall forward-filter
+/// rule (WatchGuard-style). `rule` is the firewall rule number; `action` is
+/// whether matching HTTPS is decrypted (inspect) or explicitly spared (splice).
+export interface SslPolicy {
+  rule: number;
+  ruleset: string;
+  action: SslPolicyAction;
+  enabled: boolean;
+}
+
 export interface SslInspectionConfig {
   enabled: boolean;
   interceptPort: number;
-  interfaces: string[];
+  policies: SslPolicy[];
   defaultAction: SslDefaultAction;
   noInspect: string[];
   /** true = the shipped do-not-inspect baseline is applied (default). */
@@ -54,7 +65,7 @@ export function emptySslInspectionConfig(): SslInspectionConfig {
   return {
     enabled: false,
     interceptPort: 3129,
-    interfaces: [],
+    policies: [],
     defaultAction: "inspect",
     noInspect: [],
     defaultExclusions: true,
@@ -89,6 +100,25 @@ function childList(v: Cfg, key: string): string[] {
   return [];
 }
 
+/// Parse the `policy` tag subtree ({ "20": { action, ruleset, disable }, … })
+/// into a rule-sorted list.
+function readPolicies(node: Cfg | null): SslPolicy[] {
+  if (!node) return [];
+  const out: SslPolicy[] = [];
+  for (const [key, raw] of Object.entries(node)) {
+    const rule = Number(key);
+    if (!Number.isInteger(rule)) continue;
+    const p = (raw && typeof raw === "object" ? (raw as Cfg) : {}) as Cfg;
+    out.push({
+      rule,
+      ruleset: childStr(p, "ruleset") ?? "forward",
+      action: childStr(p, "action") === "splice" ? "splice" : "inspect",
+      enabled: !("disable" in p),
+    });
+  }
+  return out.sort((a, b) => a.rule - b.rule);
+}
+
 export async function fetchSslInspection(): Promise<SslInspectionConfig> {
   const resp = await vyosApi<VyosResponse<Cfg | null>>("retrieve", {
     op: "showConfig",
@@ -114,7 +144,7 @@ export async function fetchSslInspection(): Promise<SslInspectionConfig> {
   return {
     enabled: "enable" in cfg,
     interceptPort: Number(childStr(cfg, "intercept-port")) || 3129,
-    interfaces: childList(cfg, "interface"),
+    policies: readPolicies(childCfg(cfg, "policy")),
     defaultAction: childStr(cfg, "default-action") === "splice" ? "splice" : "inspect",
     noInspect: childList(cfg, "no-inspect"),
     defaultExclusions: !("disable-default-exclusions" in cfg),
@@ -166,7 +196,7 @@ export function diffSslInspection(
       : { op: "set", path: [...BASE, "disable-default-exclusions"] });
   }
 
-  multiDiff(out, [...BASE, "interface"], live.interfaces, desired.interfaces);
+  policyDiff(out, live.policies, desired.policies);
   multiDiff(out, [...BASE, "no-inspect"], live.noInspect, desired.noInspect);
   multiDiff(out, [...BASE, "ca-download", "interface"], live.caDownloadInterfaces, desired.caDownloadInterfaces);
 
@@ -195,6 +225,35 @@ function multiDiff(out: VyosCommand[], path: string[], live: string[], desired: 
   const desiredSet = new Set(desired);
   for (const v of desiredSet) if (!liveSet.has(v)) out.push({ op: "set", path: [...path, v] });
   for (const v of liveSet) if (!desiredSet.has(v)) out.push({ op: "delete", path: [...path, v] });
+}
+
+/// Diff the per-rule inspection bindings into set/delete commands. The policy
+/// tag is the firewall rule number; children are action / ruleset / disable.
+function policyDiff(out: VyosCommand[], live: SslPolicy[], desired: SslPolicy[]) {
+  const P = (rule: number) => [...BASE, "policy", String(rule)];
+  const liveByRule = new Map(live.map((p) => [p.rule, p]));
+  const desiredByRule = new Map(desired.map((p) => [p.rule, p]));
+
+  for (const p of desired) {
+    const prev = liveByRule.get(p.rule);
+    if (!prev) {
+      // New binding: setting the leaves creates the tag node implicitly.
+      out.push({ op: "set", path: [...P(p.rule), "action", p.action] });
+      out.push({ op: "set", path: [...P(p.rule), "ruleset", p.ruleset] });
+      if (!p.enabled) out.push({ op: "set", path: [...P(p.rule), "disable"] });
+      continue;
+    }
+    if (p.action !== prev.action) out.push({ op: "set", path: [...P(p.rule), "action", p.action] });
+    if (p.ruleset !== prev.ruleset) out.push({ op: "set", path: [...P(p.rule), "ruleset", p.ruleset] });
+    if (p.enabled !== prev.enabled) {
+      out.push(p.enabled
+        ? { op: "delete", path: [...P(p.rule), "disable"] }
+        : { op: "set", path: [...P(p.rule), "disable"] });
+    }
+  }
+  for (const p of live) {
+    if (!desiredByRule.has(p.rule)) out.push({ op: "delete", path: P(p.rule) });
+  }
 }
 
 /// Apply a desired config. Returns the number of changes applied (0 = no-op).
@@ -231,13 +290,30 @@ export interface CaInfo {
   not_after?: string;
 }
 
+/// A per-policy row surfaced by the status report: which rule, its action, and
+/// whether its firewall-rule match resolved (false ⇒ see the matching problem).
+export interface SslPolicyStatus {
+  rule: number;
+  ruleset: string;
+  action: string;
+  enabled: boolean;
+  resolved: boolean;
+}
+
+/// A policy whose rule is gone or unreplicable (e.g. matches outbound-interface).
+export interface SslProblem {
+  policy: number;
+  error: string;
+}
+
 /// The qzssl status report (`/run/quartzfire-ssl/status.json`).
 export interface SslStatusReport {
   enabled: boolean;
   squid?: { running: boolean; bump_capable: boolean | null; icap_capable: boolean | null };
   certgen_db_ready?: boolean;
   intercept_port?: number;
-  interfaces?: string[];
+  policies?: SslPolicyStatus[];
+  problems?: SslProblem[];
   default_action?: string;
   no_inspect_count?: number;
   upstream_invalid?: string;
@@ -248,7 +324,9 @@ export interface SslStatusReport {
     reachable?: boolean;
   };
   ca?: CaInfo;
-  ca_download?: { port: number; interfaces: string[] };
+  /** `interfaces` are the CA-download scope; `addresses` their resolved IPs
+   *  (the LAN address clients actually reach the :4126 page on). */
+  ca_download?: { port: number; interfaces: string[]; addresses?: string[] };
   apply?: { time: number; ok: boolean; error: string | null };
 }
 

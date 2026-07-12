@@ -5,7 +5,7 @@ Fireware's **Content Inspection**. An admin toggles it on, manages the
 inspection CA, chooses which traffic is inspected vs. bypassed, and hands the
 root CA to clients. This package delivers the **TLS termination layer only**:
 Squid `ssl_bump` as the sole MITM, its CA lifecycle, transparent
-interface-scoped interception, the do-not-inspect (splice) list, a plain-HTTP
+per-firewall-rule interception, the do-not-inspect (splice) list, a plain-HTTP
 CA distribution page, and a **pre-wired but idle** ICAP seam for the future
 content filter.
 
@@ -50,11 +50,19 @@ Exactly one CA and one private key exist on the box, both owned by this package.
 
 ## Interception model: transparent
 
-WatchGuard-style: clients configure **no** proxy. The `qz_ssl` nftables table
-redirects outbound `tcp/443` on the configured interfaces to Squid's
-`https_port <intercept-port> intercept ssl-bump` port. Squid peeks step 1 to
-read the SNI, **splices** (passes through undecrypted) do-not-inspect domains,
+WatchGuard-style: clients configure **no** proxy. Inspection is scoped **per
+firewall rule** — each `policy <rule>` binds to an `ipv4 forward filter` rule,
+whose match (source / destination / port / inbound-interface) is replicated into
+the `qz_ssl` nftables table, which redirects the matching outbound `tcp/443` to
+Squid's `https_port <intercept-port> intercept ssl-bump` port. Squid peeks step 1
+to read the SNI, **splices** (passes through undecrypted) do-not-inspect domains,
 and **bumps** (decrypts) everything else.
+
+Because the redirect is a NAT **prerouting** (pre-routing-decision) rule, a
+bound rule that matches on **outbound-interface** cannot be replicated (the
+outbound interface is not yet known there) and is rejected at commit. A global
+`fib daddr type local return` spares box-local `tcp/443` (the WebUI), so a LAN
+client reaching the firewall itself is never redirected into Squid.
 
 Spliced traffic is opaque to inspection **and** to any future content filter by
 definition — the exclusion list means "these domains bypass **both** decryption
@@ -148,7 +156,9 @@ adaptation_access qf_filter_resp allow all
 ```
 set service quartzfire ssl-inspection enable
 set service quartzfire ssl-inspection intercept-port <1024-65535>   # default 3129
-set service quartzfire ssl-inspection interface <ifname>             # multi; inspection scope
+set service quartzfire ssl-inspection policy <rule> action <inspect|splice>  # attach to fwd rule <rule>
+set service quartzfire ssl-inspection policy <rule> ruleset forward          # only forward supported
+set service quartzfire ssl-inspection policy <rule> disable                  # keep but don't enforce
 set service quartzfire ssl-inspection default-action <inspect|splice>
 set service quartzfire ssl-inspection no-inspect <domain>            # multi; splice
 set service quartzfire ssl-inspection disable-default-exclusions     # drop the shipped baseline
@@ -158,7 +168,7 @@ set service quartzfire ssl-inspection content-filter icap-port <n>
 set service quartzfire ssl-inspection content-filter reqmod-service <name>
 set service quartzfire ssl-inspection content-filter respmod-service <name>
 set service quartzfire ssl-inspection content-filter fail-mode <closed|open>
-set service quartzfire ssl-inspection ca-download interface <ifname> # multi; defaults to inspection scope
+set service quartzfire ssl-inspection ca-download interface <ifname> # multi; defaults to bound rules' inbound ifaces
 ```
 
 Shipped as hand-written cstore templates under
@@ -188,10 +198,12 @@ exactly like the firewall and geolocation pages.
 
 **Commit semantics** (`verify()` aborts the commit for):
 static value errors (bad port/action/upstream/fail-mode/domain pattern), an
-enabled feature with **no interfaces** (nothing would be intercepted), a build
-**without OpenSSL bump support** when enabled, and a **content filter on a build
-without `--enable-icap-client`**. Runtime apply hiccups (a transient Squid
-reload) are warnings surfaced in status.json, not commit aborts.
+enabled feature with **no enabled policy** (nothing would be intercepted), a
+policy whose firewall rule is **gone or unreplicable** (matches
+outbound-interface or an FQDN group), a build **without OpenSSL bump support**
+when enabled, and a **content filter on a build without `--enable-icap-client`**.
+Runtime apply hiccups (a transient Squid reload) are warnings surfaced in
+status.json, not commit aborts.
 
 ## Enforcement: the qz_ssl nftables table
 
@@ -199,8 +211,10 @@ Everything lives in `table inet qz_ssl` — per the QuartzFire coexistence rule,
 nothing is injected into `vyos_filter`, which VyOS regenerates wholesale on
 every commit. Two jobs:
 
-* `chain prerouting` (dstnat): `iifname { <scope> } tcp dport 443 redirect to
-  :<intercept-port>` — transparent steering.
+* `chain prerouting` (dstnat): `fib daddr type local return` (spare the box's
+  own 443), then one rule per bound policy — `<replicated rule match> tcp dport
+  443 redirect to :<intercept-port>` for `inspect`, or `… return` for `splice`
+  (carve-outs rendered before the inspects) — transparent steering.
 * `chain input` (filter): drops `tcp dport 4126` on every interface **except**
   the trusted CA-download scope, so the plain-HTTP CA page is never reachable on
   WAN even though the listener binds all interfaces.
@@ -222,7 +236,7 @@ CAs). It serves:
   iOS/Android, Firefox's own store, Linux `ca-certificates`).
 
 The **private key is never served.** Reachability is restricted to the
-configured trusted interfaces (default: the inspection scope) by the qz_ssl
+configured trusted interfaces (default: the bound rules' inbound interfaces) by the qz_ssl
 input guard; the listener is enabled by `qzssl-apply` **only while inspection is
 on**, so :4126 is unbound when the feature is off or was never configured.
 
@@ -263,7 +277,7 @@ the conf-mode owner are symlinks dispatched on argv[0] (src/main.rs).
 * Frontend: Services → SSL Inspection (`lib/ssl-inspection.ts`,
   `app/(console)/services/ssl-inspection/`) — enable toggle, CA panel
   (subject/fingerprint/validity/serial, download PEM/DER, Regenerate),
-  inspection policy + editable do-not-inspect list, interface scope, status
+  per-rule inspection policies + editable do-not-inspect list, status
   indicators, and the inert content-filter section (ICAP fields exposed +
   disabled — the seam the WebBlocker/e2guardian work plugs into).
 

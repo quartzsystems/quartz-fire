@@ -139,6 +139,14 @@ pub struct Config {
     /// Lives under /config/quartzfire (writable for us).
     #[serde(default = "default_ssl_regen_request_file")]
     pub ssl_regen_request_file: PathBuf,
+
+    /// Per-user dashboard tile layouts (a WebUI preference), keyed by username.
+    /// Lives under /config so a saved layout survives image upgrades, and is
+    /// writable for us via the unit's ReadWritePaths — same contract as the
+    /// other desired-state files. Not part of VyOS config: it is UI state, not
+    /// device config, so it never touches the config tree or its backups.
+    #[serde(default = "default_dashboard_layouts_file")]
+    pub dashboard_layouts_file: PathBuf,
 }
 
 fn default_listen() -> String {
@@ -219,6 +227,9 @@ fn default_ssl_ca_der() -> PathBuf {
 }
 fn default_ssl_regen_request_file() -> PathBuf {
     PathBuf::from("/config/quartzfire/ssl-regen-request")
+}
+fn default_dashboard_layouts_file() -> PathBuf {
+    PathBuf::from("/config/quartzfire/dashboards.json")
 }
 fn default_guard_dir() -> PathBuf {
     PathBuf::from("/config/quartzfire")

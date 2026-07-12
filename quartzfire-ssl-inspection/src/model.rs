@@ -73,17 +73,41 @@ impl ContentFilter {
     }
 }
 
+/// One inspection binding: attach SSL inspection to a firewall forward-filter
+/// rule (WatchGuard-style). The rule's own match (source / destination / port /
+/// inbound-interface) is replicated into the qz_ssl redirect at apply time;
+/// `action` decides whether matching HTTPS is bumped or explicitly left alone.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Policy {
+    /// The firewall `ipv4 <ruleset> filter` rule number this binds to (the
+    /// config tag).
+    pub rule: u32,
+    /// Which filter ruleset the rule lives in. Only `forward` is meaningful for
+    /// interception, but kept explicit to mirror geolocation's policy shape.
+    #[serde(default = "default_ruleset")]
+    pub ruleset: String,
+    /// `inspect` (bump matching HTTPS) or `splice` (explicit do-not-inspect
+    /// carve-out, evaluated before the inspects).
+    #[serde(default = "default_action")]
+    pub action: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+fn default_ruleset() -> String {
+    "forward".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default = "default_intercept_port")]
     pub intercept_port: u16,
-    /// Interfaces inspection applies to — drives the nftables redirect and the
-    /// CA-distribution reachability guard. Never inspect on a WAN/untrusted
-    /// interface unless the admin explicitly lists it.
+    /// Per-firewall-rule inspection bindings. Each drives one replicated
+    /// redirect/return rule in the qz_ssl prerouting chain.
     #[serde(default)]
-    pub interfaces: Vec<String>,
+    pub policies: Vec<Policy>,
     /// inspect all / splice all — the fall-through when nothing matches the
     /// no-inspect list.
     #[serde(default = "default_action")]
@@ -126,7 +150,7 @@ impl Default for Model {
         Model {
             enabled: false,
             intercept_port: DEFAULT_INTERCEPT_PORT,
-            interfaces: Vec::new(),
+            policies: Vec::new(),
             default_action: default_action(),
             no_inspect: Vec::new(),
             default_exclusions: true,
@@ -138,14 +162,11 @@ impl Default for Model {
 }
 
 impl Model {
-    /// Interfaces the CA-download page binds/allows on — the explicit list, or
-    /// the inspection scope as a sensible LAN default.
+    /// The explicit CA-download interface list. When empty, apply derives a
+    /// default from the inbound interfaces of the bound rules (see
+    /// apply::effective_ca_scope) — the model itself has no interface list now.
     pub fn ca_download_scope(&self) -> &[String] {
-        if self.ca_download_interfaces.is_empty() {
-            &self.interfaces
-        } else {
-            &self.ca_download_interfaces
-        }
+        &self.ca_download_interfaces
     }
 }
 
@@ -211,14 +232,28 @@ pub fn validate(
             model.upstream_invalid
         ));
     }
-    if model.interfaces.is_empty() {
+    if !model.policies.iter().any(|p| p.enabled) {
         problems.push(
-            "at least one interface must be in the inspection scope — refusing to \
-             enable SSL inspection with no interfaces (nothing would be intercepted)"
+            "at least one inspection policy must be enabled — attach SSL inspection to a \
+             firewall rule (nothing would be intercepted otherwise)"
                 .to_string(),
         );
     }
-    for i in model.interfaces.iter().chain(model.ca_download_interfaces.iter()) {
+    for p in &model.policies {
+        if !DEFAULT_ACTIONS.contains(&p.action.as_str()) {
+            problems.push(format!(
+                "policy {}: action must be inspect or splice (got \"{}\")",
+                p.rule, p.action
+            ));
+        }
+        if p.ruleset != "forward" {
+            problems.push(format!(
+                "policy {}: only the forward ruleset can carry SSL inspection (got \"{}\")",
+                p.rule, p.ruleset
+            ));
+        }
+    }
+    for i in &model.ca_download_interfaces {
         if !iface_ok(i) {
             problems.push(format!("\"{i}\" is not a valid interface name"));
         }
@@ -276,7 +311,12 @@ mod tests {
     fn enabled_model() -> Model {
         Model {
             enabled: true,
-            interfaces: vec!["eth1".into()],
+            policies: vec![Policy {
+                rule: 20,
+                ruleset: "forward".into(),
+                action: "inspect".into(),
+                enabled: true,
+            }],
             ..Model::default()
         }
     }
@@ -292,12 +332,26 @@ mod tests {
     }
 
     #[test]
-    fn enabled_without_interfaces_rejected() {
+    fn enabled_without_enabled_policy_rejected() {
         let mut m = enabled_model();
-        m.interfaces.clear();
+        m.policies.clear();
         assert!(validate(&m, Some(true), None)
             .iter()
-            .any(|p| p.contains("at least one interface")));
+            .any(|p| p.contains("at least one inspection policy")));
+    }
+
+    #[test]
+    fn bad_policy_action_and_ruleset_rejected() {
+        let mut m = enabled_model();
+        m.policies = vec![Policy {
+            rule: 20,
+            ruleset: "output".into(),
+            action: "mangle".into(),
+            enabled: true,
+        }];
+        let problems = validate(&m, Some(true), None);
+        assert!(problems.iter().any(|p| p.contains("action must be inspect or splice")));
+        assert!(problems.iter().any(|p| p.contains("only the forward ruleset")));
     }
 
     #[test]
@@ -375,9 +429,10 @@ mod tests {
     }
 
     #[test]
-    fn ca_download_scope_defaults_to_inspection_scope() {
+    fn ca_download_scope_is_the_explicit_list() {
+        // No fallback in the model anymore; empty until apply derives one.
         let m = enabled_model();
-        assert_eq!(m.ca_download_scope(), &["eth1".to_string()]);
+        assert!(m.ca_download_scope().is_empty());
         let m2 = Model {
             ca_download_interfaces: vec!["eth2".into()],
             ..enabled_model()

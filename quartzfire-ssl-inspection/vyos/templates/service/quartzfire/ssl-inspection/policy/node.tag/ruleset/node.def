@@ -1,0 +1,6 @@
+type: txt
+help: Firewall ruleset containing the target rule (only forward can carry inspection)
+default: forward
+syntax:expression: $VAR(@) in "forward" ; "only the forward ruleset can carry SSL inspection"
+allowed: echo forward
+val_help: forward; firewall ipv4 forward filter

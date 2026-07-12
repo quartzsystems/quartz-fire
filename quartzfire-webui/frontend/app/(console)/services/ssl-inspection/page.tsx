@@ -30,7 +30,6 @@ import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
 import { useDashboard } from "@/lib/DashboardContext";
-import { fetchEthernet, fetchVlans } from "@/lib/interfaces";
 import {
   applySslInspection,
   caCrtUrl,
@@ -42,14 +41,14 @@ import {
   regenerateCa,
   setSslEnabled,
   SslInspectionConfig,
+  SslPolicy,
+  SslPolicyAction,
   SslStatusReport,
   validateDomainPattern,
 } from "@/lib/ssl-inspection";
 
 const inputStyle = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
 const cardStyle = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-
-type IfaceOpt = { name: string; label: string };
 
 // ── status indicators ───────────────────────────────────────────────────────
 
@@ -123,7 +122,10 @@ function CaPanel({
 }) {
   const ca = status?.ca;
   const [copied, setCopied] = useState(false);
-  const host = typeof window !== "undefined" ? window.location.hostname : "your-firewall";
+  // Prefer the resolved LAN IP of the CA-download interface (where clients
+  // actually reach :4126); fall back to the address the admin browsed in on.
+  const fallbackHost = typeof window !== "undefined" ? window.location.hostname : "your-firewall";
+  const host = status?.ca_download?.addresses?.[0] ?? fallbackHost;
 
   const copyFp = async () => {
     if (!ca?.fingerprint_sha256) return;
@@ -147,7 +149,7 @@ function CaPanel({
     <section className="rounded-lg px-5 py-4 flex flex-col gap-4" style={cardStyle}>
       <div className="flex items-center gap-2">
         <ShieldCheck size={16} className="text-[var(--qz-fg-3)]" />
-        <h2 className="text-[13px] font-semibold text-[var(--qz-fg-1)] m-0">Inspection root CA</h2>
+        <h2 className="text-[13px] font-semibold text-[var(--qz-fg-1)] m-0">Inspection Root CA</h2>
       </div>
 
       {!ca?.present ? (
@@ -290,6 +292,119 @@ function NoInspectEditor({
   );
 }
 
+// ── inspection policy editor (per firewall rule) ─────────────────────────────
+
+function PolicyEditor({
+  policies,
+  status,
+  onChange,
+}: {
+  policies: SslPolicy[];
+  status: SslStatusReport | null;
+  onChange: (next: SslPolicy[]) => void;
+}) {
+  const [ruleDraft, setRuleDraft] = useState("");
+  const [actionDraft, setActionDraft] = useState<SslPolicyAction>("inspect");
+  const [err, setErr] = useState<string | null>(null);
+
+  const problemFor = (rule: number) => status?.problems?.find((p) => p.policy === rule)?.error ?? null;
+  const patch = (rule: number, fields: Partial<SslPolicy>) =>
+    onChange(policies.map((x) => (x.rule === rule ? { ...x, ...fields } : x)));
+
+  const add = () => {
+    const rule = Number(ruleDraft);
+    if (!Number.isInteger(rule) || rule < 1 || rule > 999999) {
+      setErr("Enter a firewall rule number (1–999999).");
+      return;
+    }
+    if (policies.some((p) => p.rule === rule)) {
+      setErr("That rule already has an inspection binding.");
+      return;
+    }
+    onChange(
+      [...policies, { rule, ruleset: "forward", action: actionDraft, enabled: true }].sort(
+        (a, b) => a.rule - b.rule,
+      ),
+    );
+    setRuleDraft("");
+    setErr(null);
+  };
+
+  const actionItems = [
+    { value: "inspect", label: "Inspect" },
+    { value: "splice", label: "Splice" },
+  ];
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-[11px] uppercase tracking-wide text-[var(--qz-fg-4)]">Inspection policies</span>
+      {policies.length === 0 ? (
+        <span className="text-[12px] text-[var(--qz-fg-4)]">
+          No bindings yet — nothing is inspected until you attach inspection to a firewall
+          forward-filter rule below.
+        </span>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {policies.map((p) => {
+            const problem = problemFor(p.rule);
+            return (
+              <div key={p.rule} className="flex flex-col gap-1 rounded-md px-3 py-2" style={inputStyle}>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-[13px] text-[var(--qz-fg-1)] mono">forward rule {p.rule}</span>
+                  <Segmented items={actionItems} value={p.action} onChange={(v) => patch(p.rule, { action: v as SslPolicyAction })} />
+                  <label className="flex items-center gap-1 text-[12px] text-[var(--qz-fg-3)] cursor-pointer">
+                    <input type="checkbox" checked={p.enabled} onChange={(e) => patch(p.rule, { enabled: e.target.checked })} />
+                    Enabled
+                  </label>
+                  {problem && <span className="badge badge-warn" title={problem}>Unresolved</span>}
+                  <button
+                    type="button"
+                    onClick={() => onChange(policies.filter((x) => x.rule !== p.rule))}
+                    className="ml-auto text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)]"
+                    title="Remove binding"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+                {problem && (
+                  <span className="text-[12px] text-[var(--qz-danger)] flex items-center gap-1">
+                    <AlertTriangle size={12} /> {problem}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <input
+          value={ruleDraft}
+          onChange={(e) => {
+            setRuleDraft(e.target.value.replace(/[^0-9]/g, ""));
+            setErr(null);
+          }}
+          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
+          placeholder="Rule #"
+          className="rounded-md px-3 py-[6px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[100px] mono"
+          style={inputStyle}
+        />
+        <Segmented items={actionItems} value={actionDraft} onChange={(v) => setActionDraft(v as SslPolicyAction)} />
+        <Button kind="secondary" size="sm" icon={Plus} onClick={add}>
+          Add binding
+        </Button>
+      </div>
+      {err && <span className="text-[12px] text-[var(--qz-danger)]">{err}</span>}
+      <span className="text-[12px] text-[var(--qz-fg-4)]">
+        Inspection applies to HTTPS matched by the chosen firewall forward-filter rule (source,
+        destination, port). A <span className="mono">splice</span> binding is an explicit
+        do-not-inspect carve-out. Rules that match on an outbound interface can&apos;t carry
+        inspection — scope by source or destination instead.
+      </span>
+    </div>
+  );
+}
+
 // ── page ────────────────────────────────────────────────────────────────────
 
 export default function SslInspectionPage() {
@@ -297,7 +412,6 @@ export default function SslInspectionPage() {
   const [config, setConfig] = useState<SslInspectionConfig>(emptySslInspectionConfig);
   const [draft, setDraft] = useState<SslInspectionConfig>(emptySslInspectionConfig);
   const [status, setStatus] = useState<SslStatusReport | null>(null);
-  const [ifaces, setIfaces] = useState<IfaceOpt[]>([]);
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
@@ -314,19 +428,9 @@ export default function SslInspectionPage() {
 
   const load = useCallback(async () => {
     try {
-      const [cfg, eth, vlans] = await Promise.all([
-        fetchSslInspection(),
-        fetchEthernet().catch(() => []),
-        fetchVlans().catch(() => []),
-      ]);
+      const cfg = await fetchSslInspection();
       setConfig(cfg);
       setDraft(cfg);
-      setIfaces(
-        [...eth, ...vlans].map((i) => ({
-          name: i.name,
-          label: i.description ? `${i.description} (${i.name})` : i.name,
-        })),
-      );
       setPhase("ready");
       await loadStatus();
     } catch (e) {
@@ -349,8 +453,8 @@ export default function SslInspectionPage() {
       enabled &&
       !window.confirm(
         "Enable SSL inspection?\n\n" +
-          "Outbound HTTPS on the selected interface(s) will be intercepted and re-signed with the " +
-          "QuartzFire inspection CA. Any client that does NOT trust this CA will get certificate " +
+          "Outbound HTTPS matched by your inspection policies will be intercepted and re-signed with " +
+          "the QuartzFire inspection CA. Any client that does NOT trust this CA will get certificate " +
           "errors and be unable to load HTTPS sites.\n\n" +
           "Make sure the inspection CA has already been distributed to and installed on your " +
           "clients (download it from the Inspection root CA section below) before enabling.",
@@ -406,15 +510,6 @@ export default function SslInspectionPage() {
     }
   };
 
-  const toggleIface = (name: string) => {
-    setDraft((d) => ({
-      ...d,
-      interfaces: d.interfaces.includes(name)
-        ? d.interfaces.filter((i) => i !== name)
-        : [...d.interfaces, name],
-    }));
-  };
-
   if (phase === "loading") {
     return <div className="px-[36px] pt-[28px] text-[13px] text-[var(--qz-fg-4)]">Loading…</div>;
   }
@@ -434,7 +529,7 @@ export default function SslInspectionPage() {
             SSL Inspection
           </h1>
           <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
-            Decrypt, inspect, and re-encrypt outbound HTTPS on the selected interfaces (Squid ssl_bump)
+            Decrypt, inspect, and re-encrypt outbound HTTPS on selected firewall rules (Squid ssl_bump)
           </p>
         </div>
         <div className="flex items-center gap-2 pt-1">
@@ -451,7 +546,7 @@ export default function SslInspectionPage() {
 
       {/* Inspection policy */}
       <section className="rounded-lg px-5 py-4 flex flex-col gap-4" style={cardStyle}>
-        <h2 className="text-[13px] font-semibold text-[var(--qz-fg-1)] m-0">Inspection policy</h2>
+        <h2 className="text-[13px] font-semibold text-[var(--qz-fg-1)] m-0">Inspection Policy</h2>
 
         <div className="flex flex-col gap-2">
           <span className="text-[11px] uppercase tracking-wide text-[var(--qz-fg-4)]">Default action</span>
@@ -468,28 +563,11 @@ export default function SslInspectionPage() {
           </span>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <span className="text-[11px] uppercase tracking-wide text-[var(--qz-fg-4)]">Interface scope</span>
-          {ifaces.length === 0 ? (
-            <span className="text-[12px] text-[var(--qz-fg-4)]">No configured interfaces found.</span>
-          ) : (
-            <div className="flex flex-wrap gap-3">
-              {ifaces.map((i) => (
-                <label key={i.name} className="flex items-center gap-2 text-[13px] text-[var(--qz-fg-1)] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.interfaces.includes(i.name)}
-                    onChange={() => toggleIface(i.name)}
-                  />
-                  {i.label}
-                </label>
-              ))}
-            </div>
-          )}
-          <span className="text-[12px] text-[var(--qz-fg-4)]">
-            Outbound 443 on these interfaces is transparently redirected to Squid. Never select a WAN/untrusted interface.
-          </span>
-        </div>
+        <PolicyEditor
+          policies={draft.policies}
+          status={status}
+          onChange={(next) => setDraft((d) => ({ ...d, policies: next }))}
+        />
 
         <div className="flex flex-col gap-2">
           <span className="text-[11px] uppercase tracking-wide text-[var(--qz-fg-4)]">
@@ -535,7 +613,7 @@ export default function SslInspectionPage() {
       {/* Content filter — inert seam */}
       <section className="rounded-lg px-5 py-4 flex flex-col gap-3 opacity-90" style={cardStyle}>
         <div className="flex items-center gap-2">
-          <h2 className="text-[13px] font-semibold text-[var(--qz-fg-1)] m-0">Content filter (ICAP)</h2>
+          <h2 className="text-[13px] font-semibold text-[var(--qz-fg-1)] m-0">Content Filter (ICAP)</h2>
           <span className="badge badge-muted">Not attached</span>
         </div>
         <p className="text-[13px] text-[var(--qz-fg-3)] m-0">

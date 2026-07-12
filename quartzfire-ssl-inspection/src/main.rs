@@ -22,6 +22,7 @@ mod cadist;
 mod capcheck;
 mod commands;
 mod config;
+mod matchrepl;
 mod model;
 mod render;
 

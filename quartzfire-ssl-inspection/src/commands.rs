@@ -42,6 +42,18 @@ pub fn commit() -> i32 {
         return 1;
     }
 
+    // Replicate each policy's firewall-rule match against the PROPOSED config.
+    // A rule that is gone or uses a construct the prerouting redirect can't
+    // honor (outbound-interface, FQDN group) is a hard error here — reject the
+    // commit so inspection never silently misses the traffic it was scoped to.
+    let resolved = apply::resolve(&model, Some(&conf), None);
+    if model.enabled && !resolved.problems.is_empty() {
+        for p in &resolved.problems {
+            eprintln!("SSL inspection on firewall rule {}: {}", p.policy, p.error);
+        }
+        return 1;
+    }
+
     // Loud warning on the enable transition (session has `enable`, the running
     // config did not): turning inspection on starts intercepting LAN HTTPS, and
     // every client that has not installed the QuartzFire CA will get
@@ -55,8 +67,8 @@ pub fn commit() -> i32 {
              ========================================================================\n\
              WARNING: SSL inspection is being ENABLED — LAN HTTPS will be intercepted.\n\
              \n\
-             Every client on the selected interface(s) MUST trust the QuartzFire\n\
-             inspection CA first, or HTTPS sites will fail with certificate errors.\n\
+             Every client whose HTTPS matches an inspection policy MUST trust the\n\
+             QuartzFire inspection CA first, or HTTPS sites will fail with cert errors.\n\
              Distribute the CA (download from http://<box>:4126/ on a trusted\n\
              interface and install it as a trusted root) BEFORE relying on this.\n\
              \n\
@@ -65,12 +77,12 @@ pub fn commit() -> i32 {
         );
     }
 
-    if let Err(e) = apply::save_desired(&model) {
+    if let Err(e) = apply::save_desired(&model, &resolved) {
         eprintln!("{e}");
         return 1;
     }
 
-    let report = apply::apply_model(&model, caps);
+    let report = apply::apply_model(&model, &resolved, caps);
     if !report.ok {
         eprintln!(
             "WARNING: SSL inspection config committed but not fully applied: {}",
@@ -87,8 +99,8 @@ pub fn commit() -> i32 {
 /// (deliberately NOT a teardown, so a path-unit run racing the boot commit
 /// cannot yank the redirect the commit is about to install).
 pub fn standalone_apply() -> i32 {
-    let model = match apply::load_desired() {
-        Ok(Some(m)) => m,
+    let (model, snapshot) = match apply::load_desired() {
+        Ok(Some(pair)) => pair,
         Ok(None) => {
             log("no committed SSL-inspection state yet — nothing to apply");
             return 0;
@@ -99,7 +111,14 @@ pub fn standalone_apply() -> i32 {
         }
     };
     let caps = capcheck::probe();
-    let report = apply::apply_model(&model, caps);
+    // Re-resolve against the RUNNING config so the redirect follows any edit to
+    // a bound firewall rule (the reason this runs on /run/nftables.conf change);
+    // fall back to the committed snapshot if the config view is unavailable.
+    let conf = CliShellApi::active();
+    let resolved = apply::resolve(&model, Some(&conf), Some(&snapshot));
+    // Persist the refreshed resolution so the next resync starts from it.
+    let _ = apply::save_desired(&model, &resolved);
+    let report = apply::apply_model(&model, &resolved, caps);
     if report.ok {
         log("applied");
         0

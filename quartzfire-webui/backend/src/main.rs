@@ -1,6 +1,7 @@
 mod appcontrol;
 mod auth;
 mod config;
+mod dashboard;
 mod error;
 mod geolocation;
 mod guard;
@@ -38,6 +39,9 @@ pub struct AppState {
     pub jwt_secret: String,
     /// Commit-confirm state: the (at most one) change awaiting confirmation.
     pub guard: guard::Guard,
+    /// Serializes read-modify-write saves of the shared per-user dashboard
+    /// layouts file so concurrent admins can't clobber each other.
+    pub dashboard_lock: std::sync::Mutex<()>,
 }
 
 #[tokio::main]
@@ -67,12 +71,17 @@ async fn main() -> Result<()> {
         http,
         jwt_secret,
         guard: guard::Guard::default(),
+        dashboard_lock: std::sync::Mutex::new(()),
     });
 
     // Everything except the SPA itself and login/logout requires a session:
     // the VyOS API proxy is the crown jewels, so it sits behind `require_auth`.
     let protected = Router::new()
         .route("/api/auth/me", get(auth::me))
+        .route(
+            "/api/dashboard/layout",
+            get(dashboard::get_layout).put(dashboard::put_layout),
+        )
         // Static routes win over the `/api/*rest` proxy wildcard.
         .route("/api/monitor/firewall-log", get(monitor::firewall_log))
         .route("/api/monitor/system-log", get(monitor::system_log))

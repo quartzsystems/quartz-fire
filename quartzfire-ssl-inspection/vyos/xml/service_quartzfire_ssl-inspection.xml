@@ -41,12 +41,29 @@ parses the script path with a regex hard-requiring the suffix
                   <help>Local port Squid listens on for intercepted TLS</help>
                 </properties>
               </leafNode>
-              <leafNode name="interface">
+              <tagNode name="policy">
                 <properties>
-                  <help>Interface whose outbound HTTPS is intercepted</help>
-                  <multi/>
+                  <help>Attach SSL inspection to a firewall forward-filter rule (tag = rule number)</help>
                 </properties>
-              </leafNode>
+                <children>
+                  <leafNode name="action">
+                    <properties>
+                      <help>Decrypt (inspect) or explicitly spare (splice) matching HTTPS</help>
+                    </properties>
+                  </leafNode>
+                  <leafNode name="ruleset">
+                    <properties>
+                      <help>Firewall ruleset containing the target rule (forward)</help>
+                    </properties>
+                  </leafNode>
+                  <leafNode name="disable">
+                    <properties>
+                      <help>Disable this inspection binding without removing it</help>
+                      <valueless/>
+                    </properties>
+                  </leafNode>
+                </children>
+              </tagNode>
               <leafNode name="default-action">
                 <properties>
                   <help>Fall-through action (inspect or splice)</help>

@@ -8,18 +8,35 @@
 //! XML reference cache, which knows nothing about nodes this package adds.
 //! Identical machinery to quartzfire-geoip's config.rs.
 
+use std::collections::BTreeMap;
 use std::process::Command;
 
-use crate::model::{ContentFilter, Model};
+use crate::matchrepl::{Groups, IfaceSpec, RuleCfg, Side};
+use crate::model::{ContentFilter, Model, Policy};
 
 pub const BASE: [&str; 3] = ["service", "quartzfire", "ssl-inspection"];
 
+const GROUP_TYPES: [&str; 5] = [
+    "address-group",
+    "network-group",
+    "domain-group",
+    "interface-group",
+    "port-group",
+];
+
+fn group_leaves(gtype: &str) -> &'static [&'static str] {
+    match gtype {
+        "address-group" => &["address", "include"],
+        "network-group" => &["network", "include"],
+        "domain-group" => &["address", "include"],
+        "interface-group" => &["interface"],
+        "port-group" => &["port"],
+        _ => &[],
+    }
+}
+
 pub trait ConfigRead {
     fn exists(&self, path: &[&str]) -> bool;
-    /// Enumerate tag-node children. Unused by ssl-inspection today (its tree has
-    /// only leaves + one tag-less `content-filter` node), but kept on the trait
-    /// so the reader machinery stays a drop-in match for geoip's.
-    #[allow(dead_code)]
     fn list_nodes(&self, path: &[&str]) -> Vec<String>;
     fn return_value(&self, path: &[&str]) -> Option<String>;
     fn return_values(&self, path: &[&str]) -> Vec<String>;
@@ -33,10 +50,9 @@ impl CliShellApi {
     pub fn session() -> Self {
         Self { active: false }
     }
-    /// The running-config view. The standalone resync works from the committed
-    /// desired.json snapshot (there is no live drift to reconcile as geoip has),
-    /// so this is currently unused — kept for parity and future use.
-    #[allow(dead_code)]
+    /// The running-config view, used by the standalone resync to re-resolve each
+    /// policy's firewall-rule match after a firewall commit (VyOS may edit the
+    /// bound rule; the redirect must follow it).
     pub fn active() -> Self {
         Self { active: true }
     }
@@ -115,7 +131,20 @@ pub fn read_service(conf: &dyn ConfigRead) -> Model {
     if let Some(p) = conf.return_value(&join(&BASE, &["intercept-port"])).and_then(|v| v.parse().ok()) {
         model.intercept_port = p;
     }
-    model.interfaces = conf.return_values(&join(&BASE, &["interface"]));
+    for num in conf.list_nodes(&join(&BASE, &["policy"])) {
+        let p: Vec<&str> = vec!["service", "quartzfire", "ssl-inspection", "policy", &num];
+        model.policies.push(Policy {
+            rule: num.parse().unwrap_or(0),
+            ruleset: conf
+                .return_value(&join(&p, &["ruleset"]))
+                .unwrap_or_else(|| "forward".into()),
+            action: conf
+                .return_value(&join(&p, &["action"]))
+                .unwrap_or_else(|| "inspect".into()),
+            enabled: !conf.exists(&join(&p, &["disable"])),
+        });
+    }
+    model.policies.sort_by_key(|p| p.rule);
     if let Some(a) = conf.return_value(&join(&BASE, &["default-action"])) {
         model.default_action = a;
     }
@@ -151,6 +180,79 @@ pub fn read_service(conf: &dyn ConfigRead) -> Model {
     model
 }
 
+/// The bits of one firewall rule the SSL match replication needs, or None when
+/// the rule does not exist (a dangling policy). Identical to geoip's reader.
+pub fn read_rule_cfg(conf: &dyn ConfigRead, ruleset: &str, rule: u32) -> Option<RuleCfg> {
+    let rule_s = rule.to_string();
+    let base: Vec<&str> = vec!["firewall", "ipv4", ruleset, "filter", "rule", &rule_s];
+    if !conf.exists(&base) {
+        return None;
+    }
+
+    let iface = |key: &str| -> Option<IfaceSpec> {
+        if let Some(name) = conf.return_value(&join(&base, &[key, "name"])) {
+            return Some(IfaceSpec { name: Some(name), group: None });
+        }
+        if let Some(group) = conf.return_value(&join(&base, &[key, "group"])) {
+            return Some(IfaceSpec { name: None, group: Some(group) });
+        }
+        None
+    };
+
+    let side = |key: &str| -> Side {
+        let mut out = Side {
+            address: conf.return_value(&join(&base, &[key, "address"])),
+            ..Default::default()
+        };
+        for gt in ["address-group", "network-group", "domain-group"] {
+            if let Some(name) = conf.return_value(&join(&base, &[key, "group", gt])) {
+                out.group_type = Some(gt.into());
+                out.group_name = Some(name);
+                break;
+            }
+        }
+        out
+    };
+
+    let mut destination = side("destination");
+    destination.port_group = conf.return_value(&join(&base, &["destination", "group", "port-group"]));
+
+    Some(RuleCfg {
+        inbound_interface: iface("inbound-interface"),
+        outbound_interface: iface("outbound-interface"),
+        source: side("source"),
+        destination,
+        protocol: conf.return_value(&join(&base, &["protocol"])),
+    })
+}
+
+/// Every firewall group's members, for group-reference resolution.
+pub fn read_groups(conf: &dyn ConfigRead) -> Groups {
+    let mut groups = Groups::new();
+    for gt in GROUP_TYPES {
+        groups.insert(gt.to_string(), BTreeMap::new());
+    }
+    if !conf.exists(&["firewall", "group"]) {
+        return groups;
+    }
+    for gt in GROUP_TYPES {
+        if !conf.exists(&["firewall", "group", gt]) {
+            continue;
+        }
+        for name in conf.list_nodes(&["firewall", "group", gt]) {
+            let mut entry = BTreeMap::new();
+            for leaf in group_leaves(gt) {
+                entry.insert(
+                    leaf.to_string(),
+                    conf.return_values(&["firewall", "group", gt, &name, leaf]),
+                );
+            }
+            groups.get_mut(gt).unwrap().insert(name, entry);
+        }
+    }
+    groups
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -163,6 +265,7 @@ mod tests {
         present: BTreeSet<String>,
         values: std::collections::BTreeMap<String, String>,
         multi: std::collections::BTreeMap<String, Vec<String>>,
+        children: std::collections::BTreeMap<String, Vec<String>>,
     }
     impl Fake {
         fn key(path: &[&str]) -> String {
@@ -182,13 +285,21 @@ mod tests {
             self.set(path);
             self.multi.insert(Self::key(path), vs.iter().map(|s| s.to_string()).collect());
         }
+        /// Register `child` as a tag-node under `parent` (and mark it present).
+        fn child(&mut self, parent: &[&str], child: &str) {
+            self.set(parent);
+            let mut full = parent.to_vec();
+            full.push(child);
+            self.set(&full);
+            self.children.entry(Self::key(parent)).or_default().push(child.to_string());
+        }
     }
     impl ConfigRead for Fake {
         fn exists(&self, path: &[&str]) -> bool {
             self.present.contains(&Self::key(path))
         }
-        fn list_nodes(&self, _path: &[&str]) -> Vec<String> {
-            Vec::new()
+        fn list_nodes(&self, path: &[&str]) -> Vec<String> {
+            self.children.get(&Self::key(path)).cloned().unwrap_or_default()
         }
         fn return_value(&self, path: &[&str]) -> Option<String> {
             self.values.get(&Self::key(path)).cloned()
@@ -211,7 +322,11 @@ mod tests {
         let mut f = Fake::default();
         f.set(&["service", "quartzfire", "ssl-inspection", "enable"]);
         f.value(&["service", "quartzfire", "ssl-inspection", "intercept-port"], "3130");
-        f.values_of(&["service", "quartzfire", "ssl-inspection", "interface"], &["eth1", "eth2"]);
+        f.child(&["service", "quartzfire", "ssl-inspection", "policy"], "20");
+        f.value(&["service", "quartzfire", "ssl-inspection", "policy", "20", "action"], "inspect");
+        f.child(&["service", "quartzfire", "ssl-inspection", "policy"], "30");
+        f.value(&["service", "quartzfire", "ssl-inspection", "policy", "30", "action"], "splice");
+        f.set(&["service", "quartzfire", "ssl-inspection", "policy", "30", "disable"]);
         f.value(&["service", "quartzfire", "ssl-inspection", "default-action"], "inspect");
         f.values_of(&["service", "quartzfire", "ssl-inspection", "no-inspect"], &["internal.example"]);
         f.value(&["service", "quartzfire", "ssl-inspection", "upstream-invalid"], "allow");
@@ -223,7 +338,13 @@ mod tests {
         let m = read_service(&f);
         assert!(m.enabled);
         assert_eq!(m.intercept_port, 3130);
-        assert_eq!(m.interfaces, vec!["eth1", "eth2"]);
+        assert_eq!(m.policies.len(), 2);
+        assert_eq!(m.policies[0].rule, 20);
+        assert_eq!(m.policies[0].action, "inspect");
+        assert!(m.policies[0].enabled);
+        assert_eq!(m.policies[1].rule, 30);
+        assert_eq!(m.policies[1].action, "splice");
+        assert!(!m.policies[1].enabled); // has `disable`
         assert_eq!(m.no_inspect, vec!["internal.example"]);
         assert_eq!(m.upstream_invalid, "allow");
         let cf = m.content_filter.expect("content filter present");
@@ -246,5 +367,20 @@ mod tests {
         assert_eq!(parse_quoted_list("'eth0' 'eth1'"), vec!["eth0", "eth1"]);
         assert_eq!(parse_quoted_list("'with space' 'b'"), vec!["with space", "b"]);
         assert_eq!(parse_quoted_list(""), Vec::<String>::new());
+    }
+
+    #[test]
+    fn reads_a_forward_filter_rule() {
+        let mut f = Fake::default();
+        let base = &["firewall", "ipv4", "forward", "filter", "rule", "20"];
+        f.set(base);
+        f.value(&["firewall", "ipv4", "forward", "filter", "rule", "20", "inbound-interface", "name"], "eth1");
+        f.value(&["firewall", "ipv4", "forward", "filter", "rule", "20", "source", "address"], "10.0.0.0/8");
+        f.value(&["firewall", "ipv4", "forward", "filter", "rule", "20", "protocol"], "tcp");
+        let cfg = read_rule_cfg(&f, "forward", 20).expect("rule present");
+        assert_eq!(cfg.inbound_interface.unwrap().name.unwrap(), "eth1");
+        assert_eq!(cfg.source.address.unwrap(), "10.0.0.0/8");
+        assert_eq!(cfg.protocol.unwrap(), "tcp");
+        assert!(read_rule_cfg(&f, "forward", 99).is_none());
     }
 }

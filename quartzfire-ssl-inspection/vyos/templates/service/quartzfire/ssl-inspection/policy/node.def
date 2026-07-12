@@ -1,0 +1,5 @@
+tag:
+type: u32
+help: SSL inspection binding — decrypt HTTPS matched by a firewall forward-filter rule
+syntax:expression: $VAR(@) >= 1 && $VAR(@) <= 999999 ; "rule number must be 1-999999"
+val_help: u32:1-999999; Firewall ipv4 forward filter rule number to attach inspection to
