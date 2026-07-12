@@ -11,9 +11,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Earth, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Segmented } from "@/components/ui/Segmented";
+import { Tabs } from "@/components/ui/Tabs";
 import { useDashboard } from "@/lib/DashboardContext";
 import { emptyFirewallConfig, fetchFirewall, FirewallConfig, FirewallRule } from "@/lib/firewall";
 import {
@@ -936,8 +936,7 @@ export default function GeolocationPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0 flex items-center gap-2" style={{ letterSpacing: "-0.015em" }}>
-          <Earth size={26} className="text-[var(--qz-accent)]" />
+        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
           Geolocation
         </h1>
         <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
@@ -950,23 +949,25 @@ export default function GeolocationPage() {
         <StatusCard status={status} onRefresh={() => load("refresh")} />
       </div>
 
-      <div className="px-[36px] pb-4 flex-shrink-0 flex items-center gap-3">
-        <Segmented
+      <div className="px-[36px] pb-4 flex-shrink-0">
+        <Tabs
           items={[
-            { value: "actions", label: "Actions" },
-            { value: "policies", label: "Policies" },
+            { value: "actions", label: "Actions", count: config.actions.length },
+            { value: "policies", label: "Policies", count: config.policies.length },
             { value: "alerts", label: "Alerts" },
           ]}
           value={tab}
           onChange={(v) => setTab(v as Tab)}
+          trailing={
+            status?.status?.active ? (
+              <span className="badge badge-ok">Enforcing</span>
+            ) : config.policies.some((p) => p.enabled) ? (
+              <span className="badge badge-warn">Not enforcing</span>
+            ) : (
+              <span className="badge badge-muted">No enabled policies</span>
+            )
+          }
         />
-        {status?.status?.active ? (
-          <span className="badge badge-ok">Enforcing</span>
-        ) : config.policies.some((p) => p.enabled) ? (
-          <span className="badge badge-warn">Not enforcing</span>
-        ) : (
-          <span className="badge badge-muted">No enabled policies</span>
-        )}
       </div>
 
       {applyError && (

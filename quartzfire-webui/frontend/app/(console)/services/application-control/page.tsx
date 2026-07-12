@@ -11,9 +11,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, AppWindow, Copy, Eraser, Pause, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Copy, Eraser, Pause, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
+import { Tabs } from "@/components/ui/Tabs";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { useDashboard } from "@/lib/DashboardContext";
 import {
@@ -918,8 +919,7 @@ export default function ApplicationControlPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0 flex items-center gap-2" style={{ letterSpacing: "-0.015em" }}>
-          <AppWindow size={26} className="text-[var(--qz-accent)]" />
+        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
           Application Control
         </h1>
         <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
@@ -927,28 +927,30 @@ export default function ApplicationControlPage() {
         </p>
       </div>
 
-      <div className="px-[36px] pb-4 flex-shrink-0 flex items-center gap-3">
-        <Segmented
+      <div className="px-[36px] pb-4 flex-shrink-0">
+        <Tabs
           items={[
-            { value: "actions", label: "Actions" },
-            { value: "policies", label: "Policies" },
+            { value: "actions", label: "Actions", count: Object.keys(config.actions).length },
+            { value: "policies", label: "Policies", count: config.bindings.length },
             { value: "alerts", label: "Alerts" },
           ]}
           value={tab}
           onChange={(v) => setTab(v as Tab)}
+          trailing={
+            status?.status?.policy_last_error || status?.apply?.ok === false ? (
+              <span
+                className="inline-flex items-center gap-[6px] text-[12px] text-[var(--qz-danger)]"
+                title={status?.status?.policy_last_error || status?.apply?.error}
+              >
+                <AlertTriangle size={13} /> Last apply rejected
+              </span>
+            ) : status?.running ? (
+              <span className="badge badge-ok">qfappd running</span>
+            ) : (
+              <span className="badge badge-muted">qfappd not reporting</span>
+            )
+          }
         />
-        {status?.status?.policy_last_error || status?.apply?.ok === false ? (
-          <span
-            className="inline-flex items-center gap-[6px] text-[12px] text-[var(--qz-danger)]"
-            title={status?.status?.policy_last_error || status?.apply?.error}
-          >
-            <AlertTriangle size={13} /> Last apply rejected
-          </span>
-        ) : status?.running ? (
-          <span className="badge badge-ok">qfappd running</span>
-        ) : (
-          <span className="badge badge-muted">qfappd not reporting</span>
-        )}
       </div>
 
       {status?.apply?.ok === false && (
