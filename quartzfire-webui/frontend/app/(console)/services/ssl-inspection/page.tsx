@@ -16,6 +16,7 @@
 // do its own TLS MITM. Do not implement filtering logic here.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AlertTriangle,
   Check,
@@ -23,13 +24,17 @@ import {
   Download,
   Plus,
   RotateCw,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
+import { Tabs } from "@/components/ui/Tabs";
 import { useDashboard } from "@/lib/DashboardContext";
+import { emptyFirewallConfig, fetchFirewall, FirewallConfig } from "@/lib/firewall";
 import {
   applySslInspection,
   caCrtUrl,
@@ -41,7 +46,6 @@ import {
   regenerateCa,
   setSslEnabled,
   SslInspectionConfig,
-  SslPolicy,
   SslPolicyAction,
   SslStatusReport,
   validateDomainPattern,
@@ -292,116 +296,245 @@ function NoInspectEditor({
   );
 }
 
-// ── inspection policy editor (per firewall rule) ─────────────────────────────
+// ── policies tab (per firewall rule) ─────────────────────────────────────────
 
-function PolicyEditor({
-  policies,
+/// One row per eligible forward Allow rule, with an inspect / splice / none
+/// picker — mirrors the Application Control Policies tab so attaching inspection
+/// to a rule is discoverable (and so enabling has something to intercept). Each
+/// change commits immediately, like the App Control page.
+function PoliciesTab({
+  config,
   status,
-  onChange,
+  onApplied,
+  setToast,
 }: {
-  policies: SslPolicy[];
+  config: SslInspectionConfig;
   status: SslStatusReport | null;
-  onChange: (next: SslPolicy[]) => void;
+  onApplied: () => Promise<void>;
+  setToast: (msg: string) => void;
 }) {
-  const [ruleDraft, setRuleDraft] = useState("");
-  const [actionDraft, setActionDraft] = useState<SslPolicyAction>("inspect");
-  const [err, setErr] = useState<string | null>(null);
+  const [fw, setFw] = useState<FirewallConfig>(emptyFirewallConfig);
+  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [busyRule, setBusyRule] = useState<number | null>(null);
+
+  const loadFw = useCallback(async () => {
+    try {
+      setFw(await fetchFirewall());
+      setState("ready");
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "Failed to load the firewall config.");
+      setState("error");
+    }
+  }, []);
+  useEffect(() => {
+    loadFw();
+  }, [loadFw]);
+
+  const actionByRule = useMemo(() => {
+    const m = new Map<number, SslPolicyAction>();
+    for (const p of config.policies) if (p.enabled) m.set(p.rule, p.action);
+    return m;
+  }, [config.policies]);
 
   const problemFor = (rule: number) => status?.problems?.find((p) => p.policy === rule)?.error ?? null;
-  const patch = (rule: number, fields: Partial<SslPolicy>) =>
-    onChange(policies.map((x) => (x.rule === rule ? { ...x, ...fields } : x)));
 
-  const add = () => {
-    const rule = Number(ruleDraft);
-    if (!Number.isInteger(rule) || rule < 1 || rule > 999999) {
-      setErr("Enter a firewall rule number (1–999999).");
-      return;
+  const setRule = async (rule: number, choice: "off" | SslPolicyAction) => {
+    const policies = config.policies.filter((p) => p.rule !== rule);
+    if (choice !== "off") policies.push({ rule, ruleset: "forward", action: choice, enabled: true });
+    policies.sort((a, b) => a.rule - b.rule);
+    setBusyRule(rule);
+    try {
+      await applySslInspection(config, { ...config, policies });
+      setToast(
+        choice === "off"
+          ? `Removed SSL inspection from rule ${rule}.`
+          : `Rule ${rule} set to ${choice === "inspect" ? "Inspect" : "Splice"}.`,
+      );
+      await onApplied();
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "Failed to change the inspection policy.");
+    } finally {
+      setBusyRule(null);
     }
-    if (policies.some((p) => p.rule === rule)) {
-      setErr("That rule already has an inspection binding.");
-      return;
-    }
-    onChange(
-      [...policies, { rule, ruleset: "forward", action: actionDraft, enabled: true }].sort(
-        (a, b) => a.rule - b.rule,
-      ),
-    );
-    setRuleDraft("");
-    setErr(null);
   };
 
-  const actionItems = [
-    { value: "inspect", label: "Inspect" },
-    { value: "splice", label: "Splice" },
-  ];
+  if (state === "loading") return <div className="text-[13px] text-[var(--qz-fg-4)]">Loading firewall rules…</div>;
+  if (state === "error")
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
+          <AlertTriangle size={15} />
+          {errorMsg}
+        </div>
+        <div>
+          <Button kind="secondary" icon={RotateCw} onClick={loadFw}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+
+  const eligible = fw.rules.filter((r) => r.chain === "forward" && r.action === "accept");
 
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-[11px] uppercase tracking-wide text-[var(--qz-fg-4)]">Inspection policies</span>
-      {policies.length === 0 ? (
-        <span className="text-[12px] text-[var(--qz-fg-4)]">
-          No bindings yet — nothing is inspected until you attach inspection to a firewall
-          forward-filter rule below.
-        </span>
-      ) : (
-        <div className="flex flex-col gap-1">
-          {policies.map((p) => {
-            const problem = problemFor(p.rule);
-            return (
-              <div key={p.rule} className="flex flex-col gap-1 rounded-md px-3 py-2" style={inputStyle}>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <span className="text-[13px] text-[var(--qz-fg-1)] mono">forward rule {p.rule}</span>
-                  <Segmented items={actionItems} value={p.action} onChange={(v) => patch(p.rule, { action: v as SslPolicyAction })} />
-                  <label className="flex items-center gap-1 text-[12px] text-[var(--qz-fg-3)] cursor-pointer">
-                    <input type="checkbox" checked={p.enabled} onChange={(e) => patch(p.rule, { enabled: e.target.checked })} />
-                    Enabled
-                  </label>
-                  {problem && <span className="badge badge-warn" title={problem}>Unresolved</span>}
-                  <button
-                    type="button"
-                    onClick={() => onChange(policies.filter((x) => x.rule !== p.rule))}
-                    className="ml-auto text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)]"
-                    title="Remove binding"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-                {problem && (
-                  <span className="text-[12px] text-[var(--qz-danger)] flex items-center gap-1">
-                    <AlertTriangle size={12} /> {problem}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <div className="flex flex-col gap-3 max-w-[1000px]">
+      <p className="text-[13px] text-[var(--qz-fg-4)] m-0">
+        Attach SSL inspection to a forward Allow rule to decrypt (<span className="mono">Inspect</span>)
+        or explicitly spare (<span className="mono">Splice</span>) the HTTPS it matches. Only forward
+        Allow rules are eligible. SSL inspection won&apos;t enable until at least one rule is set to
+        Inspect. Rules that match on an outbound interface can&apos;t carry inspection — scope by
+        source or destination instead.
+      </p>
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <input
-          value={ruleDraft}
-          onChange={(e) => {
-            setRuleDraft(e.target.value.replace(/[^0-9]/g, ""));
-            setErr(null);
-          }}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
-          placeholder="Rule #"
-          className="rounded-md px-3 py-[6px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[100px] mono"
-          style={inputStyle}
-        />
-        <Segmented items={actionItems} value={actionDraft} onChange={(v) => setActionDraft(v as SslPolicyAction)} />
-        <Button kind="secondary" size="sm" icon={Plus} onClick={add}>
-          Add binding
-        </Button>
+      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+        <table className="qz-table" style={{ width: "100%" }}>
+          <colgroup>
+            <col style={{ width: 60 }} />
+            <col />
+            <col style={{ width: 150 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 200 }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Name</th>
+              <th>From → To</th>
+              <th>Action</th>
+              <th>SSL Inspection</th>
+            </tr>
+          </thead>
+          <tbody>
+            {eligible.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                  No eligible forward Allow rules — create them under{" "}
+                  <Link href="/firewall/rules" className="text-[var(--qz-fg-3)]">
+                    Firewall → Rules
+                  </Link>
+                  .
+                </td>
+              </tr>
+            ) : (
+              eligible.map((r) => {
+                const value = actionByRule.get(r.rule) ?? "off";
+                const problem = problemFor(r.rule);
+                return (
+                  <tr key={r.rule} style={{ cursor: "default", opacity: r.enabled ? 1 : 0.55 }}>
+                    <td className="mono text-[var(--qz-fg-3)]">{r.rule}</td>
+                    <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.name ?? <span className="text-[var(--qz-fg-4)]">Rule {r.rule}</span>}
+                    </td>
+                    <td className="mono text-[12px] text-[var(--qz-fg-3)]">
+                      {(r.from.iface ?? "any") + " → " + (r.to.iface ?? "any")}
+                    </td>
+                    <td>
+                      <span className="badge badge-ok">Allow</span>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={value}
+                          disabled={busyRule !== null}
+                          onChange={(e) => setRule(r.rule, e.target.value as "off" | SslPolicyAction)}
+                          className="rounded-md px-2 py-[6px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer w-full"
+                          style={{ ...inputStyle, color: value === "off" ? "var(--qz-fg-4)" : "var(--qz-accent)" }}
+                        >
+                          <option value="off">None</option>
+                          <option value="inspect">Inspect</option>
+                          <option value="splice">Splice</option>
+                        </select>
+                        {problem && (
+                          <span className="badge badge-warn flex-shrink-0" title={problem}>
+                            !
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
-      {err && <span className="text-[12px] text-[var(--qz-danger)]">{err}</span>}
-      <span className="text-[12px] text-[var(--qz-fg-4)]">
-        Inspection applies to HTTPS matched by the chosen firewall forward-filter rule (source,
-        destination, port). A <span className="mono">splice</span> binding is an explicit
-        do-not-inspect carve-out. Rules that match on an outbound interface can&apos;t carry
-        inspection — scope by source or destination instead.
-      </span>
     </div>
+  );
+}
+
+// ── confirm modal ────────────────────────────────────────────────────────────
+
+/// Themed replacement for window.confirm on the high-blast-radius actions
+/// (enabling interception, regenerating the CA). Styled to the console theme
+/// so the warning reads inside the app instead of a bare browser dialog.
+function ConfirmModal({
+  title,
+  subtitle,
+  tone = "warn",
+  confirmLabel,
+  onCancel,
+  onConfirm,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  tone?: "warn" | "danger";
+  confirmLabel: string;
+  onCancel: () => void;
+  onConfirm: () => Promise<void>;
+  children: React.ReactNode;
+}) {
+  const [working, setWorking] = useState(false);
+  const toneColor = tone === "danger" ? "var(--qz-danger)" : "var(--qz-warn)";
+  const toneSoft = tone === "danger" ? "var(--qz-danger-soft)" : "var(--qz-warn-soft)";
+  const Icon = tone === "danger" ? AlertTriangle : ShieldAlert;
+  // While the action is in flight, ignore backdrop/Escape closes so the modal
+  // stays put until the device answers (parent unmounts it on completion).
+  const close = () => {
+    if (!working) onCancel();
+  };
+  const run = async () => {
+    setWorking(true);
+    try {
+      await onConfirm();
+    } finally {
+      setWorking(false);
+    }
+  };
+  return (
+    <ModalShell onClose={close} maxWidth={460}>
+      <ModalHeader title={title} subtitle={subtitle} onClose={close} />
+      <div className="flex flex-col gap-4">
+        <div
+          className="flex gap-3 rounded-md px-3 py-3"
+          style={{ background: toneSoft, border: `1px solid color-mix(in oklab, ${toneColor} 35%, transparent)` }}
+        >
+          <Icon size={16} className="flex-shrink-0 mt-[1px]" style={{ color: toneColor }} />
+          <div className="text-[13px] text-[var(--qz-fg-2)] flex flex-col gap-2 [&_p]:m-0">{children}</div>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={close}
+            disabled={working}
+            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer disabled:opacity-50"
+            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={run}
+            disabled={working}
+            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0 disabled:opacity-70"
+            style={{ background: toneColor, color: "white" }}
+          >
+            {working ? "Working…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -417,6 +550,9 @@ export default function SslInspectionPage() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  // Which high-blast-radius action is awaiting an in-app confirmation, if any.
+  const [confirm, setConfirm] = useState<"enable" | "regenerate" | null>(null);
+  const [tab, setTab] = useState<"settings" | "policies">("settings");
 
   const loadStatus = useCallback(async () => {
     try {
@@ -445,22 +581,7 @@ export default function SslInspectionPage() {
 
   const dirty = useMemo(() => JSON.stringify(config) !== JSON.stringify(draft), [config, draft]);
 
-  const onToggle = async (enabled: boolean) => {
-    // Enabling starts intercepting LAN HTTPS immediately. Any client that has
-    // not installed the QuartzFire CA will get certificate errors and be unable
-    // to load HTTPS sites, so require an explicit acknowledgement first.
-    if (
-      enabled &&
-      !window.confirm(
-        "Enable SSL inspection?\n\n" +
-          "Outbound HTTPS matched by your inspection policies will be intercepted and re-signed with " +
-          "the QuartzFire inspection CA. Any client that does NOT trust this CA will get certificate " +
-          "errors and be unable to load HTTPS sites.\n\n" +
-          "Make sure the inspection CA has already been distributed to and installed on your " +
-          "clients (download it from the Inspection root CA section below) before enabling.",
-      )
-    )
-      return;
+  const applyEnabled = async (enabled: boolean) => {
     setToggling(true);
     try {
       await setSslEnabled(config, enabled);
@@ -471,6 +592,18 @@ export default function SslInspectionPage() {
     } finally {
       setToggling(false);
     }
+  };
+
+  const onToggle = async (enabled: boolean) => {
+    // Enabling starts intercepting LAN HTTPS immediately. Any client that has
+    // not installed the QuartzFire CA will get certificate errors and be unable
+    // to load HTTPS sites, so require an explicit acknowledgement first via the
+    // themed confirm modal. Disabling is safe and applies straight away.
+    if (enabled) {
+      setConfirm("enable");
+      return;
+    }
+    await applyEnabled(false);
   };
 
   const onSave = async () => {
@@ -486,14 +619,7 @@ export default function SslInspectionPage() {
     }
   };
 
-  const onRegenerate = async () => {
-    if (
-      !window.confirm(
-        "Regenerate the inspection CA?\n\nAll previously distributed CAs become INVALID — every " +
-          "client must reinstall the new certificate before it can browse HTTPS through the firewall.",
-      )
-    )
-      return;
+  const applyRegenerate = async () => {
     setRegenerating(true);
     try {
       await regenerateCa();
@@ -540,9 +666,24 @@ export default function SslInspectionPage() {
         </div>
       </div>
 
-      <div className="px-[36px] pb-8 flex flex-col gap-4 overflow-auto max-w-[1000px]">
+      <div className="px-[36px] pb-4 flex-shrink-0">
+        <Tabs
+          items={[
+            { value: "settings", label: "Settings" },
+            { value: "policies", label: "Policies", count: config.policies.length },
+          ]}
+          value={tab}
+          onChange={(v) => setTab(v as "settings" | "policies")}
+        />
+      </div>
+
+      <div className="flex-1 overflow-auto px-[36px] pb-8">
+        {tab === "policies" ? (
+          <PoliciesTab config={config} status={status} onApplied={load} setToast={setToast} />
+        ) : (
+          <div className="flex flex-col gap-4 max-w-[1000px]">
         <StatusCard status={status} />
-        <CaPanel status={status} onRegenerate={onRegenerate} regenerating={regenerating} />
+        <CaPanel status={status} onRegenerate={() => setConfirm("regenerate")} regenerating={regenerating} />
 
       {/* Inspection policy */}
       <section className="rounded-lg px-5 py-4 flex flex-col gap-4" style={cardStyle}>
@@ -562,12 +703,6 @@ export default function SslInspectionPage() {
             Traffic not on the do-not-inspect list is {draft.defaultAction === "inspect" ? "decrypted" : "passed through"}.
           </span>
         </div>
-
-        <PolicyEditor
-          policies={draft.policies}
-          status={status}
-          onChange={(next) => setDraft((d) => ({ ...d, policies: next }))}
-        />
 
         <div className="flex flex-col gap-2">
           <span className="text-[11px] uppercase tracking-wide text-[var(--qz-fg-4)]">
@@ -637,7 +772,50 @@ export default function SslInspectionPage() {
           </div>
         </div>
       </section>
+          </div>
+        )}
       </div>
+
+      {confirm === "enable" && (
+        <ConfirmModal
+          title="Enable SSL inspection?"
+          tone="warn"
+          confirmLabel="Enable inspection"
+          onCancel={() => setConfirm(null)}
+          onConfirm={async () => {
+            setConfirm(null);
+            await applyEnabled(true);
+          }}
+        >
+          <p>
+            Outbound HTTPS matched by your inspection policies will be intercepted and re-signed with
+            the QuartzFire inspection CA. Any client that does <strong>not</strong> trust this CA will
+            get certificate errors and be unable to load HTTPS sites.
+          </p>
+          <p>
+            Make sure the inspection CA has already been distributed to and installed on your clients
+            (download it from the Inspection root CA section below) before enabling.
+          </p>
+        </ConfirmModal>
+      )}
+
+      {confirm === "regenerate" && (
+        <ConfirmModal
+          title="Regenerate the inspection CA?"
+          tone="danger"
+          confirmLabel="Regenerate CA"
+          onCancel={() => setConfirm(null)}
+          onConfirm={async () => {
+            setConfirm(null);
+            await applyRegenerate();
+          }}
+        >
+          <p>
+            All previously distributed CAs become <strong>invalid</strong> — every client must
+            reinstall the new certificate before it can browse HTTPS through the firewall.
+          </p>
+        </ConfirmModal>
+      )}
     </div>
   );
 }

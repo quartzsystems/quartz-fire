@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ShieldCheck, X } from "lucide-react";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
@@ -19,9 +19,22 @@ import {
   RuleAction,
   RuleChain,
   RulePolicyChoice,
+  ruleChainFor,
   ruleSelection,
+  RuleUpdate,
   validateInline,
 } from "@/lib/firewall";
+import {
+  applyRuleAndServices,
+  emptyRuleServiceState,
+  RuleServiceConfigs,
+  RuleServiceState,
+  serviceStateForRule,
+  SslServiceChoice,
+} from "@/lib/rule-services";
+import { emptySslInspectionConfig, fetchSslInspection } from "@/lib/ssl-inspection";
+import { emptyGeolocationConfig, fetchGeolocation, GeoDirection } from "@/lib/geolocation";
+import { emptyAcConfig, fetchAcStatus } from "@/lib/appcontrol";
 
 const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
 const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
@@ -359,6 +372,50 @@ export function RuleFormModal({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Per-rule security services (SSL Inspection, Geolocation, Application
+  // Control) — the IPS siblings, each attachable to a forward Allow rule. Their
+  // live configs are read once when the modal opens; the desired attachment
+  // seeds from the rule's current bindings when editing.
+  const [svcConfigs, setSvcConfigs] = useState<RuleServiceConfigs | null>(null);
+  const [svc, setSvc] = useState<RuleServiceState>(emptyRuleServiceState());
+  const [svcLoaded, setSvcLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [ssl, geo, ac] = await Promise.all([
+        fetchSslInspection().catch(() => emptySslInspectionConfig()),
+        fetchGeolocation().catch(() => emptyGeolocationConfig()),
+        fetchAcStatus()
+          .then((s) => s.settings ?? emptyAcConfig())
+          .catch(() => emptyAcConfig()),
+      ]);
+      if (cancelled) return;
+      const cfgs: RuleServiceConfigs = { ssl, geo, ac };
+      setSvcConfigs(cfgs);
+      if (initial) setSvc(serviceStateForRule(initial.rule, "forward", cfgs));
+      setSvcLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initial]);
+
+  // Services attach only to forward Allow rules (matching the SSL / App Control
+  // Policies tabs). A Firewall-endpoint side steers the rule out of the forward
+  // chain, so it's ineligible too.
+  const chain = useMemo<RuleChain>(() => {
+    try {
+      return ruleChainFor(from, to);
+    } catch {
+      return "forward";
+    }
+  }, [from, to]);
+  const servicesEligible = action === "accept" && chain === "forward";
+
+  const geoActions = svcConfigs?.geo.actions ?? [];
+  const acActions = svcConfigs ? Object.keys(svcConfigs.ac.actions) : [];
+
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
@@ -382,21 +439,31 @@ export function RuleFormModal({
     setSaving(true);
     try {
       const rule = initial?.rule ?? nextRuleNumber(rules);
-      const applied = await applyRule(
-        initial ?? null,
-        {
-          rule,
-          name: name.trim() || null,
-          action,
-          from,
-          to,
-          policy,
-          enabled,
-          log,
-          ips,
-        },
-        config,
-      );
+      const ruleUpdate: RuleUpdate = {
+        rule,
+        name: name.trim() || null,
+        action,
+        from,
+        to,
+        policy,
+        enabled,
+        log,
+        ips,
+      };
+      // With the service configs in hand, apply the rule and its SSL / Geo / App
+      // Control attachments in one shot (a single guarded commit for the
+      // VyOS-backed ones, plus the App Control PUT). A rule that can't carry
+      // services detaches any it previously had. Fall back to a plain rule apply
+      // only if the service configs never loaded.
+      const applied = svcConfigs
+        ? await applyRuleAndServices(
+            initial ?? null,
+            ruleUpdate,
+            config,
+            svcConfigs,
+            servicesEligible ? svc : emptyRuleServiceState(),
+          )
+        : await applyRule(initial ?? null, ruleUpdate, config);
       onSaved(
         applied === 0
           ? "No changes — config already matches."
@@ -515,6 +582,106 @@ export function RuleFormModal({
             </label>
           )}
         </div>
+
+        {servicesEligible && (
+          <div
+            className="flex flex-col gap-3 rounded-md px-4 py-3"
+            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+          >
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={14} className="text-[var(--qz-fg-3)]" />
+              <span className="text-[12px] font-semibold text-[var(--qz-fg-1)]">Security services</span>
+            </div>
+            {!svcLoaded ? (
+              <span className="text-[12px] text-[var(--qz-fg-4)]">Loading…</span>
+            ) : (
+              <div className="flex flex-col gap-[10px]">
+                {/* SSL Inspection — inspect / splice / off (no named policies). */}
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">SSL Inspection</span>
+                  <select
+                    value={svc.ssl}
+                    onChange={(e) => setSvc((s) => ({ ...s, ssl: e.target.value as SslServiceChoice }))}
+                    className="flex-1 rounded-md px-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
+                    style={inputSt}
+                    onFocus={focusBorder}
+                    onBlur={blurBorder}
+                  >
+                    <option value="off">Off</option>
+                    <option value="inspect">Inspect</option>
+                    <option value="splice">Splice</option>
+                  </select>
+                </div>
+
+                {/* Geolocation — a named action plus a match direction. */}
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">Geolocation</span>
+                  <select
+                    value={svc.geo?.action ?? ""}
+                    onChange={(e) =>
+                      setSvc((s) => ({
+                        ...s,
+                        geo: e.target.value
+                          ? { action: e.target.value, direction: s.geo?.direction ?? "both" }
+                          : null,
+                      }))
+                    }
+                    className="flex-1 rounded-md px-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
+                    style={inputSt}
+                    onFocus={focusBorder}
+                    onBlur={blurBorder}
+                  >
+                    <option value="">None</option>
+                    {geoActions.map((a) => (
+                      <option key={a.name} value={a.name}>
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                  {svc.geo && (
+                    <Segmented
+                      items={[
+                        { value: "source", label: "Source" },
+                        { value: "destination", label: "Dest" },
+                        { value: "both", label: "Both" },
+                      ]}
+                      value={svc.geo.direction}
+                      onChange={(v) =>
+                        setSvc((s) => (s.geo ? { ...s, geo: { ...s.geo, direction: v as GeoDirection } } : s))
+                      }
+                    />
+                  )}
+                </div>
+
+                {/* Application Control — a named action. */}
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">Application Control</span>
+                  <select
+                    value={svc.appcontrol ?? ""}
+                    onChange={(e) => setSvc((s) => ({ ...s, appcontrol: e.target.value || null }))}
+                    className="flex-1 rounded-md px-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
+                    style={inputSt}
+                    onFocus={focusBorder}
+                    onBlur={blurBorder}
+                  >
+                    <option value="">None</option>
+                    {acActions.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {(geoActions.length === 0 || acActions.length === 0) && (
+                  <p className="text-[11px] text-[var(--qz-fg-4)] m-0">
+                    Define actions on the Geolocation and Application Control pages to attach them here.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
