@@ -575,15 +575,9 @@ export function RuleFormModal({
             <Switch on={log} onChange={setLog} />
             <span className="text-[13px] text-[var(--qz-fg-2)]">Log traffic (Traffic Monitor)</span>
           </label>
-          {action === "accept" && (
-            <label className="flex items-center gap-[10px] cursor-pointer select-none">
-              <Switch on={ips} onChange={setIps} />
-              <span className="text-[13px] text-[var(--qz-fg-2)]">Enable IPS</span>
-            </label>
-          )}
         </div>
 
-        {servicesEligible && (
+        {action === "accept" && (
           <div
             className="flex flex-col gap-3 rounded-md px-4 py-3"
             style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
@@ -592,11 +586,18 @@ export function RuleFormModal({
               <ShieldCheck size={14} className="text-[var(--qz-fg-3)]" />
               <span className="text-[12px] font-semibold text-[var(--qz-fg-1)]">Security services</span>
             </div>
-            {!svcLoaded ? (
-              <span className="text-[12px] text-[var(--qz-fg-4)]">Loading…</span>
-            ) : (
-              <div className="flex flex-col gap-[10px]">
-                {/* SSL Inspection — inspect / splice / off (no named policies). */}
+            {/* IPS lives on the rule itself, so it's available on any Allow rule
+                (input/output/forward) — unlike the forward-only siblings below. */}
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">IPS</span>
+              <Switch on={ips} onChange={setIps} />
+            </label>
+            {servicesEligible &&
+              (!svcLoaded ? (
+                <span className="text-[12px] text-[var(--qz-fg-4)]">Loading…</span>
+              ) : (
+                <div className="flex flex-col gap-[10px]">
+                  {/* SSL Inspection — inspect / splice / off (no named policies). */}
                 <div className="flex items-center gap-3">
                   <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">SSL Inspection</span>
                   <select
@@ -678,8 +679,8 @@ export function RuleFormModal({
                     Define actions on the Geolocation and Application Control pages to attach them here.
                   </p>
                 )}
-              </div>
-            )}
+                </div>
+              ))}
           </div>
         )}
 

@@ -26,15 +26,14 @@ function PriorityPill({ priority }: { priority: number }) {
   return <span className="badge badge-muted">Info</span>;
 }
 
-const timeFmt = new Intl.DateTimeFormat(undefined, {
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-  hour12: false,
-});
+/// Render a millisecond timestamp as `YYYY-MM-DD HH:MM:SS` in the browser's
+/// local time — matching how Config Changes shows commit dates (the CLI's
+/// device-local rendering) so both tabs read identically.
+function formatCommitStyle(ms: number): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
 
 const commitColumns: Column<CommitEntry>[] = [
   { key: "revision", header: "Revision", value: (r) => r.revision, mono: true, sortable: true, width: 90 },
@@ -52,9 +51,9 @@ const commitColumns: Column<CommitEntry>[] = [
 const logColumns: Column<SystemLogEntry>[] = [
   {
     key: "time",
-    header: "Time",
+    header: "Date",
     value: (r) => r.ts,
-    render: (r) => timeFmt.format(new Date(r.ts)),
+    render: (r) => formatCommitStyle(r.ts),
     mono: true,
     sortable: true,
     width: 170,
