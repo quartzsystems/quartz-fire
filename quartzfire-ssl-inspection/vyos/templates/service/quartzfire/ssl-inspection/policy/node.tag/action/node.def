@@ -1,6 +1,6 @@
 type: txt
 help: Whether matching HTTPS is decrypted (inspect) or explicitly left alone (splice)
-default: inspect
+default: "inspect"
 syntax:expression: $VAR(@) in "inspect", "splice" ; "action must be inspect or splice"
 allowed: echo inspect splice
 val_help: inspect; Decrypt and inspect matching HTTPS (ssl_bump)

@@ -1,3 +1,14 @@
+quartzfire-ssl-inspection (0.2.1) unstable; urgency=medium
+
+  * Fix cstore template parse error that made `service quartzfire ssl-inspection
+    policy <rule> action` and `... ruleset` unsettable ("is not valid"). The
+    vyatta template parser requires text `default:` values to be quoted; the
+    bareword `default: inspect` / `default: forward` raised "syntax error ...
+    last token [i]", corrupting the node so the path failed to resolve. Numeric
+    defaults (the u32 policy tag) are unaffected. Both defaults are now quoted.
+
+ -- QuartzFire <cwellman@quartz.systems>  Sun, 12 Jul 2026 14:30:00 +0000
+
 quartzfire-ssl-inspection (0.2.0) unstable; urgency=medium
 
   * Per-firewall-rule inspection policies replace the interface-scoped model:
