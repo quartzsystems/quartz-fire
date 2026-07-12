@@ -44,8 +44,13 @@ override_dh_auto_install:
 	# and migration engine (postinst registers both with generate_cache.py).
 	install -D -m0644 vyos/xml/service_content-filtering.xml \
 		$(D)/usr/share/quartzfire/xml/service_content-filtering.xml
-	install -D -m0644 vyos/xml/xml-component-version.xml \
-		$(D)/usr/share/quartzfire/xml/xml-component-version.xml
+	# Unique basename: quartzfire-ssl-inspection also ships an
+	# xml-component-version.xml into this shared xml-dir, so a generic name here
+	# is a dpkg file conflict ("trying to overwrite ..., which is also in package
+	# quartzfire-ssl-inspection"). generate_cache.py globs the whole --xml-dir,
+	# so the per-package name is still picked up for component-version registration.
+	install -D -m0644 vyos/xml/xml-component-version-content-filtering.xml \
+		$(D)/usr/share/quartzfire/xml/xml-component-version-content-filtering.xml
 	# e2guardian sandboxing drop-in (consistent with our other daemons).
 	install -D -m0644 systemd/e2guardian-quartzfire.conf \
 		$(D)/etc/systemd/system/e2guardian.service.d/quartzfire.conf
