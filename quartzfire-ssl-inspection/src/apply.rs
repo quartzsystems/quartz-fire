@@ -116,6 +116,13 @@ pub fn update_status(patch: Value) {
 pub struct Problem {
     pub policy: u32,
     pub error: String,
+    /// True when the target firewall rule simply no longer exists (an orphaned
+    /// policy left behind after the rule was deleted/renumbered). These are
+    /// harmless — there is no live traffic to miss — so the commit warns and
+    /// skips rather than aborting, unlike a rule that EXISTS but can't be
+    /// replicated (outbound-interface, FQDN group), which stays a hard error.
+    #[serde(default)]
+    pub dangling: bool,
 }
 
 /// Everything the renderer needs beyond the model: each enabled policy's
@@ -172,7 +179,11 @@ pub fn resolve(
             .policies
             .iter()
             .filter(|p| p.enabled)
-            .map(|p| Problem { policy: p.rule, error: "no configuration view available".into() })
+            .map(|p| Problem {
+                policy: p.rule,
+                error: "no configuration view available".into(),
+                dangling: false,
+            })
             .collect();
         return Resolved { matches: BTreeMap::new(), problems, ca_scope: Vec::new() };
     };
@@ -194,6 +205,7 @@ pub fn resolve(
                         "target firewall ipv4 {} filter rule {} does not exist",
                         policy.ruleset, policy.rule
                     ),
+                    dangling: true,
                 });
             }
             Some(cfg) => match rule_match_expr(&cfg, &groups) {
@@ -203,7 +215,7 @@ pub fn resolve(
                 }
                 Err(e) => {
                     matches.insert(policy.rule, None);
-                    problems.push(Problem { policy: policy.rule, error: e.0 });
+                    problems.push(Problem { policy: policy.rule, error: e.0, dangling: false });
                 }
             },
         }
@@ -641,13 +653,21 @@ mod tests {
         let m = model_with(vec![Policy { rule: 20, ruleset: "forward".into(), action: "inspect".into(), enabled: true }]);
         let r = resolve(&m, Some(&f), None);
         assert!(matches!(r.matches.get(&20), Some(None)));
-        assert!(r.problems.iter().any(|p| p.policy == 20 && p.error.contains("outbound-interface")));
+        // Rule exists but can't be replicated → a HARD problem (aborts commit).
+        assert!(r
+            .problems
+            .iter()
+            .any(|p| p.policy == 20 && p.error.contains("outbound-interface") && !p.dangling));
     }
 
     #[test]
     fn resolve_flags_missing_rule() {
         let m = model_with(vec![Policy { rule: 99, ruleset: "forward".into(), action: "inspect".into(), enabled: true }]);
         let r = resolve(&m, Some(&Fake::default()), None);
-        assert!(r.problems.iter().any(|p| p.policy == 99 && p.error.contains("does not exist")));
+        // Rule is gone → a DANGLING problem (commit warns and skips, not aborts).
+        assert!(r
+            .problems
+            .iter()
+            .any(|p| p.policy == 99 && p.error.contains("does not exist") && p.dangling));
     }
 }

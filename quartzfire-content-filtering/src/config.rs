@@ -7,7 +7,7 @@
 use std::process::Command;
 
 use crate::model::{
-    BlockPage, Blocklists, FilterGroup, LogLevel, Model, DEFAULT_NAUGHTYNESS,
+    BlockPage, Blocklists, FilterGroup, LogLevel, Model, DEFAULT_GROUP_NAME, DEFAULT_NAUGHTYNESS,
 };
 
 pub const BASE: [&str; 2] = ["service", "content-filtering"];
@@ -128,6 +128,16 @@ pub fn read_service(conf: &dyn ConfigRead) -> Model {
     }
     // Deterministic order: config-listing order is already sorted by tag name.
     // Group 1 (index 0) is the default/unmatched group.
+    //
+    // Guarantee a default group even when the operator has defined none: without
+    // one, render_group would index an empty groups vec (panic) and validate()
+    // would refuse the commit. "Global" is the default/unmatched group (group 1)
+    // and applies to every client; with no categories it blocks nothing, so
+    // Content Filtering can be enabled out of the box and tightened later. It is
+    // implicit — editing it in the WebUI materializes it as explicit config.
+    if model.groups.is_empty() {
+        model.groups.push(FilterGroup::new(DEFAULT_GROUP_NAME));
+    }
 
     if conf.exists(&join(&BASE, &["blocklists"])) {
         let bp = join(&BASE, &["blocklists"]);
@@ -228,6 +238,21 @@ mod tests {
         assert!(!m.enabled);
         assert!(m.ssl_inspection_enabled);
         assert_eq!(m.listen_port, 1344);
+    }
+
+    #[test]
+    fn synthesizes_default_global_group_when_none_defined() {
+        // Tree present + enabled but zero filter-group nodes: read_service must
+        // inject the implicit "Global" default group so validate()/render()
+        // (which index groups[0]) have a group to work with and enabling the
+        // feature does not fail on "at least one filter-group must be defined".
+        let mut f = Fake::default();
+        f.set(&["service", "content-filtering", "enable"]);
+        let m = read_service(&f);
+        assert_eq!(m.groups.len(), 1);
+        assert_eq!(m.groups[0].name, DEFAULT_GROUP_NAME);
+        assert!(m.groups[0].source_address.is_empty()); // default/unmatched group
+        assert!(crate::model::validate(&m).iter().all(|s| !s.contains("at least one filter-group")));
     }
 
     #[test]

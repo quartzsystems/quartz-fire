@@ -43,15 +43,33 @@ pub fn commit() -> i32 {
     }
 
     // Replicate each policy's firewall-rule match against the PROPOSED config.
-    // A rule that is gone or uses a construct the prerouting redirect can't
+    // A rule that EXISTS but uses a construct the prerouting redirect can't
     // honor (outbound-interface, FQDN group) is a hard error here — reject the
     // commit so inspection never silently misses the traffic it was scoped to.
+    //
+    // A policy whose firewall rule no longer exists (dangling) is NOT fatal:
+    // the rule is gone, so there is no traffic to miss, and the Policies tab
+    // only lists live rules — hard-failing would leave an orphaned policy that
+    // is invisible in the UI yet blocks every future commit. Warn and skip it
+    // (the renderer already drops it), matching geolocation's leniency.
     let resolved = apply::resolve(&model, Some(&conf), None);
-    if model.enabled && !resolved.problems.is_empty() {
+    if model.enabled {
+        let mut hard = false;
         for p in &resolved.problems {
-            eprintln!("SSL inspection on firewall rule {}: {}", p.policy, p.error);
+            if p.dangling {
+                eprintln!(
+                    "WARNING: SSL inspection policy on firewall rule {} skipped: {}. \
+                     Remove the stale policy with `delete service quartzfire ssl-inspection policy {}`.",
+                    p.policy, p.error, p.policy
+                );
+            } else {
+                eprintln!("SSL inspection on firewall rule {}: {}", p.policy, p.error);
+                hard = true;
+            }
         }
-        return 1;
+        if hard {
+            return 1;
+        }
     }
 
     // Loud warning on the enable transition (session has `enable`, the running

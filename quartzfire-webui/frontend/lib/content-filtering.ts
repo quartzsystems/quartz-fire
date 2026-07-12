@@ -53,6 +53,10 @@ export interface ContentFilteringConfig {
 }
 
 export const DEFAULT_NAUGHTYNESS = 150;
+/// Name of the implicit default/unmatched action synthesized when none is
+/// configured (mirrors the backend's DEFAULT_GROUP_NAME). Applies to every
+/// client; blocks nothing until categories/lists are added.
+export const DEFAULT_GROUP_NAME = "Global";
 
 export function emptyGroup(name: string): FilterGroup {
   return {
@@ -144,10 +148,14 @@ export async function fetchContentFiltering(): Promise<ContentFilteringConfig> {
   const bp = childCfg(cfg, "block-page") ?? {};
   const log = childCfg(cfg, "log") ?? {};
   const lvl = childStr(log, "level");
+  // The backend synthesizes a default "Global" group when none is configured
+  // (config.rs read_service); mirror that here so the default action is always
+  // visible/editable and the two views agree.
+  const groups = readGroups(childCfg(cfg, "filter-group"));
   return {
     enabled: "enable" in cfg,
     listenPort: Number(childStr(cfg, "listen-port")) || 1344,
-    groups: readGroups(childCfg(cfg, "filter-group")),
+    groups: groups.length ? groups : [emptyGroup(DEFAULT_GROUP_NAME)],
     blocklists: {
       sources: childList(bl, "source"),
       autoUpdate: "auto-update" in bl,

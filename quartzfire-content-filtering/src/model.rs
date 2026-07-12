@@ -48,6 +48,10 @@ impl FilterGroup {
 }
 
 pub const DEFAULT_NAUGHTYNESS: u32 = 150;
+/// Name of the implicit default/unmatched filter group synthesized when the
+/// operator has defined none. Applies to every client; blocks nothing until
+/// categories or lists are added.
+pub const DEFAULT_GROUP_NAME: &str = "Global";
 pub const DEFAULT_LISTEN_PORT: u16 = 1344;
 pub const DEFAULT_UPDATE_INTERVAL_HOURS: u32 = 24;
 /// UT1 (Université Toulouse) blocklist tarball — the offline-shippable default.
