@@ -1,0 +1,4 @@
+multi:
+type: txt
+help: Regular expression matching URLs to block
+val_help: txt; POSIX/PCRE regular expression matched against the request URL

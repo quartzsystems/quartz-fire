@@ -1,0 +1,4 @@
+type: u32
+help: Hours between automatic blocklist updates (default 24)
+syntax:expression: $VAR(@) >= 1 && $VAR(@) <= 720 ; "update-interval must be 1-720 hours"
+val_help: u32:1-720; Update interval in hours (default 24)

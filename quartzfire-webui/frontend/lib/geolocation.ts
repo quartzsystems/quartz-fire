@@ -246,7 +246,7 @@ export function deleteGeoAction(name: string): Promise<number> {
 
 // ── writes: policies ──────────────────────────────────────────────────────────
 
-const policyBase = (id: number) => ["service", "geolocation", "policy", String(id)];
+export const policyBase = (id: number) => ["service", "geolocation", "policy", String(id)];
 
 /// Desired policy. `original_id` identifies the policy being edited.
 export interface GeoPolicyUpdate {
@@ -404,6 +404,11 @@ export interface GeoEvent {
   proto?: string;
   spt?: number;
   dpt?: number;
+  /** ISO 3166-1 alpha-2 code of the filtered (foreign) endpoint, resolved by
+   *  the backend via libloc. Absent when neither endpoint resolves. */
+  country?: string | null;
+  /** Human-readable country name for `country`, when the database has one. */
+  country_name?: string | null;
 }
 
 /// Stable-ish identity for de-duping the live stream against history.

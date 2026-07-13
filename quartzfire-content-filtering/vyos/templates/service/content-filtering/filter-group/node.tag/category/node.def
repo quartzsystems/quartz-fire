@@ -1,0 +1,5 @@
+multi:
+type: txt
+help: UT1 blocklist category to block (e.g. adult, malware, phishing)
+syntax:expression: pattern $VAR(@) "^[A-Za-z0-9][A-Za-z0-9_-]*$" ; "category must be an installed UT1 category name"
+val_help: txt; Installed UT1 category name

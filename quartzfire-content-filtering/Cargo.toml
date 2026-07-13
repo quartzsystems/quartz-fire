@@ -1,0 +1,22 @@
+[package]
+name = "quartzfire-content-filtering"
+version = "0.1.0"
+edition = "2021"
+description = "QuartzFire Content Filtering — e2guardian ICAP server behind the Squid bump"
+license = "MIT"
+
+# One multi-call binary. The /usr/libexec/quartzfire/qfcf-* helper names and the
+# /usr/libexec/vyos/conf_mode/service_content_filtering owner are symlinks to
+# qfcf, dispatched on argv[0] (see src/main.rs), so systemd units, node.def
+# templates, and the WebUI backend reference stable paths. Same scheme as
+# quartzfire-ssl-inspection's qzssl and quartzfire-geoip's qzgeo.
+[[bin]]
+name = "qfcf"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+strip = true

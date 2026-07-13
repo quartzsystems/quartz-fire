@@ -1,0 +1,23 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|purge)
+        # Stop the ICAP server; leave the stock e2guardian package config as-is.
+        systemctl disable --now e2guardian 2>/dev/null || true
+        # Remove our Squid-facing state; the SSL crate drops the ICAP block on
+        # its next resync now that `service content-filtering` is gone.
+        if [ -x /usr/libexec/quartzfire/qzssl-apply ]; then
+            /usr/libexec/quartzfire/qzssl-apply 2>/dev/null || true
+        fi
+        systemctl daemon-reload 2>/dev/null || true
+        ;;
+esac
+
+if [ "$1" = purge ]; then
+    rm -rf /var/lib/quartzfire/content-filtering
+fi
+
+#DEBHELPER#
+
+exit 0

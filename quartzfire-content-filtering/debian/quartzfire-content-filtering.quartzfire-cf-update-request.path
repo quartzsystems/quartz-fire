@@ -1,0 +1,13 @@
+[Unit]
+Description=Watch for a WebUI-triggered content-filter blocklist update
+Documentation=file:/usr/share/doc/quartzfire-content-filtering/design.md
+
+[Path]
+# The WebUI backend writes this file to request an immediate update (it runs
+# unprivileged but has ReadWritePaths=/config/quartzfire, like geoip). The path
+# unit fires quartzfire-cf-update.service (same unit the timer runs).
+PathChanged=/config/quartzfire/content-filtering-update-request
+Unit=quartzfire-cf-update.service
+
+[Install]
+WantedBy=multi-user.target

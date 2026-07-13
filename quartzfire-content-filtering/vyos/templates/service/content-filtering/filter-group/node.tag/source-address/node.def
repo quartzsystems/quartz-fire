@@ -1,0 +1,5 @@
+multi:
+type: txt
+help: Client source subnet mapped to this group (CIDR); unmatched clients use the default group
+val_help: ipv4net; IPv4 CIDR (e.g. 10.0.20.0/24)
+val_help: ipv6net; IPv6 CIDR

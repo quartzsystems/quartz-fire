@@ -1,0 +1,9 @@
+quartzfire-content-filtering (0.1.0) unstable; urgency=medium
+
+  * Initial release: e2guardian ICAP-server content filtering behind the
+    SSL-inspection Squid bump. `service content-filtering` config tree, filter
+    groups (source-IP mapping), UT1 category filtering with custom allow/block
+    lists, phrase filtering, safe search, block-page, blocklist updater, and
+    the qfcf multi-call binary (conf-mode owner + updater + status + test-url).
+
+ -- QuartzFire <cwellman@quartz.systems>  Sun, 12 Jul 2026 20:00:00 +0000

@@ -1,0 +1,3 @@
+type: txt
+help: Contact shown on the block page (e.g. helpdesk email)
+val_help: txt; Contact text (e.g. it@example.com)

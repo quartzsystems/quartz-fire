@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, Settings, Search, LogOut, Network, Route, ArrowLeftRight, Shield, Server, LucideIcon, ChevronDown, ChevronRight, Cable, Tags, Repeat, Combine, Waypoints, Shuffle, ListOrdered, Boxes, BookMarked, Milestone, Router, Forward, Globe, Activity, ScrollText, ShieldAlert, SlidersHorizontal, Users, KeyRound, Wrench, AppWindow, Earth, Lock, ShieldCheck, HeartPulse, FolderSync } from "lucide-react";
+import { Gauge, Settings, Search, LogOut, Network, Route, ArrowLeftRight, Shield, Server, LucideIcon, ChevronDown, ChevronRight, Cable, Tags, Repeat, Combine, Waypoints, Shuffle, ListOrdered, Boxes, BookMarked, Milestone, Router, Forward, Globe, Activity, ScrollText, ShieldAlert, SlidersHorizontal, Users, KeyRound, Wrench, AppWindow, Earth, Lock, ShieldCheck, HeartPulse, FolderSync, Filter } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -80,6 +80,7 @@ const ITEMS: NavItem[] = [
       { id: "application-control", label: "Application Control", href: "/services/application-control", icon: AppWindow },
       { id: "geolocation", label: "Geolocation", href: "/services/geolocation", icon: Earth },
       { id: "ssl-inspection", label: "SSL Inspection", href: "/services/ssl-inspection", icon: Lock },
+      { id: "content-filtering", label: "Content Filtering", href: "/services/content-filtering", icon: Filter },
     ],
   },
   {
@@ -90,6 +91,15 @@ const ITEMS: NavItem[] = [
     children: [
       { id: "config-sync", label: "Config Sync", href: "/high-availability/config-sync", icon: FolderSync },
       { id: "vrrp",        label: "VRRP",        href: "/high-availability/vrrp",        icon: Network },
+    ],
+  },
+  {
+    id: "monitoring",
+    label: "Monitoring",
+    icon: Activity,
+    href: "/monitoring",
+    children: [
+      { id: "logs", label: "Logs", href: "/monitoring/logs", icon: ScrollText },
     ],
   },
   {

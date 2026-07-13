@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Copy, Eraser, Pause, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
@@ -91,13 +91,6 @@ function ActionsTab({
     const actions = { ...config.actions };
     delete actions[name];
     onSave({ ...config, actions });
-  };
-
-  const cloneAction = (name: string) => {
-    let n = `${name} copy`;
-    let i = 2;
-    while (config.actions[n]) n = `${name} copy ${i++}`;
-    onSave({ ...config, actions: { ...config.actions, [n]: structuredClone(config.actions[name]) } });
   };
 
   const commitEdit = (name: string, action: AcAction, originalName: string | null) => {
@@ -183,11 +176,14 @@ function ActionsTab({
                       <div className="flex items-center gap-1">
                         <button
                           className="icon-btn"
-                          title="Clone"
-                          onClick={() => cloneAction(name)}
+                          title="Edit"
+                          onClick={() => {
+                            setCreating(false);
+                            setEditing({ name, action: structuredClone(a) });
+                          }}
                           style={{ background: "transparent", border: 0, cursor: "pointer", color: "var(--qz-fg-3)" }}
                         >
-                          <Copy size={15} />
+                          <Pencil size={15} />
                         </button>
                         <button
                           className="icon-btn"
@@ -520,6 +516,24 @@ function PoliciesTab({
   }, [config.bindings]);
 
   const boundActionCount = new Set(config.bindings.map((b) => b.action)).size;
+
+  // Self-heal: drop bindings whose forward rule no longer exists (e.g. a rule
+  // deleted before the delete-cascade shipped, or removed outside the WebUI).
+  // Only bindings on forward rules are ever created, so a binding id absent from
+  // the current forward chain is an orphan. Runs once, after the live firewall
+  // config loads, so a stale "Policies N" count settles on its own.
+  const healedRef = useRef(false);
+  useEffect(() => {
+    if (state !== "ready" || healedRef.current) return;
+    const forwardNums = new Set(
+      fw.rules.filter((r) => r.chain === "forward").map((r) => r.rule),
+    );
+    const kept = config.bindings.filter((b) => forwardNums.has(b.id));
+    if (kept.length !== config.bindings.length) {
+      healedRef.current = true;
+      onSave({ ...config, bindings: kept });
+    }
+  }, [state, fw, config, onSave]);
 
   const setRuleAction = (rule: FirewallRule, action: string | null) => {
     const bindings = config.bindings.filter((b) => b.id !== rule.rule);

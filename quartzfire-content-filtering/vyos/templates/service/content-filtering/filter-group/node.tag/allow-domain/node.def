@@ -1,0 +1,5 @@
+multi:
+type: txt
+help: Custom domain to allow / bypass (overrides a category or blanket block)
+syntax:expression: pattern $VAR(@) "^[*]?[.]?([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?[.])*[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$" ; "must be a domain (e.g. example.com)"
+val_help: txt; Domain to allow (exception — overrides blocks)

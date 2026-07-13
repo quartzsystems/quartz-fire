@@ -190,6 +190,14 @@ pub struct GeoEvent {
     spt: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     dpt: Option<u32>,
+    /// ISO 3166-1 alpha-2 code of the filtered (foreign) endpoint, resolved from
+    /// libloc. Absent when neither endpoint is a public IP or the database has
+    /// no entry for it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    country: Option<String>,
+    /// Human-readable name for `country`, when the database provides one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    country_name: Option<String>,
 }
 
 /// journalctl argument list selecting kernel `[GEO-…]` LOG lines as JSON.
@@ -205,7 +213,7 @@ fn journal_args(extra: &[&str]) -> Vec<String> {
 
 /// GET /api/geolocation/alerts — SSE stream of block events from the journal
 /// (live only; history comes from /api/geolocation/alerts/history).
-pub async fn alerts() -> Response {
+pub async fn alerts(State(state): State<Arc<AppState>>) -> Response {
     let mut child = match Command::new("journalctl")
         .args(journal_args(&["-f", "-n", "0"]))
         .stdout(Stdio::piped())
@@ -228,13 +236,20 @@ pub async fn alerts() -> Response {
     };
 
     // Each line is one journal entry as JSON; parse_geo_event drops anything
-    // that is not a `[GEO-…]` netfilter LOG record.
-    let stream = LinesStream::new(BufReader::new(stdout).lines()).filter_map(move |line| {
-        let _keep_child_alive = &child;
-        let entry = parse_geo_event(&line.ok()?)?;
-        let json = serde_json::to_string(&entry).ok()?;
-        Some(Ok::<Event, Infallible>(Event::default().data(json)))
-    });
+    // that is not a `[GEO-…]` netfilter LOG record, then the country of the
+    // filtered endpoint is resolved (cached) before the event is serialized.
+    let stream = LinesStream::new(BufReader::new(stdout).lines())
+        .then(move |line| {
+            let _keep_child_alive = &child;
+            let state = state.clone();
+            async move {
+                let mut entry = parse_geo_event(&line.ok()?)?;
+                enrich_country(&state, &mut entry).await;
+                let json = serde_json::to_string(&entry).ok()?;
+                Some(Ok::<Event, Infallible>(Event::default().data(json)))
+            }
+        })
+        .filter_map(std::convert::identity);
     let stream = tokio_stream::once(Ok(Event::default().comment("connected"))).chain(stream);
     Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
 }
@@ -242,7 +257,7 @@ pub async fn alerts() -> Response {
 /// GET /api/geolocation/alerts/history — recent block events, newest first,
 /// read from the journal's kernel backlog (survives reboots as far as the
 /// persistent journal reaches).
-pub async fn alerts_history() -> Result<Json<Vec<GeoEvent>>> {
+pub async fn alerts_history(State(state): State<Arc<AppState>>) -> Result<Json<Vec<GeoEvent>>> {
     let output = Command::new("journalctl")
         .args(journal_args(&["--since", "-48h", "-n", "1000"]))
         .stderr(Stdio::null())
@@ -253,6 +268,11 @@ pub async fn alerts_history() -> Result<Json<Vec<GeoEvent>>> {
     let mut events: Vec<GeoEvent> = text.lines().filter_map(parse_geo_event).collect();
     events.sort_by(|a, b| b.ts.cmp(&a.ts));
     events.truncate(500);
+    // Resolve the filtered country for each row; the cache collapses the many
+    // repeated foreign IPs a backlog usually contains into a handful of lookups.
+    for e in &mut events {
+        enrich_country(&state, e).await;
+    }
     Ok(Json(events))
 }
 
@@ -293,7 +313,105 @@ fn parse_geo_event(line: &str) -> Option<GeoEvent> {
         .map(|us| us / 1000)
         .unwrap_or(0);
 
-    Some(GeoEvent { ts, action_name, iif, oif, src, dst, proto, spt, dpt })
+    Some(GeoEvent {
+        ts,
+        action_name,
+        iif,
+        oif,
+        src,
+        dst,
+        proto,
+        spt,
+        dpt,
+        country: None,
+        country_name: None,
+    })
+}
+
+/// Whether `ip` is a routable public address — i.e. the kind libloc can place
+/// in a country. Excludes RFC1918, loopback, link-local, CGNAT, and the like so
+/// we never look up (or attribute a country to) the box's own LAN side.
+fn is_public_ip(ip: &str) -> bool {
+    use std::net::IpAddr;
+    match ip.parse::<IpAddr>() {
+        Ok(IpAddr::V4(v4)) => {
+            !(v4.is_private()
+                || v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_broadcast()
+                || v4.is_unspecified()
+                || v4.is_multicast()
+                || v4.is_documentation()
+                // CGNAT 100.64.0.0/10 (not covered by std helpers).
+                || (v4.octets()[0] == 100 && (64..=127).contains(&v4.octets()[1])))
+        }
+        Ok(IpAddr::V6(v6)) => {
+            !(v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                // unique-local fc00::/7 and link-local fe80::/10.
+                || (v6.segments()[0] & 0xfe00) == 0xfc00
+                || (v6.segments()[0] & 0xffc0) == 0xfe80)
+        }
+        Err(_) => false,
+    }
+}
+
+/// The foreign endpoint whose country the drop filtered on. Prefer the public
+/// address; when both are public (inbound to our own public WAN IP) the remote
+/// is the source on the input chain (no OUT interface) and the destination on
+/// the forward chain.
+fn foreign_ip(e: &GeoEvent) -> Option<String> {
+    let src_pub = e.src.as_deref().filter(|s| is_public_ip(s));
+    let dst_pub = e.dst.as_deref().filter(|s| is_public_ip(s));
+    match (src_pub, dst_pub) {
+        (Some(s), None) => Some(s.to_string()),
+        (None, Some(d)) => Some(d.to_string()),
+        (Some(s), Some(d)) => Some(if e.oif.is_none() { s } else { d }.to_string()),
+        (None, None) => None,
+    }
+}
+
+/// Resolve an IP to (country code, name) via the libloc lookup helper, memoized
+/// on `state.geoip_cc`. The lock is never held across the shell-out.
+async fn lookup_country(state: &AppState, ip: &str) -> Option<(String, Option<String>)> {
+    if let Some(hit) = state.geoip_cc.lock().unwrap().get(ip).cloned() {
+        return hit;
+    }
+    let result = match Command::new(&state.config.geoip_lookup_helper)
+        .arg(ip)
+        .output()
+        .await
+    {
+        Ok(out) => serde_json::from_slice::<serde_json::Value>(&out.stdout)
+            .ok()
+            .and_then(|v| {
+                let code = v.get("country")?.as_str()?.to_string();
+                let name = v
+                    .get("country_name")
+                    .and_then(|n| n.as_str())
+                    .map(|s| s.to_string());
+                Some((code, name))
+            }),
+        Err(_) => None,
+    };
+    let mut cache = state.geoip_cc.lock().unwrap();
+    // Bound the cache; a wholesale clear is fine — it only re-triggers lookups.
+    if cache.len() >= 4096 {
+        cache.clear();
+    }
+    cache.insert(ip.to_string(), result.clone());
+    result
+}
+
+/// Fill in `country`/`country_name` for a parsed event, best-effort.
+async fn enrich_country(state: &AppState, e: &mut GeoEvent) {
+    if let Some(ip) = foreign_ip(e) {
+        if let Some((code, name)) = lookup_country(state, &ip).await {
+            e.country = Some(code);
+            e.country_name = name;
+        }
+    }
 }
 
 #[cfg(test)]

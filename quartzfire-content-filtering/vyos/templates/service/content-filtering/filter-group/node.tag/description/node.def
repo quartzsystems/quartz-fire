@@ -1,0 +1,3 @@
+type: txt
+help: Description of this filter group
+val_help: txt; Free-text description

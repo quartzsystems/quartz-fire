@@ -1,0 +1,51 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Runtime + log dirs the WebUI backend and the JSON log feed read.
+        mkdir -p /var/lib/quartzfire/content-filtering/blacklists
+        mkdir -p /var/log/quartzfire
+        chmod 0755 /var/lib/quartzfire /var/lib/quartzfire/content-filtering 2>/dev/null || true
+        # /config/quartzfire holds the WebUI-writable blocklist-update trigger
+        # (watched by quartzfire-cf-update-request.path). ssl-inspection also
+        # creates this, but content-filtering must not depend on install order.
+        if [ -d /config ]; then
+            mkdir -p /config/quartzfire
+            chmod 0755 /config/quartzfire 2>/dev/null || true
+        fi
+
+        # Do NOT let stock e2guardian start on boot with its default proxy
+        # config: it would bind a pointless proxy port and is needless attack
+        # surface. qfcf-apply enables + starts e2guardian (in ICAP server mode)
+        # only while `service content-filtering enable` is set.
+        systemctl disable e2guardian 2>/dev/null || true
+
+        # Register `service content-filtering` with the vyos-1x Python XML
+        # reference cache. The cstore templates alone are NOT enough:
+        # vyos-configd resolves every commit diff path through vyos.xml_ref and
+        # dies on paths missing from the cache, hanging the commit forever.
+        XML_REF=/usr/lib/python3/dist-packages/vyos/xml_ref
+        if [ -f "$XML_REF/generate_cache.py" ]; then
+            vyconf_tmp=$(mktemp)
+            if (cd "$XML_REF" && \
+                python3 generate_cache.py \
+                    --xml-dir /usr/share/quartzfire/xml \
+                    --package-name quartzfire-content-filtering \
+                    --internal-cache "$vyconf_tmp" >/dev/null && \
+                python3 update_cache.py); then
+                systemctl try-restart vyos-configd 2>/dev/null || true
+            else
+                echo "quartzfire-content-filtering: WARNING: xml_ref cache registration failed —" \
+                     "committing content-filtering config will hang vyos-configd" >&2
+            fi
+            rm -f "$vyconf_tmp"
+        fi
+
+        systemctl daemon-reload 2>/dev/null || true
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

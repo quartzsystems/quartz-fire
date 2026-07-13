@@ -140,6 +140,25 @@ pub struct Config {
     #[serde(default = "default_ssl_regen_request_file")]
     pub ssl_regen_request_file: PathBuf,
 
+    // ── Content Filtering (quartzfire-content-filtering, qfcf helpers) ──────
+    /// e2guardian/ICAP/updater state (read-only), written by root qfcf helpers.
+    #[serde(default = "default_cf_status_file")]
+    pub cf_status_file: PathBuf,
+    /// Blocklist-update trigger file watched by quartzfire-cf-update-request.path
+    /// (under /config/quartzfire, writable for us).
+    #[serde(default = "default_cf_update_request_file")]
+    pub cf_update_request_file: PathBuf,
+    /// JSON access-log feed (read-only) written by qfcf-logfeed.
+    #[serde(default = "default_cf_log_file")]
+    pub cf_log_file: PathBuf,
+    /// qfcf helper symlinks used by the status/test/categories endpoints.
+    #[serde(default = "default_cf_status_helper")]
+    pub cf_status_helper: PathBuf,
+    #[serde(default = "default_cf_categories_helper")]
+    pub cf_categories_helper: PathBuf,
+    #[serde(default = "default_cf_testurl_helper")]
+    pub cf_testurl_helper: PathBuf,
+
     /// Per-user dashboard tile layouts (a WebUI preference), keyed by username.
     /// Lives under /config so a saved layout survives image upgrades, and is
     /// writable for us via the unit's ReadWritePaths — same contract as the
@@ -227,6 +246,24 @@ fn default_ssl_ca_der() -> PathBuf {
 }
 fn default_ssl_regen_request_file() -> PathBuf {
     PathBuf::from("/config/quartzfire/ssl-regen-request")
+}
+fn default_cf_status_file() -> PathBuf {
+    PathBuf::from("/run/quartzfire-content-filtering/status.json")
+}
+fn default_cf_update_request_file() -> PathBuf {
+    PathBuf::from("/config/quartzfire/content-filtering-update-request")
+}
+fn default_cf_log_file() -> PathBuf {
+    PathBuf::from("/var/log/quartzfire/content-filtering.json")
+}
+fn default_cf_status_helper() -> PathBuf {
+    PathBuf::from("/usr/libexec/quartzfire/qfcf-status")
+}
+fn default_cf_categories_helper() -> PathBuf {
+    PathBuf::from("/usr/libexec/quartzfire/qfcf-categories")
+}
+fn default_cf_testurl_helper() -> PathBuf {
+    PathBuf::from("/usr/libexec/quartzfire/qfcf-testurl")
 }
 fn default_dashboard_layouts_file() -> PathBuf {
     PathBuf::from("/config/quartzfire/dashboards.json")

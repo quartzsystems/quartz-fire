@@ -1,0 +1,5 @@
+multi:
+type: txt
+help: Custom domain to block (matches the domain and its subdomains)
+syntax:expression: pattern $VAR(@) "^[*]?[.]?([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?[.])*[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?$" ; "must be a domain (e.g. example.com or .example.com)"
+val_help: txt; Domain to block (example.com blocks www.example.com too)

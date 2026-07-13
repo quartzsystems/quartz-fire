@@ -1,0 +1,4 @@
+multi:
+type: txt
+help: MIME type to block (e.g. application/x-dosexec)
+val_help: txt; MIME type (e.g. application/x-msdownload)

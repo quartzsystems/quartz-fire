@@ -1,0 +1,8 @@
+type: txt
+help: Access-log verbosity
+default: "blocked-only"
+syntax:expression: $VAR(@) in "none", "blocked-only", "all" ; "level must be none, blocked-only, or all"
+allowed: echo none blocked-only all
+val_help: none; No access logging
+val_help: blocked-only; Log blocked requests only
+val_help: all; Log all requests

@@ -5,9 +5,7 @@ import { AlertTriangle, Check, GripVertical, Plus, RotateCw, Search, Undo2 } fro
 import { Button } from "@/components/ui/Button";
 import {
   aliasDisplayName,
-  applyRuleOrder,
   counterKey,
-  deleteRule,
   emptyFirewallConfig,
   fetchFirewall,
   fetchRuleCounters,
@@ -18,6 +16,7 @@ import {
   ruleSelection,
   setDefaultAction,
 } from "@/lib/firewall";
+import { applyRuleOrderWithCascade, deleteRuleWithCascade } from "@/lib/rule-cascade";
 import { fetchInterfaceDescriptions } from "@/lib/interfaces";
 import { formatBytes } from "@/lib/format";
 import { fetchInterfaceStats } from "@/lib/vyos";
@@ -187,8 +186,18 @@ export default function FirewallRulesPage() {
   const commitOrder = async () => {
     setApplyingOrder(true);
     try {
-      const moved = await applyRuleOrder(orderedRules);
-      setToast(`Reordered ${moved} rule${moved === 1 ? "" : "s"}.`);
+      const { renumbered, repointedGeoPolicies, repointedAcBindings } =
+        await applyRuleOrderWithCascade(orderedRules);
+      const also: string[] = [];
+      if (repointedAcBindings) {
+        also.push(`${repointedAcBindings} Application Control binding${repointedAcBindings === 1 ? "" : "s"}`);
+      }
+      if (repointedGeoPolicies) {
+        also.push(`${repointedGeoPolicies} Geolocation polic${repointedGeoPolicies === 1 ? "y" : "ies"}`);
+      }
+      setToast(
+        `Reordered ${renumbered} rule${renumbered === 1 ? "" : "s"}.${also.length ? ` Repointed ${also.join(" and ")}.` : ""}`,
+      );
       await load("refresh");
     } catch (e) {
       setToast(e instanceof Error ? e.message : "Failed to apply the new rule order.");
@@ -199,8 +208,20 @@ export default function FirewallRulesPage() {
 
   const remove = async (rule: FirewallRule) => {
     try {
-      await deleteRule(rule, data.auto_groups);
-      setToast(`Deleted rule ${rule.rule}.`);
+      const { removedGeoPolicies, removedAcBinding } = await deleteRuleWithCascade(
+        rule,
+        data.auto_groups,
+      );
+      const also: string[] = [];
+      if (removedAcBinding) also.push("Application Control binding");
+      if (removedGeoPolicies.length) {
+        also.push(
+          `${removedGeoPolicies.length} Geolocation polic${removedGeoPolicies.length === 1 ? "y" : "ies"}`,
+        );
+      }
+      setToast(
+        `Deleted rule ${rule.rule}.${also.length ? ` Also removed its ${also.join(" and ")}.` : ""}`,
+      );
       await load("refresh");
     } catch (e) {
       setToast(e instanceof Error ? e.message : `Failed to delete rule ${rule.rule}.`);

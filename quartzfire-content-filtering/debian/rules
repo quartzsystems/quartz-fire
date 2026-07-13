@@ -1,0 +1,85 @@
+#!/usr/bin/make -f
+# quartzfire-content-filtering Debian packaging (Rust multi-call binary + config
+# templates + systemd units). Same scheme as quartzfire-ssl-inspection.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export CARGO_HOME = $(CURDIR)/debian/cargo
+
+D = debian/quartzfire-content-filtering
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release --locked
+
+override_dh_auto_test:
+	cargo test --release --locked
+
+override_dh_auto_clean:
+	cargo clean || true
+	rm -rf debian/cargo
+
+override_dh_auto_install:
+	# One multi-call binary; helper names + the conf-mode owner are symlinks
+	# dispatched on argv[0] (see src/main.rs), so systemd units, node.def lines,
+	# and the WebUI backend reference stable paths.
+	install -D -m0755 target/release/qfcf $(D)/usr/libexec/quartzfire/qfcf
+	set -e; for name in qfcf-apply qfcf-update qfcf-status qfcf-testurl qfcf-categories qfcf-logfeed; do \
+		ln -s qfcf $(D)/usr/libexec/quartzfire/$$name; \
+	done
+	# The .py suffix is mandatory even though the target is an ELF binary:
+	# vyos-configd regex-parses the committing script path and crashes the
+	# daemon (hanging the commit) on any conf_mode script not ending in .py.
+	install -d $(D)/usr/libexec/vyos/conf_mode
+	ln -s /usr/libexec/quartzfire/qfcf \
+		$(D)/usr/libexec/vyos/conf_mode/service_content_filtering.py
+	# VyOS cstore command templates (the CLI grammar).
+	mkdir -p $(D)/opt/vyatta/share/vyatta-cfg/templates/service
+	cp -r vyos/templates/service/content-filtering \
+		$(D)/opt/vyatta/share/vyatta-cfg/templates/service/
+	find $(D)/opt/vyatta -type f -exec chmod 0644 {} +
+	find $(D)/opt/vyatta -type d -exec chmod 0755 {} +
+	# XML interface definition + component version for the vyos-1x xml_ref cache
+	# and migration engine (postinst registers both with generate_cache.py).
+	install -D -m0644 vyos/xml/service_content-filtering.xml \
+		$(D)/usr/share/quartzfire/xml/service_content-filtering.xml
+	# Unique basename: quartzfire-ssl-inspection also ships an
+	# xml-component-version.xml into this shared xml-dir, so a generic name here
+	# is a dpkg file conflict ("trying to overwrite ..., which is also in package
+	# quartzfire-ssl-inspection"). generate_cache.py globs the whole --xml-dir,
+	# so the per-package name is still picked up for component-version registration.
+	install -D -m0644 vyos/xml/xml-component-version-content-filtering.xml \
+		$(D)/usr/share/quartzfire/xml/xml-component-version-content-filtering.xml
+	# e2guardian sandboxing drop-in (consistent with our other daemons).
+	install -D -m0644 systemd/e2guardian-quartzfire.conf \
+		$(D)/etc/systemd/system/e2guardian.service.d/quartzfire.conf
+	# JSON access-log rotation (feeds the dashboard/SIEM pipeline).
+	install -D -m0644 logrotate/content-filtering \
+		$(D)/etc/logrotate.d/quartzfire-content-filtering
+	# Offline seed so category filtering has *some* data before the first
+	# updater run; the ISO build overlays the full UT1 snapshot.
+	install -d $(D)/var/lib/quartzfire/content-filtering/blacklists
+	cp -r blacklists-seed/. $(D)/var/lib/quartzfire/content-filtering/blacklists/
+	find $(D)/var/lib/quartzfire -type f -exec chmod 0644 {} +
+	find $(D)/var/lib/quartzfire -type d -exec chmod 0755 {} +
+	# Docs.
+	install -D -m0644 docs/design.md \
+		$(D)/usr/share/doc/quartzfire-content-filtering/design.md
+
+# Units are named debian/quartzfire-content-filtering.<unit>.<type>;
+# dh_installsystemd only auto-processes debian/<pkg>.service, so each must be
+# installed (and, where it has an [Install] section, enabled) explicitly.
+# No boot "apply" unit: the config.boot replay runs the conf-mode owner
+# (service_content_filtering.py → commit → apply) at boot, exactly like
+# ssl-inspection/geolocation, so e2guardian + the Squid ICAP block converge from
+# the saved config without a separate oneshot.
+override_dh_installsystemd:
+	# The updater oneshot is started by the timer + the WebUI request path unit;
+	# never enabled on its own (would run before the WAN is up at boot).
+	dh_installsystemd --no-enable --no-start --name=quartzfire-cf-update
+	dh_installsystemd --name=quartzfire-cf-update.timer
+	dh_installsystemd --name=quartzfire-cf-update-request
+	# The JSON log feed follows e2guardian's access log; safe to run always
+	# (it waits for the log to appear), enabled at boot.
+	dh_installsystemd --name=quartzfire-cf-logfeed

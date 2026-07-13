@@ -43,15 +43,33 @@ pub fn commit() -> i32 {
     }
 
     // Replicate each policy's firewall-rule match against the PROPOSED config.
-    // A rule that is gone or uses a construct the prerouting redirect can't
+    // A rule that EXISTS but uses a construct the prerouting redirect can't
     // honor (outbound-interface, FQDN group) is a hard error here — reject the
     // commit so inspection never silently misses the traffic it was scoped to.
+    //
+    // A policy whose firewall rule no longer exists (dangling) is NOT fatal:
+    // the rule is gone, so there is no traffic to miss, and the Policies tab
+    // only lists live rules — hard-failing would leave an orphaned policy that
+    // is invisible in the UI yet blocks every future commit. Warn and skip it
+    // (the renderer already drops it), matching geolocation's leniency.
     let resolved = apply::resolve(&model, Some(&conf), None);
-    if model.enabled && !resolved.problems.is_empty() {
+    if model.enabled {
+        let mut hard = false;
         for p in &resolved.problems {
-            eprintln!("SSL inspection on firewall rule {}: {}", p.policy, p.error);
+            if p.dangling {
+                eprintln!(
+                    "WARNING: SSL inspection policy on firewall rule {} skipped: {}. \
+                     Remove the stale policy with `delete service quartzfire ssl-inspection policy {}`.",
+                    p.policy, p.error, p.policy
+                );
+            } else {
+                eprintln!("SSL inspection on firewall rule {}: {}", p.policy, p.error);
+                hard = true;
+            }
         }
-        return 1;
+        if hard {
+            return 1;
+        }
     }
 
     // Loud warning on the enable transition (session has `enable`, the running
@@ -99,7 +117,7 @@ pub fn commit() -> i32 {
 /// (deliberately NOT a teardown, so a path-unit run racing the boot commit
 /// cannot yank the redirect the commit is about to install).
 pub fn standalone_apply() -> i32 {
-    let (model, snapshot) = match apply::load_desired() {
+    let (mut model, snapshot) = match apply::load_desired() {
         Ok(Some(pair)) => pair,
         Ok(None) => {
             log("no committed SSL-inspection state yet — nothing to apply");
@@ -114,7 +132,25 @@ pub fn standalone_apply() -> i32 {
     // Re-resolve against the RUNNING config so the redirect follows any edit to
     // a bound firewall rule (the reason this runs on /run/nftables.conf change);
     // fall back to the committed snapshot if the config view is unavailable.
-    let conf = CliShellApi::active();
+    //
+    // Content Filtering invokes qzssl-apply from INSIDE its own commit to
+    // add/remove the Squid ICAP block. Mid-commit the active config does not yet
+    // reflect `service content-filtering enable` (it lives only in the session
+    // config), so reading active would drop the ICAP block that was just enabled.
+    // qfcf sets QZSSL_CONFIG_SESSION=1 in that case; we inherit its config-session
+    // environment, so the session view sees the proposed config. Post-commit path
+    // and boot resyncs leave it unset and read the committed active config.
+    let conf: CliShellApi = if std::env::var_os("QZSSL_CONFIG_SESSION").is_some() {
+        CliShellApi::session()
+    } else {
+        CliShellApi::active()
+    };
+    // Refresh the ICAP seam from the ACTIVE config: Content Filtering
+    // (`service content-filtering`) is committed independently and triggers this
+    // resync via qzssl-apply to add/remove the Squid ICAP block. The SSL
+    // snapshot may predate that change (enable OR disable), so always re-derive
+    // content_filter from the running config. Keeps Squid ownership here.
+    model.content_filter = config::read_content_filter(&conf);
     let resolved = apply::resolve(&model, Some(&conf), Some(&snapshot));
     // Persist the refreshed resolution so the next resync starts from it.
     let _ = apply::save_desired(&model, &resolved);

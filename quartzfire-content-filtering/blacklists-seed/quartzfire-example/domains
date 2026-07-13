@@ -1,0 +1,3 @@
+# QuartzFire example category (seed). Replace with the full UT1 snapshot at ISO
+# build time. This exists so `category quartzfire-example` resolves offline.
+malware-test.quartzfire.invalid

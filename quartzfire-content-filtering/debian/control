@@ -1,0 +1,31 @@
+Source: quartzfire-content-filtering
+Section: net
+Priority: optional
+Maintainer: QuartzFire <cwellman@quartz.systems>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/zagdrath/quartz-fire
+
+Package: quartzfire-content-filtering
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         e2guardian,
+         curl,
+         tar,
+         vyos-1x,
+         quartzfire-ssl-inspection
+Description: QuartzFire content filtering (e2guardian ICAP behind Squid ssl_bump)
+ URL/domain/category filtering and content/phrase scanning for QuartzFire
+ (VyOS-based NGFW), equivalent to WatchGuard Fireware's WebBlocker. e2guardian
+ runs in ICAP SERVER mode only (no proxy, no MITM of its own): it listens on
+ 127.0.0.1:1344 and answers REQMOD/RESPMOD requests from the existing SSL
+ Inspection Squid, which is the sole TLS terminator and the ICAP client. Squid
+ bumps TLS first, so e2guardian filters already-decrypted plaintext.
+ .
+ A single Rust multi-call binary (qfcf) provides the `service content-filtering`
+ conf-mode owner, the UT1 blocklist updater, the status plumbing the QuartzFire
+ WebUI reads, and the URL-test facility. Filter groups map clients to policy by
+ source IP; category filtering uses the UT1 (Université Toulouse) blocklists,
+ layered under custom allow/block lists. The feature has a hard dependency on
+ SSL Inspection — committing it without SSL inspection enabled is refused.
