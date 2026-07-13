@@ -12,6 +12,7 @@ import type { RuleChain } from "./firewall";
 import type { IpsAlert } from "./ips";
 import type { AcEvent } from "./appcontrol";
 import type { GeoEvent } from "./geolocation";
+import { flagEmoji } from "./geolocation";
 import type { CfLogEntry } from "./content-filtering";
 
 export type UnifiedSource = "firewall" | "content-filtering" | "ips" | "appcontrol" | "geo";
@@ -151,13 +152,17 @@ export function normalizeAc(e: AcEvent): Raw {
 }
 
 export function normalizeGeo(e: GeoEvent): Raw {
-  const blocked = /block|drop|deny|reject/i.test(e.action_name);
   const iface = e.iif ? (e.oif ? `${e.iif} → ${e.oif}` : e.iif) : e.oif;
+  // Geolocation logs are emitted on the action's drop rule, so every geo event
+  // is a block. Surface the filtered country (resolved backend-side) as detail.
+  const country =
+    e.country_name || (e.country ? e.country.toUpperCase() : undefined) || undefined;
+  const flag = e.country ? flagEmoji(e.country) : "";
   return {
     key: `geo|${e.ts}|${e.action_name}|${e.src ?? ""}:${e.spt ?? ""}|${e.dst ?? ""}:${e.dpt ?? ""}`,
     ts: e.ts,
     source: "geo",
-    action: blocked ? "blocked" : "alert",
+    action: "blocked",
     summary: e.action_name,
     src: e.src,
     spt: e.spt,
@@ -165,6 +170,6 @@ export function normalizeGeo(e: GeoEvent): Raw {
     dpt: e.dpt,
     proto: e.proto,
     iface,
-    detail: undefined,
+    detail: country ? (flag ? `${flag} ${country}` : country) : undefined,
   };
 }

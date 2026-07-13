@@ -21,6 +21,9 @@ import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
 import { emptyFirewallConfig, fetchFirewall, FirewallConfig } from "@/lib/firewall";
 import { fetchCfLogs } from "@/lib/content-filtering";
+import { fetchIpsAlertHistory } from "@/lib/ips";
+import { fetchAcAlertHistory } from "@/lib/appcontrol";
+import { fetchGeoAlertHistory } from "@/lib/geolocation";
 import {
   FirewallLogEntry,
   normalizeAc,
@@ -172,6 +175,25 @@ export default function UnifiedLogsPage() {
     pollCf();
     const cfTimer = setInterval(pollCf, CF_POLL_MS);
 
+    // Backfill recent history for the alert sources. Their SSE streams only
+    // carry events from now on, so a block that fired before this page opened
+    // (or between reconnects) would otherwise never show — even though it is
+    // recorded on each feature's own Alerts tab. Deduped by key against the
+    // live streams, so overlapping events collapse to one row.
+    const backfill = async () => {
+      const [ips, app, geo] = await Promise.allSettled([
+        fetchIpsAlertHistory(),
+        fetchAcAlertHistory(),
+        fetchGeoAlertHistory(),
+      ]);
+      if (!active) return;
+      if (ips.status === "fulfilled") for (const e of ips.value) add(normalizeIps(e));
+      if (app.status === "fulfilled") for (const e of app.value) add(normalizeAc(e));
+      if (geo.status === "fulfilled") for (const e of geo.value) add(normalizeGeo(e));
+      scheduleFlush();
+    };
+    backfill();
+
     return () => {
       active = false;
       firewall.close();
@@ -252,7 +274,6 @@ export default function UnifiedLogsPage() {
 
   const time = (ts: number) =>
     ts ? new Date(ts).toLocaleTimeString(undefined, { hour12: false }) : "—";
-  const hostPort = (h?: string, p?: number) => (h ? (p != null ? `${h}:${p}` : h) : null);
 
   return (
     <div className="flex flex-col h-full">
@@ -287,7 +308,6 @@ export default function UnifiedLogsPage() {
                 { value: "all", label: "All" },
                 { value: "allowed", label: "Allowed" },
                 { value: "blocked", label: "Blocked" },
-                { value: "alert", label: "Alerts" },
               ]}
               value={actionFilter}
               onChange={(v) => setActionFilter(v as typeof actionFilter)}
@@ -350,13 +370,15 @@ export default function UnifiedLogsPage() {
             <table className="qz-table" style={{ width: "100%" }}>
               <colgroup>
                 <col style={{ width: 90 }} />
-                <col style={{ width: 90 }} />
-                <col style={{ width: 95 }} />
+                <col style={{ width: 84 }} />
+                <col style={{ width: 88 }} />
                 <col />
-                <col style={{ width: 150 }} />
-                <col style={{ width: 150 }} />
-                <col style={{ width: 64 }} />
-                <col style={{ width: 200 }} />
+                <col style={{ width: 128 }} />
+                <col style={{ width: 62 }} />
+                <col style={{ width: 128 }} />
+                <col style={{ width: 62 }} />
+                <col style={{ width: 56 }} />
+                <col style={{ width: 170 }} />
               </colgroup>
               <thead>
                 <tr>
@@ -365,7 +387,9 @@ export default function UnifiedLogsPage() {
                   <th>Action</th>
                   <th>Event</th>
                   <th>From</th>
+                  <th>Src Port</th>
                   <th>To</th>
+                  <th>Dst Port</th>
                   <th>Proto</th>
                   <th>Detail</th>
                 </tr>
@@ -373,7 +397,7 @@ export default function UnifiedLogsPage() {
               <tbody>
                 {visible.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                    <td colSpan={10} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
                       {rows.length === 0
                         ? "Waiting for events… (firewall traffic needs per-rule logging enabled; the security sources need their features on)"
                         : "No entries match the filter."}
@@ -390,11 +414,13 @@ export default function UnifiedLogsPage() {
                         {r.iface && <span className="text-[11px] text-[var(--qz-fg-4)]"> · {r.iface}</span>}
                       </td>
                       <td className="mono text-[12px]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {hostPort(r.src, r.spt) ?? dash}
+                        {r.src ?? dash}
                       </td>
+                      <td className="mono text-[12px]">{r.spt != null ? r.spt : dash}</td>
                       <td className="mono text-[12px]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {hostPort(r.dst, r.dpt) ?? dash}
+                        {r.dst ?? dash}
                       </td>
+                      <td className="mono text-[12px]">{r.dpt != null ? r.dpt : dash}</td>
                       <td className="mono text-[12px]">{r.proto ?? "—"}</td>
                       <td className="text-[12px] text-[var(--qz-fg-3)]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.detail ?? ""}>
                         {r.detail ?? dash}

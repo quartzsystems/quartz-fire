@@ -3,6 +3,7 @@
 //! place (never a half-populated tree), per the acceptance criteria.
 
 use std::fs;
+use std::io;
 use std::path::Path;
 use std::process::Command;
 
@@ -129,19 +130,59 @@ fn verify(root: &str) -> Result<usize, ApplyError> {
     Ok(count)
 }
 
-/// Swap the verified staged tree into BLACKLIST_DIR atomically at the directory
-/// level: move each staged category dir over the live one via rename. We move
-/// the whole verified root into place, keeping the old tree until the new one is
-/// committed, so a crash mid-swap can't leave a partial live tree.
+/// Move a directory tree, falling back to a recursive copy when `rename`
+/// reports the source and destination are on different filesystems (EXDEV,
+/// "invalid cross-device link"). On the VyOS image the blacklists tree lives on
+/// an overlayfs, where renaming a directory node that originates in a lower
+/// (squashfs/package) layer isn't supported and returns EXDEV even for two
+/// paths in the same parent dir; a persistence bind-mount would do the same.
+/// The copy path reaches the same end state, just not atomically.
+fn move_dir(src: &Path, dst: &Path) -> io::Result<()> {
+    match fs::rename(src, dst) {
+        Ok(()) => Ok(()),
+        // EXDEV == 18 on Linux (this only ever runs on the VyOS appliance).
+        Err(e) if e.raw_os_error() == Some(18) => {
+            copy_dir(src, dst)?;
+            fs::remove_dir_all(src)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// Recursively copy `src` into `dst` (created if absent). Only the EXDEV
+/// fallback in `move_dir` uses it. UT1 category trees are plain files and
+/// directories — no symlinks — so a non-directory entry is copied by content.
+fn copy_dir(src: &Path, dst: &Path) -> io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&from, &to)?;
+        } else {
+            fs::copy(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
+/// Swap the verified staged tree into BLACKLIST_DIR: move the live tree aside to
+/// `.old`, move the staged tree into place, then drop `.old`. Prefer an atomic
+/// rename; `move_dir` falls back to a copy when the live tree sits on a
+/// filesystem that can't rename directory nodes (the VyOS overlayfs). The old
+/// tree is kept under `.old` until the new one is committed, so a failure
+/// mid-swap restores it and never leaves the lists missing.
 fn swap_into_place(root: &str) -> Result<(), ApplyError> {
     let live = render::BLACKLIST_DIR;
     let old = format!("{live}.old");
     let _ = fs::remove_dir_all(&old);
     // Move current live aside (if present), stage new into place, drop old.
     if Path::new(live).exists() {
-        fs::rename(live, &old).map_err(|e| ApplyError(format!("archiving old lists: {e}")))?;
+        move_dir(Path::new(live), Path::new(&old))
+            .map_err(|e| ApplyError(format!("archiving old lists: {e}")))?;
     }
-    match fs::rename(root, live) {
+    match move_dir(Path::new(root), Path::new(live)) {
         Ok(()) => {
             let _ = fs::remove_dir_all(&old);
             Ok(())
@@ -149,7 +190,7 @@ fn swap_into_place(root: &str) -> Result<(), ApplyError> {
         Err(e) => {
             // Roll back: restore the old tree so we never leave lists missing.
             if Path::new(&old).exists() {
-                let _ = fs::rename(&old, live);
+                let _ = move_dir(Path::new(&old), Path::new(live));
             }
             err(format!("activating new lists: {e}"))
         }

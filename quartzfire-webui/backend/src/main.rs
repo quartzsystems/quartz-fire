@@ -43,6 +43,10 @@ pub struct AppState {
     /// Serializes read-modify-write saves of the shared per-user dashboard
     /// layouts file so concurrent admins can't clobber each other.
     pub dashboard_lock: std::sync::Mutex<()>,
+    /// IP → (country code, name) cache for enriching geolocation block events.
+    /// A `None` value is a negative result (looked up, unresolved). Bounded in
+    /// `geolocation::lookup_country`; never held across an await.
+    pub geoip_cc: std::sync::Mutex<std::collections::HashMap<String, Option<(String, Option<String>)>>>,
 }
 
 #[tokio::main]
@@ -73,6 +77,7 @@ async fn main() -> Result<()> {
         jwt_secret,
         guard: guard::Guard::default(),
         dashboard_lock: std::sync::Mutex::new(()),
+        geoip_cc: std::sync::Mutex::new(std::collections::HashMap::new()),
     });
 
     // Everything except the SPA itself and login/logout requires a session:

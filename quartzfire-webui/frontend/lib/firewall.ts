@@ -1187,11 +1187,18 @@ export function applyRuleIps(
 }
 
 /// Delete a filter rule, along with the auto-managed OR groups backing its
-/// sides.
-export function deleteRule(rule: FirewallRule, autoGroups: AutoGroup[]): Promise<number> {
+/// sides. `extraCommands` ride the same commit — used by the delete cascade to
+/// drop the security-feature config that referenced this rule atomically with
+/// it (see lib/rule-cascade).
+export function deleteRule(
+  rule: FirewallRule,
+  autoGroups: AutoGroup[],
+  extraCommands: VyosCommand[] = [],
+): Promise<number> {
   return commitAndSave([
     { op: "delete", path: ruleBase(rule.chain, rule.rule) },
     ...autoGroupDeletes(rule, autoGroups),
+    ...extraCommands,
   ]);
 }
 
@@ -1233,23 +1240,43 @@ function cfgToCommands(base: string[], cfg: Cfg, out: VyosCommand[]): void {
 /// whose number already matches are untouched; moved rules are deleted first
 /// (so a target number freed by another move is safe to reuse), then rebuilt
 /// from their raw config subtree.
-export function reorderCommands(orderedRules: FirewallRule[]): VyosCommand[] {
-  const deletes: VyosCommand[] = [];
-  const sets: VyosCommand[] = [];
+/// The rules whose number changes to match the given display order
+/// (position × 10), keyed `${chain}:${from}` → new number. Single source of
+/// truth for both the renumber commands and the cascade that repoints
+/// security-feature references at the new numbers (see lib/rule-cascade).
+export function renumberMap(orderedRules: FirewallRule[]): Map<string, number> {
+  const m = new Map<string, number>();
   orderedRules.forEach((r, i) => {
     const target = (i + 1) * 10;
-    if (r.rule === target) return;
+    if (r.rule !== target) m.set(`${r.chain}:${r.rule}`, target);
+  });
+  return m;
+}
+
+export function reorderCommands(orderedRules: FirewallRule[]): VyosCommand[] {
+  const moves = renumberMap(orderedRules);
+  const deletes: VyosCommand[] = [];
+  const sets: VyosCommand[] = [];
+  orderedRules.forEach((r) => {
+    const target = moves.get(`${r.chain}:${r.rule}`);
+    if (target === undefined) return;
     deletes.push({ op: "delete", path: ruleBase(r.chain, r.rule) });
     cfgToCommands(ruleBase(r.chain, target), r.raw, sets);
   });
   return [...deletes, ...sets];
 }
 
-/// Apply a new rule order. Returns the number of rules that were renumbered.
-export async function applyRuleOrder(orderedRules: FirewallRule[]): Promise<number> {
-  const commands = reorderCommands(orderedRules);
-  await commitAndSave(commands);
-  return commands.filter((c) => c.op === "delete").length;
+/// Apply a new rule order. `extraCommands` ride the same commit — used by the
+/// reorder cascade to repoint security-feature config at the new rule numbers
+/// atomically with the renumber. Returns the number of rules renumbered.
+export async function applyRuleOrder(
+  orderedRules: FirewallRule[],
+  extraCommands: VyosCommand[] = [],
+): Promise<number> {
+  const renumbered = renumberMap(orderedRules).size;
+  const commands = [...reorderCommands(orderedRules), ...extraCommands];
+  if (commands.length > 0) await commitAndSave(commands);
+  return renumbered;
 }
 
 // ── writes: default action ────────────────────────────────────────────────────

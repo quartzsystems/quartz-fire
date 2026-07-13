@@ -521,6 +521,24 @@ function PoliciesTab({
 
   const boundActionCount = new Set(config.bindings.map((b) => b.action)).size;
 
+  // Self-heal: drop bindings whose forward rule no longer exists (e.g. a rule
+  // deleted before the delete-cascade shipped, or removed outside the WebUI).
+  // Only bindings on forward rules are ever created, so a binding id absent from
+  // the current forward chain is an orphan. Runs once, after the live firewall
+  // config loads, so a stale "Policies N" count settles on its own.
+  const healedRef = useRef(false);
+  useEffect(() => {
+    if (state !== "ready" || healedRef.current) return;
+    const forwardNums = new Set(
+      fw.rules.filter((r) => r.chain === "forward").map((r) => r.rule),
+    );
+    const kept = config.bindings.filter((b) => forwardNums.has(b.id));
+    if (kept.length !== config.bindings.length) {
+      healedRef.current = true;
+      onSave({ ...config, bindings: kept });
+    }
+  }, [state, fw, config, onSave]);
+
   const setRuleAction = (rule: FirewallRule, action: string | null) => {
     const bindings = config.bindings.filter((b) => b.id !== rule.rule);
     if (action) {
