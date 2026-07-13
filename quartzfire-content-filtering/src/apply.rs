@@ -247,20 +247,40 @@ fn ensure_language_dir() -> Result<(), ApplyError> {
     Ok(())
 }
 
-/// Reconcile Squid with the SSL-inspection crate: qzssl-apply re-reads the
-/// active config (which cross-reads `service content-filtering enable`) and
-/// re-renders the Squid drop-in with — or without — the ICAP block, then
+/// Reconcile Squid with the SSL-inspection crate: qzssl-apply re-reads the VyOS
+/// config (which cross-reads `service content-filtering enable`) and re-renders
+/// the Squid drop-in with — or without — the ICAP block, then
 /// `squid -k reconfigure`. This is the single seam that keeps Squid ownership in
 /// the SSL crate (per the feature's architecture decision). Best-effort: a Squid
 /// reconcile failure is surfaced in status.json, not a fatal apply error, so the
 /// e2guardian side still converges and the operator can retry.
-fn reconcile_squid() -> Result<(), ApplyError> {
+///
+/// `in_commit` selects which config view qzssl reads. Post-commit resyncs (path
+/// unit / boot) read the ACTIVE config, which already reflects the change. But
+/// when we run inside CF's OWN commit, `service content-filtering enable` is only
+/// in the SESSION (proposed) config — the active config still lacks it — so
+/// qzssl's cross-read would return None and render Squid WITHOUT the ICAP block
+/// (content filter silently not attached). qzssl-apply is a child of this commit
+/// and inherits its config-session environment, so it can read the session view;
+/// `QZSSL_CONFIG_SESSION=1` tells it to. See qzssl commands.rs::standalone_apply.
+fn reconcile_squid(in_commit: bool) -> Result<(), ApplyError> {
     if !Path::new(QZSSL_APPLY).exists() {
         return err(format!(
             "{QZSSL_APPLY} not found — is quartzfire-ssl-inspection installed?"
         ));
     }
-    run(QZSSL_APPLY, &[])
+    let mut cmd = Command::new(QZSSL_APPLY);
+    if in_commit {
+        cmd.env("QZSSL_CONFIG_SESSION", "1");
+    }
+    let status = cmd
+        .status()
+        .map_err(|e| ApplyError(format!("running {QZSSL_APPLY}: {e}")))?;
+    if status.success() {
+        Ok(())
+    } else {
+        err(format!("{QZSSL_APPLY} exited {}", status.code().unwrap_or(-1)))
+    }
 }
 
 /// Persist the desired Model so the standalone apply (path/boot unit) can
@@ -289,11 +309,15 @@ pub struct ApplyReport {
 
 /// Converge the box to `model`. Enabled → render + start e2guardian + reconcile
 /// Squid. Disabled → stop e2guardian + reconcile Squid (drops the ICAP block).
-pub fn apply_model(model: &Model) -> ApplyReport {
+///
+/// `in_commit` must be true only when called from the conf-mode commit owner (so
+/// the Squid reconcile reads the SESSION config); false for standalone/boot
+/// resyncs (which read the committed ACTIVE config). See reconcile_squid.
+pub fn apply_model(model: &Model, in_commit: bool) -> ApplyReport {
     let res = if model.enabled {
-        apply_enabled(model)
+        apply_enabled(model, in_commit)
     } else {
-        apply_disabled()
+        apply_disabled(in_commit)
     };
     match res {
         Ok(()) => {
@@ -321,7 +345,7 @@ pub fn apply_model(model: &Model) -> ApplyReport {
     }
 }
 
-fn apply_enabled(model: &Model) -> Result<(), ApplyError> {
+fn apply_enabled(model: &Model, in_commit: bool) -> Result<(), ApplyError> {
     render_files(model)?;
     save_desired(model)?;
 
@@ -329,7 +353,7 @@ fn apply_enabled(model: &Model) -> Result<(), ApplyError> {
     run("systemctl", &["enable", "--now", E2G_UNIT])?;
     // reload picks up list/group changes without dropping the ICAP listener.
     run("systemctl", &["reload-or-restart", E2G_UNIT])?;
-    reconcile_squid()?;
+    reconcile_squid(in_commit)?;
     Ok(())
 }
 
@@ -366,11 +390,11 @@ pub fn render_files(model: &Model) -> Result<(), ApplyError> {
     Ok(())
 }
 
-fn apply_disabled() -> Result<(), ApplyError> {
+fn apply_disabled(in_commit: bool) -> Result<(), ApplyError> {
     // Stop e2guardian and remove it from boot; harmless if never started.
     let _ = run("systemctl", &["disable", "--now", E2G_UNIT]);
     // Reconcile Squid so the ICAP block is removed (traffic flows normally).
-    let squid = reconcile_squid();
+    let squid = reconcile_squid(in_commit);
     // Keep the desired snapshot reflecting the off state.
     save_desired(&Model::default()).ok();
     squid

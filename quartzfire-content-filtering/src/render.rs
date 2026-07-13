@@ -90,6 +90,13 @@ pub struct GroupRender {
 pub fn conf_overrides(model: &Model) -> Vec<(String, String)> {
     vec![
         ("filterip".into(), "127.0.0.1".into()),
+        // Run in the FOREGROUND so systemd tracks e2guardian's real PID. The stock
+        // unit is Type=forking with GuessMainPID=no and NO PIDFile, so a
+        // backgrounded (daemonised) e2g leaves systemd with no main process to
+        // follow — the unit's ActiveState desyncs (reads inactive/dead) even while
+        // the reparented worker keeps the :1344 ICAP listener bound. Our drop-in
+        // pins Type=simple to match; the pair keeps `systemctl is-active` truthful.
+        ("nodaemon".into(), "on".into()),
         // Defining icapport enables ICAP SERVER mode.
         ("icapport".into(), model.listen_port.to_string()),
         // Disable e2g's own transparent-TLS listener — Squid owns TLS.

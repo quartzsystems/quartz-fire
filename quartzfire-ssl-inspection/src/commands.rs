@@ -132,7 +132,19 @@ pub fn standalone_apply() -> i32 {
     // Re-resolve against the RUNNING config so the redirect follows any edit to
     // a bound firewall rule (the reason this runs on /run/nftables.conf change);
     // fall back to the committed snapshot if the config view is unavailable.
-    let conf = CliShellApi::active();
+    //
+    // Content Filtering invokes qzssl-apply from INSIDE its own commit to
+    // add/remove the Squid ICAP block. Mid-commit the active config does not yet
+    // reflect `service content-filtering enable` (it lives only in the session
+    // config), so reading active would drop the ICAP block that was just enabled.
+    // qfcf sets QZSSL_CONFIG_SESSION=1 in that case; we inherit its config-session
+    // environment, so the session view sees the proposed config. Post-commit path
+    // and boot resyncs leave it unset and read the committed active config.
+    let conf: CliShellApi = if std::env::var_os("QZSSL_CONFIG_SESSION").is_some() {
+        CliShellApi::session()
+    } else {
+        CliShellApi::active()
+    };
     // Refresh the ICAP seam from the ACTIVE config: Content Filtering
     // (`service content-filtering`) is committed independently and triggers this
     // resync via qzssl-apply to add/remove the Squid ICAP block. The SSL

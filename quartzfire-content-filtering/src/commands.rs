@@ -52,7 +52,10 @@ pub fn commit() -> i32 {
         );
     }
 
-    let report = apply::apply_model(&model);
+    // in_commit=true: the Squid reconcile (qzssl-apply) must read the SESSION
+    // config, since `service content-filtering enable` is not yet in the active
+    // config mid-commit. See apply::reconcile_squid.
+    let report = apply::apply_model(&model, true);
     if !report.ok {
         eprintln!(
             "WARNING: content-filtering config committed but not fully applied: {}",
@@ -69,7 +72,8 @@ pub fn commit() -> i32 {
 pub fn standalone_apply() -> i32 {
     match apply::load_desired() {
         Ok(Some(model)) => {
-            let report = apply::apply_model(&model);
+            // Standalone/boot resync: read the committed ACTIVE config (in_commit=false).
+            let report = apply::apply_model(&model, false);
             if report.ok {
                 log("applied");
                 0
