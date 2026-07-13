@@ -25,6 +25,12 @@ pub const PRISTINE_SUFFIX: &str = ".qz-pristine";
 pub const QZSSL_APPLY: &str = "/usr/libexec/quartzfire/qzssl-apply";
 pub const E2G_UNIT: &str = "e2guardian.service";
 pub const LOG_DIR: &str = "/var/log/quartzfire";
+/// Gate file for the e2guardian systemd drop-in's `ConditionPathExists`. Present
+/// only while Content Filtering is enabled AND qfcf has rendered the ICAP config
+/// (transparenthttpsport blanked). Under /run so it is cleared each boot: a
+/// stock-config e2guardian therefore cannot start on its default 8443 listener
+/// before qfcf re-renders. Must be created BEFORE `systemctl start`.
+pub const E2G_READY_MARKER: &str = "/run/quartzfire-content-filtering/e2g-ready";
 
 #[derive(Debug)]
 pub struct ApplyError(pub String);
@@ -349,6 +355,11 @@ fn apply_enabled(model: &Model, in_commit: bool) -> Result<(), ApplyError> {
     render_files(model)?;
     save_desired(model)?;
 
+    // Drop the readiness marker BEFORE starting: the e2guardian drop-in gates
+    // start on it (ConditionPathExists), and the config is now rendered with
+    // transparenthttpsport blanked, so it is safe to bring the daemon up.
+    write_atomic(Path::new(E2G_READY_MARKER), "")?;
+
     // Start/refresh e2guardian, then reconcile Squid so it gets the ICAP block.
     run("systemctl", &["enable", "--now", E2G_UNIT])?;
     // reload picks up list/group changes without dropping the ICAP listener.
@@ -391,6 +402,9 @@ pub fn render_files(model: &Model) -> Result<(), ApplyError> {
 }
 
 fn apply_disabled(in_commit: bool) -> Result<(), ApplyError> {
+    // Drop the readiness marker first so the drop-in's ConditionPathExists will
+    // refuse any future/racing start on stock config.
+    let _ = fs::remove_file(E2G_READY_MARKER);
     // Stop e2guardian and remove it from boot; harmless if never started.
     let _ = run("systemctl", &["disable", "--now", E2G_UNIT]);
     // Reconcile Squid so the ICAP block is removed (traffic flows normally).
@@ -470,6 +484,19 @@ mod tests {
         let out = apply_overrides("transparenthttpsport = 8443\n", &[("transparenthttpsport".into(), String::new())]);
         assert!(out.contains("transparenthttpsport =\n"));
         assert!(!out.contains("8443"));
+    }
+
+    /// The e2guardian readiness marker MUST live under /run (STATE_DIR), so it is
+    /// cleared on every boot. A persistent marker would let a stock-config
+    /// e2guardian pass the drop-in's ConditionPathExists and bind :8443 before
+    /// qfcf re-renders — the boot race behind the 2026-07-13 WebUI outage.
+    #[test]
+    fn ready_marker_is_boot_cleared_under_run() {
+        assert!(
+            E2G_READY_MARKER.starts_with("/run/"),
+            "marker {E2G_READY_MARKER} must be under /run so it clears each boot"
+        );
+        assert!(E2G_READY_MARKER.starts_with(STATE_DIR));
     }
 
     #[test]

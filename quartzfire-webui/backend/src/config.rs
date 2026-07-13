@@ -169,7 +169,11 @@ pub struct Config {
 }
 
 fn default_listen() -> String {
-    "127.0.0.1:8443".to_string()
+    // Loopback-only; nginx reverse-proxies to this. Deliberately NOT 8443 —
+    // that is e2guardian's stock `transparenthttpsport`, and a stock-config
+    // e2guardian (Content Filtering) would steal the port and crash-loop the
+    // backend. Kept clear of e2guardian (8080/8443), Squid (3128/9), ICAP (1344).
+    "127.0.0.1:8181".to_string()
 }
 fn default_vyos_api_url() -> String {
     // The VyOS HTTPS API serves TLS itself; QuartzFire pins it to loopback on
@@ -296,5 +300,35 @@ impl Config {
         std::fs::read_to_string(&self.vyos_api_key_file)
             .map(|s| s.trim().to_string())
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The backend listen port must not collide with any local daemon that
+    /// might squat it and crash-loop the backend. Regression guard for the
+    /// 2026-07-13 outage where e2guardian's stock `transparenthttpsport = 8443`
+    /// stole the port. Keep clear of e2guardian (8080/8443), Squid (3128/9),
+    /// ICAP (1344).
+    #[test]
+    fn default_listen_avoids_colliding_ports() {
+        let listen = default_listen();
+        for banned in ["8443", "8080", "3128", "3129", "1344"] {
+            assert!(
+                !listen.ends_with(&format!(":{banned}")),
+                "backend listen {listen} collides with a known local daemon port :{banned}"
+            );
+        }
+    }
+
+    /// An empty config file must fall back to the built-in defaults (used by
+    /// `Config::load` when the file is absent), and that fallback must carry the
+    /// non-colliding listen port.
+    #[test]
+    fn empty_config_uses_noncolliding_default_listen() {
+        let cfg: Config = toml::from_str("").unwrap();
+        assert_eq!(cfg.listen, "127.0.0.1:8181");
     }
 }

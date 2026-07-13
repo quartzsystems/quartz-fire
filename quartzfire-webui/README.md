@@ -14,7 +14,7 @@ Web management interface for QuartzFire (a VyOS-based firewall OS).
 ## Architecture
 
 ```
-browser ──https──> nginx :443 ──> quartzfire-webui (axum) :8443
+browser ──https──> nginx :443 ──> quartzfire-webui (axum) :8181
                                      ├── /                 static files (exported Next.js; login shell)
                                      ├── /api/auth/*       login/logout/me (session issue/verify)
                                      └── /api/*  ──auth──> VyOS HTTPS API https://127.0.0.1:4443
@@ -131,7 +131,7 @@ cd .. && make quartzfire
 `/etc/quartzfire/webui.toml` (installed by the package, override on device):
 
 ```toml
-listen        = "127.0.0.1:8443"   # nginx proxies to this
+listen        = "127.0.0.1:8181"   # nginx proxies to this
 vyos_api_url  = "https://127.0.0.1:4443"
 vyos_api_key_file = "/etc/quartzfire/vyos-api.key"
 www_root      = "/usr/share/quartzfire-webui/www"

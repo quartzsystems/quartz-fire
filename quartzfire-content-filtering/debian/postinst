@@ -15,11 +15,17 @@ case "$1" in
             chmod 0755 /config/quartzfire 2>/dev/null || true
         fi
 
-        # Do NOT let stock e2guardian start on boot with its default proxy
-        # config: it would bind a pointless proxy port and is needless attack
-        # surface. qfcf-apply enables + starts e2guardian (in ICAP server mode)
-        # only while `service content-filtering enable` is set.
-        systemctl disable e2guardian 2>/dev/null || true
+        # Do NOT let stock e2guardian run with its default proxy config: its
+        # stock `transparenthttpsport = 8443` collides with a service on 8443 and
+        # it is needless attack surface. `--now` also STOPS any instance the
+        # stock e2guardian package just enabled+started at install — without it
+        # the running daemon keeps the port until a reboot (this is exactly the
+        # bug that black-holed the WebUI). qfcf-apply enables + starts e2guardian
+        # (ICAP server mode, transparenthttpsport blanked) only while `service
+        # content-filtering enable` is set, and gates the start on the
+        # e2g-ready marker (see the systemd drop-in) so it can never come up on
+        # unrendered stock config.
+        systemctl disable --now e2guardian 2>/dev/null || true
 
         # Register `service content-filtering` with the vyos-1x Python XML
         # reference cache. The cstore templates alone are NOT enough:
