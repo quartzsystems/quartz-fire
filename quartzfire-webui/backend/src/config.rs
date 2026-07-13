@@ -152,6 +152,8 @@ pub struct Config {
     #[serde(default = "default_cf_log_file")]
     pub cf_log_file: PathBuf,
     /// qfcf helper symlinks used by the status/test/categories endpoints.
+    #[serde(default = "default_cf_status_helper")]
+    pub cf_status_helper: PathBuf,
     #[serde(default = "default_cf_categories_helper")]
     pub cf_categories_helper: PathBuf,
     #[serde(default = "default_cf_testurl_helper")]
@@ -253,6 +255,9 @@ fn default_cf_update_request_file() -> PathBuf {
 }
 fn default_cf_log_file() -> PathBuf {
     PathBuf::from("/var/log/quartzfire/content-filtering.json")
+}
+fn default_cf_status_helper() -> PathBuf {
+    PathBuf::from("/usr/libexec/quartzfire/qfcf-status")
 }
 fn default_cf_categories_helper() -> PathBuf {
     PathBuf::from("/usr/libexec/quartzfire/qfcf-categories")

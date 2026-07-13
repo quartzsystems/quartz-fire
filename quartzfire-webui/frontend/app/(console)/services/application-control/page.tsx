@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Copy, Eraser, Pause, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
@@ -91,13 +91,6 @@ function ActionsTab({
     const actions = { ...config.actions };
     delete actions[name];
     onSave({ ...config, actions });
-  };
-
-  const cloneAction = (name: string) => {
-    let n = `${name} copy`;
-    let i = 2;
-    while (config.actions[n]) n = `${name} copy ${i++}`;
-    onSave({ ...config, actions: { ...config.actions, [n]: structuredClone(config.actions[name]) } });
   };
 
   const commitEdit = (name: string, action: AcAction, originalName: string | null) => {
@@ -183,11 +176,14 @@ function ActionsTab({
                       <div className="flex items-center gap-1">
                         <button
                           className="icon-btn"
-                          title="Clone"
-                          onClick={() => cloneAction(name)}
+                          title="Edit"
+                          onClick={() => {
+                            setCreating(false);
+                            setEditing({ name, action: structuredClone(a) });
+                          }}
                           style={{ background: "transparent", border: 0, cursor: "pointer", color: "var(--qz-fg-3)" }}
                         >
-                          <Copy size={15} />
+                          <Pencil size={15} />
                         </button>
                         <button
                           className="icon-btn"

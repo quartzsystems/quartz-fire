@@ -36,8 +36,26 @@ fn read_json(path: &std::path::Path) -> Option<serde_json::Value> {
 // ── status ──────────────────────────────────────────────────────────────────
 
 /// GET /api/content-filtering/status
+///
+/// The e2guardian/ICAP probe fields (`e2guardian_active`, `icap_listening`,
+/// `installed_categories`) are only ever written by `qfcf-status` — nothing runs
+/// it on a schedule, so the on-disk status.json carries only what the last
+/// commit/apply wrote (enabled, apply_ok, …) and the daemon indicators would
+/// otherwise read as perpetually "stopped/down". So we run `qfcf-status` live
+/// here (same pattern as the categories endpoint) and overlay its fresh probe
+/// onto the persisted apply state. The helper's stdout is authoritative because
+/// its status.json write needs root; ours is an unprivileged read.
 pub async fn status(State(state): State<Arc<AppState>>) -> Result<Json<serde_json::Value>> {
-    let status = read_json(&state.config.cf_status_file).unwrap_or(serde_json::json!(null));
+    let mut status = read_json(&state.config.cf_status_file).unwrap_or(serde_json::json!({}));
+    if let Ok(output) = Command::new(&state.config.cf_status_helper).output().await {
+        if let Ok(probe) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
+            if let (Some(obj), Some(p)) = (status.as_object_mut(), probe.as_object()) {
+                for (k, v) in p {
+                    obj.insert(k.clone(), v.clone());
+                }
+            }
+        }
+    }
     Ok(Json(serde_json::json!({ "status": status })))
 }
 

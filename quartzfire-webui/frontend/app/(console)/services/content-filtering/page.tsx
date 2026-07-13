@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  AlertTriangle, Check, Plus, RotateCw, Trash2, ShieldAlert, ShieldCheck, Search, X,
+  AlertTriangle, Check, Pencil, Plus, RotateCw, Trash2, ShieldAlert, ShieldCheck, Search, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
@@ -459,53 +459,81 @@ export default function ContentFilteringPage() {
           )}
 
           {tab === "groups" && (
-            <div className="flex flex-col gap-3">
-              <div className="flex justify-end">
-                <Button size="sm" icon={Plus} onClick={() => setAddingGroup(true)}>Add action</Button>
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <p className="text-[13px] text-[var(--qz-fg-4)] m-0 flex-1">
+                  An action decides what a set of clients can reach — blocked categories, custom allow/block
+                  lists, and content scanning. Clients are mapped to an action by source subnet; the first
+                  action is the default that unmatched clients fall to.
+                </p>
+                <Button kind="primary" size="sm" icon={Plus} onClick={() => setAddingGroup(true)}>Add action</Button>
               </div>
               <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
                 <table className="qz-table" style={{ width: "100%" }}>
+                  <colgroup>
+                    <col style={{ width: 220 }} />
+                    <col />
+                    <col style={{ width: 120 }} />
+                    <col style={{ width: 170 }} />
+                    <col style={{ width: 90 }} />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>Action</th><th>Sources</th><th>Categories</th><th>Custom</th><th />
                     </tr>
                   </thead>
                   <tbody>
-                    {draft.groups.length === 0 && (
+                    {draft.groups.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
                           No actions — add one to start filtering. The first action is the default (unmatched clients).
                         </td>
                       </tr>
+                    ) : (
+                      draft.groups.map((g, i) => (
+                        <tr key={g.name} style={{ cursor: "pointer" }} onClick={() => setEditing(g)}>
+                          <td>
+                            <div className="font-semibold text-[var(--qz-fg-1)] flex items-center gap-1.5">
+                              {g.name}
+                              {i === 0 && <span className="badge badge-muted">default</span>}
+                            </div>
+                            {g.description && <div className="text-[11px] text-[var(--qz-fg-4)]">{g.description}</div>}
+                          </td>
+                          <td className="text-[12px] text-[var(--qz-fg-3)]">{i === 0 ? "unmatched" : (g.sourceAddress.join(", ") || "—")}</td>
+                          <td className="text-[12px] text-[var(--qz-fg-3)]">
+                            {g.blanketBlock
+                              ? <span className="badge badge-warn">blanket block</span>
+                              : `${g.categories.length} categor${g.categories.length === 1 ? "y" : "ies"}`}
+                          </td>
+                          <td className="text-[12px] text-[var(--qz-fg-3)]">
+                            {g.blockDomains.length + g.blockUrlRegex.length}b / {g.allowDomains.length}a
+                            {g.phraseFiltering && " · phrase"}{g.safeSearch && " · safe"}
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-1">
+                              <button className="icon-btn" title="Edit" onClick={() => setEditing(g)}
+                                style={{ background: "transparent", border: 0, cursor: "pointer", color: "var(--qz-fg-3)" }}>
+                                <Pencil size={15} />
+                              </button>
+                              {/* The default (first) action always exists — deleting it just
+                                  re-seeds on reload, so only non-default actions are removable. */}
+                              <button className="icon-btn"
+                                title={i === 0 ? "The default action cannot be removed" : "Remove"}
+                                disabled={i === 0}
+                                onClick={() => setDraft({ ...draft, groups: draft.groups.filter((x) => x.name !== g.name) })}
+                                style={{
+                                  background: "transparent", border: 0,
+                                  cursor: i === 0 ? "not-allowed" : "pointer",
+                                  color: i === 0 ? "var(--qz-fg-4)" : "var(--qz-danger)",
+                                  opacity: i === 0 ? 0.5 : 1,
+                                }}>
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
                     )}
-                    {draft.groups.map((g, i) => (
-                      <tr key={g.name} style={{ cursor: "default" }}>
-                        <td>
-                          <div className="text-[var(--qz-fg-1)] flex items-center gap-1.5">
-                            {g.name}
-                            {i === 0 && <span className="badge badge-muted">default</span>}
-                          </div>
-                          {g.description && <div className="text-[11px] text-[var(--qz-fg-4)]">{g.description}</div>}
-                        </td>
-                        <td className="text-[12px] text-[var(--qz-fg-3)]">{i === 0 ? "unmatched" : (g.sourceAddress.join(", ") || "—")}</td>
-                        <td className="text-[12px] text-[var(--qz-fg-3)]">{g.blanketBlock ? "blanket-block" : (g.categories.length || 0)}</td>
-                        <td className="text-[12px] text-[var(--qz-fg-3)]">
-                          {g.blockDomains.length + g.blockUrlRegex.length}b / {g.allowDomains.length}a
-                          {g.phraseFiltering && " · phrase"}{g.safeSearch && " · safe"}
-                        </td>
-                        <td className="text-right whitespace-nowrap">
-                          <div className="inline-flex items-center gap-2">
-                            <Button kind="ghost" size="sm" onClick={() => setEditing(g)}>Edit</Button>
-                            {/* The default (first) action always exists — deleting it just
-                                re-seeds on reload, so only non-default actions are removable. */}
-                            {i !== 0 && (
-                              <Button kind="ghost" size="sm" icon={Trash2}
-                                onClick={() => setDraft({ ...draft, groups: draft.groups.filter((x) => x.name !== g.name) })} />
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
                   </tbody>
                 </table>
               </div>
