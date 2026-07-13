@@ -94,6 +94,15 @@ const ITEMS: NavItem[] = [
     ],
   },
   {
+    id: "monitoring",
+    label: "Monitoring",
+    icon: Activity,
+    href: "/monitoring",
+    children: [
+      { id: "logs", label: "Logs", href: "/monitoring/logs", icon: ScrollText },
+    ],
+  },
+  {
     id: "system",
     label: "System",
     icon: Settings,

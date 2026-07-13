@@ -303,7 +303,7 @@ export interface CfStatusReport {
 }
 
 export async function fetchCfStatus(): Promise<CfStatusReport | null> {
-  const r = await apiFetch<{ status: CfStatusReport | null }>("/api/content-filtering/status");
+  const r = await apiFetch<{ status: CfStatusReport | null }>("/content-filtering/status");
   return r.status;
 }
 
@@ -312,12 +312,12 @@ export interface CfCategory {
   entries: number;
 }
 export async function fetchCfCategories(): Promise<CfCategory[]> {
-  const r = await apiFetch<{ categories: CfCategory[] }>("/api/content-filtering/categories");
+  const r = await apiFetch<{ categories: CfCategory[] }>("/content-filtering/categories");
   return r.categories ?? [];
 }
 
 export async function requestCfUpdate(): Promise<{ requested: boolean; seq: number }> {
-  return apiFetch("/api/content-filtering/update", { method: "POST" });
+  return apiFetch("/content-filtering/update", { method: "POST" });
 }
 
 export interface CfLogEntry {
@@ -345,7 +345,7 @@ export async function fetchCfLogs(opts: {
   if (opts.action) params.set("action", opts.action);
   const qs = params.toString();
   const r = await apiFetch<{ entries: CfLogEntry[] }>(
-    `/api/content-filtering/logs${qs ? `?${qs}` : ""}`,
+    `/content-filtering/logs${qs ? `?${qs}` : ""}`,
   );
   return r.entries ?? [];
 }
@@ -360,7 +360,7 @@ export interface CfVerdict {
   reason?: string;
 }
 export async function testCfUrl(url: string, group?: string): Promise<CfVerdict> {
-  return apiFetch("/api/content-filtering/test-url", {
+  return apiFetch("/content-filtering/test-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, group: group || undefined }),
