@@ -1,0 +1,197 @@
+# .github/workflows/build-iso.yml
+#
+# Build the QuartzFire ISO: the four local debs (webui, geoip, ssl-inspection,
+# qfappd + libndpi) in parallel, then the VyOS live-build ISO with all of them
+# baked in via packages/*.deb.
+#
+# Triggers:
+#   - manual (workflow_dispatch), with an optional "release" toggle that drops
+#     the UTC build stamp from the version string (mirrors `make quartzfire
+#     BUILD_STAMP=`)
+#   - tags matching v* → stamp-less release build, ISO attached to the
+#     GitHub Release
+#
+# Optional secret:
+#   MINISIGN_SECRET_KEY — an unencrypted minisign secret key. If present, the
+#   ISO is signed and the .minisig ships alongside it.
+
+name: Build QuartzFire ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release build (drop the UTC build stamp from the version)"
+        type: boolean
+        default: false
+  push:
+    tags:
+      - "v*"
+
+# One ISO build at a time per ref; don't cancel a tag build mid-flight.
+concurrency:
+  group: build-iso-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: write   # needed to attach the ISO to a Release on tag builds
+
+env:
+  BUILD_BY: actions@quartz.systems
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Stage 1: the local .debs, in parallel.
+  # Each component's build-deb.sh already does everything inside a
+  # rust:1-bookworm container, so we just run the scripts as-is on the runner.
+  # qfappd produces two debs (qfappd + libndpi-quartzfire); the packages/*.deb
+  # glob picks them both up.
+  # ──────────────────────────────────────────────────────────────────────────
+  build-debs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: true
+      matrix:
+        component:
+          - quartzfire-webui
+          - quartzfire-geoip
+          - quartzfire-ssl-inspection
+          - qfappd
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Build ${{ matrix.component }} .deb
+        run: bash ${{ matrix.component }}/build-deb.sh
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: debs-${{ matrix.component }}
+          path: packages/*.deb
+          retention-days: 3
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Stage 2: the ISO, inside the upstream VyOS build container.
+  # Same container + options as vyos-build's own package-smoketest workflow
+  # (rolling branch → vyos/vyos-build:rolling, --privileged for
+  # debootstrap/loop mounts).
+  # ──────────────────────────────────────────────────────────────────────────
+  build-iso:
+    needs: build-debs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    container:
+      image: vyos/vyos-build:rolling
+      options: --sysctl net.ipv6.conf.lo.disable_ipv6=0 --privileged
+    env:
+      # secrets can't be referenced directly in step `if:` conditions,
+      # so surface key presence as a job-level env var instead
+      HAVE_MINISIGN_KEY: ${{ secrets.MINISIGN_SECRET_KEY != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download all deb artifacts into packages/
+        uses: actions/download-artifact@v8
+        with:
+          pattern: debs-*
+          path: packages
+          merge-multiple: true
+
+      - name: List packages to be embedded
+        run: ls -l packages/
+
+      # Version logic mirrors the Makefile's `quartzfire` target:
+      #   quartzfire-<VERSION>-<UTC stamp>   (dev / manual builds)
+      #   quartzfire-<VERSION>               (tag or release=true builds)
+      # The stamp keeps every dev ISO's image name unique so the installer
+      # never refuses an upgrade to a rebuild of the same version.
+      - name: Compute version string
+        id: version
+        run: |
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          if [ -z "$VERSION" ]; then
+            echo "::error::VERSION file is missing or empty"
+            exit 1
+          fi
+
+          RELEASE=false
+          if [ "${{ github.ref_type }}" = "tag" ] || [ "${{ inputs.release }}" = "true" ]; then
+            RELEASE=true
+          fi
+
+          if [ "${{ github.ref_type }}" = "tag" ] && [ "${{ github.ref_name }}" != "v${VERSION}" ]; then
+            echo "::warning::Tag ${{ github.ref_name }} does not match VERSION file (v${VERSION}); building v${VERSION} anyway"
+          fi
+
+          if [ "$RELEASE" = "true" ]; then
+            FULL="quartzfire-${VERSION}"
+          else
+            FULL="quartzfire-${VERSION}-$(date -u +%Y%m%d%H%M)"
+          fi
+
+          echo "version=${FULL}" >> "$GITHUB_OUTPUT"
+          echo "Building ${FULL}"
+
+      - name: Build QuartzFire ISO
+        shell: bash
+        run: |
+          sudo --preserve-env ./build-vyos-image \
+            --architecture amd64 \
+            --build-by "${BUILD_BY}" \
+            --version "${{ steps.version.outputs.version }}" \
+            quartzfire
+
+      - name: Checksum
+        run: |
+          cd build
+          ISO="${{ steps.version.outputs.version }}-amd64.iso"
+          if [ ! -f "$ISO" ]; then
+            echo "::error::Expected build/$ISO not found; contents of build/:"
+            ls -l
+            exit 1
+          fi
+          sha256sum "$ISO" > "$ISO.sha256"
+          cat "$ISO.sha256"
+
+      # Optional: minisign the ISO if a key is configured
+      # (Settings → Secrets → Actions → MINISIGN_SECRET_KEY, the unencrypted
+      # secret key file contents). Skipped silently otherwise.
+      - name: Sign ISO with minisign
+        if: ${{ env.HAVE_MINISIGN_KEY == 'true' }}
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > /tmp/minisign.key
+          cd build
+          ISO="${{ steps.version.outputs.version }}-amd64.iso"
+          minisign -S -s /tmp/minisign.key -m "$ISO" \
+            -t "QuartzFire ${{ steps.version.outputs.version }}"
+          rm -f /tmp/minisign.key
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.version.outputs.version }}
+          path: |
+            build/${{ steps.version.outputs.version }}-amd64.iso
+            build/${{ steps.version.outputs.version }}-amd64.iso.sha256
+            build/${{ steps.version.outputs.version }}-amd64.iso.minisig
+            build/manifest.json
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Attach ISO to GitHub Release
+        if: ${{ github.ref_type == 'tag' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/${{ steps.version.outputs.version }}-amd64.iso
+            build/${{ steps.version.outputs.version }}-amd64.iso.sha256
+            build/${{ steps.version.outputs.version }}-amd64.iso.minisig
+          generate_release_notes: true
