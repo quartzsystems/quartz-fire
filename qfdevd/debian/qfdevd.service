@@ -15,6 +15,10 @@ Restart=on-failure
 RestartSec=2
 WatchdogSec=45
 TimeoutStopSec=15
+# qfdevd polls for the /config persistence mount before opening the DB (bounded
+# to 120s). Give the start phase headroom past that so a genuinely slow mount
+# can never trip systemd's default start timeout and restart-loop the daemon.
+TimeoutStartSec=150
 
 # Dedicated unprivileged identity. Joins the `quartzfire` group so the DB it
 # creates under /config can be handed to the (DynamicUser) WebUI backend, which

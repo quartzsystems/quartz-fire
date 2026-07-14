@@ -1,8 +1,8 @@
 # .github/workflows/build-iso.yml
 #
-# Build the QuartzFire ISO: the five local debs (webui, geoip, ssl-inspection,
-# qfappd + libndpi, qfdevd) in parallel, then the VyOS live-build ISO with all
-# of them baked in via packages/*.deb.
+# Build the QuartzFire ISO: the six local debs (webui, geoip, ssl-inspection,
+# content-filtering, qfappd + libndpi, qfdevd) in parallel, then the VyOS
+# live-build ISO with all of them baked in via packages/*.deb.
 #
 # Triggers:
 #   - manual (workflow_dispatch), with an optional "release" toggle that drops
@@ -57,6 +57,7 @@ jobs:
           - quartzfire-webui
           - quartzfire-geoip
           - quartzfire-ssl-inspection
+          - quartzfire-content-filtering
           - qfappd
           - qfdevd
     steps:

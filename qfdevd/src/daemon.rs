@@ -514,25 +514,39 @@ fn wait_for_config_mount(db_path: &std::path::Path) {
     if !db_path.starts_with("/config") {
         return;
     }
-    // /config is mounted once its device id differs from the root's.
-    let dev_of = |p: &str| -> Option<u64> {
-        use std::os::unix::fs::MetadataExt;
-        std::fs::metadata(p).ok().map(|m| m.dev())
-    };
-    let root_dev = dev_of("/");
+    // Detect the mount via /proc/self/mountinfo, NOT by comparing st_dev with
+    // the root. On VyOS `/config` is an overlay bind of /opt/vyatta/etc/config
+    // that shares the root filesystem's device id (verified on installed boxes:
+    // `stat` reports the same device for `/` and `/config`), so a st_dev diff
+    // never trips. The old heuristic therefore looped the full 120s every boot —
+    // longer than systemd's default start timeout — and the unit restart-looped,
+    // never opening the DB.
     for waited in 0..120 {
-        match (dev_of("/config"), root_dev) {
-            (Some(c), Some(r)) if c != r => {
-                if waited > 0 {
-                    tracing::info!("/config mounted after {waited}s");
-                }
-                return;
+        if is_mountpoint("/config") {
+            if waited > 0 {
+                tracing::info!("/config mounted after {waited}s");
             }
-            _ => {}
+            return;
         }
         std::thread::sleep(Duration::from_secs(1));
     }
     tracing::warn!("/config not detected as a mount after 120s; proceeding anyway");
+}
+
+/// True if `path` is an active mount point (appears as the mount-point field of
+/// a line in /proc/self/mountinfo). Works for bind/overlay mounts that share the
+/// parent filesystem's device id, which a st_dev comparison cannot detect.
+fn is_mountpoint(path: &str) -> bool {
+    let Ok(mounts) = std::fs::read_to_string("/proc/self/mountinfo") else {
+        return false;
+    };
+    // mountinfo fields are space-separated; the 5th (index 4) is the mount
+    // point. The kernel octal-escapes whitespace in the path, but /config has
+    // none, so a direct compare is correct here.
+    mounts
+        .lines()
+        .filter_map(|line| line.split(' ').nth(4))
+        .any(|mp| mp == path)
 }
 
 fn group_gid(name: &str) -> Option<u32> {
@@ -559,5 +573,13 @@ mod tests {
         assert_eq!(vlan_of("eth1.20").as_deref(), Some("20"));
         assert_eq!(vlan_of("eth1"), None);
         assert_eq!(vlan_of("bond0.100").as_deref(), Some("100"));
+    }
+
+    #[test]
+    fn mountpoint_detects_root_not_bogus() {
+        // `/` is always a mount point on Linux; a made-up path never is. Guards
+        // the /proc/self/mountinfo field parsing that gates the DB open.
+        assert!(is_mountpoint("/"));
+        assert!(!is_mountpoint("/nonexistent-qfdevd-test-path"));
     }
 }
