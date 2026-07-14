@@ -159,6 +159,25 @@ pub struct Config {
     #[serde(default = "default_cf_testurl_helper")]
     pub cf_testurl_helper: PathBuf,
 
+    // ── Device Monitoring (qfdevd) ──────────────────────────────────────────
+    /// Shared device inventory (SQLite, WAL) qfdevd maintains and we read for
+    /// Monitoring → Devices. Under /config so it survives image upgrades; the
+    /// backend reaches it via the `quartzfire` group (qfdevd makes the file
+    /// group-writable) and writes only the user-assigned `description`.
+    #[serde(default = "default_devices_db_file")]
+    pub devices_db_file: PathBuf,
+
+    /// qfdevd's runtime status snapshot (read-only for us): collector health,
+    /// last poll times, device count. Null-tolerant — absent until qfdevd runs.
+    #[serde(default = "default_qfdevd_status_file")]
+    pub qfdevd_status_file: PathBuf,
+
+    /// A device is Online if its neighbor entry is REACHABLE/DELAY/PROBE or it
+    /// passed traffic within this many seconds. Recomputed at query time so the
+    /// list is fresh regardless of qfdevd's last online sweep.
+    #[serde(default = "default_devices_online_timeout_secs")]
+    pub devices_online_timeout_secs: u64,
+
     /// Per-user dashboard tile layouts (a WebUI preference), keyed by username.
     /// Lives under /config so a saved layout survives image upgrades, and is
     /// writable for us via the unit's ReadWritePaths — same contract as the
@@ -271,6 +290,15 @@ fn default_cf_testurl_helper() -> PathBuf {
 }
 fn default_dashboard_layouts_file() -> PathBuf {
     PathBuf::from("/config/quartzfire/dashboards.json")
+}
+fn default_devices_db_file() -> PathBuf {
+    PathBuf::from("/config/quartzfire/devices.db")
+}
+fn default_qfdevd_status_file() -> PathBuf {
+    PathBuf::from("/run/qfdevd/status.json")
+}
+fn default_devices_online_timeout_secs() -> u64 {
+    300
 }
 fn default_guard_dir() -> PathBuf {
     PathBuf::from("/config/quartzfire")

@@ -1,0 +1,25 @@
+Source: qfdevd
+Section: net
+Priority: optional
+Maintainer: QuartzFire <cwellman@quartz.systems>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/zagdrath/quartz-fire
+
+Package: qfdevd
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         iproute2,
+         conntrack,
+         ieee-data
+Description: QuartzFire device/client monitoring daemon
+ Aggregates the neighbor table, Kea DHCPv4 leases, and conntrack byte
+ accounting into a shared SQLite inventory of the clients seen on the network,
+ with best-effort device-type/OS fingerprinting (MAC OUI + DHCP hostname).
+ .
+ Backs the QuartzFire WebUI's Monitoring - Devices page (a Meraki-style client
+ list): online/offline status, best-known identity, last-seen time, per-device
+ usage over selectable windows, client type, and IPv4 assignment. The WebUI
+ backend reads the same SQLite database (WAL) and owns the user-assigned
+ device description.

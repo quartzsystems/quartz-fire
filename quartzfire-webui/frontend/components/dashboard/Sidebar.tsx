@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, Settings, Search, LogOut, Network, Route, ArrowLeftRight, Shield, Server, LucideIcon, ChevronDown, ChevronRight, Cable, Tags, Repeat, Combine, Waypoints, Shuffle, ListOrdered, Boxes, BookMarked, Milestone, Router, Forward, Globe, Activity, ScrollText, ShieldAlert, SlidersHorizontal, Users, KeyRound, Wrench, AppWindow, Earth, Lock, ShieldCheck, HeartPulse, FolderSync, Filter } from "lucide-react";
+import { Gauge, Settings, Search, LogOut, Network, Route, ArrowLeftRight, Shield, Server, LucideIcon, ChevronDown, ChevronRight, Cable, Tags, Repeat, Combine, Waypoints, Shuffle, ListOrdered, Boxes, BookMarked, Milestone, Router, Forward, Globe, Activity, ScrollText, ShieldAlert, SlidersHorizontal, Users, KeyRound, Wrench, AppWindow, Earth, Lock, ShieldCheck, HeartPulse, FolderSync, Filter, MonitorSmartphone } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -99,6 +99,7 @@ const ITEMS: NavItem[] = [
     icon: Activity,
     href: "/monitoring",
     children: [
+      { id: "devices", label: "Devices", href: "/monitoring/devices", icon: MonitorSmartphone },
       { id: "logs", label: "Logs", href: "/monitoring/logs", icon: ScrollText },
     ],
   },

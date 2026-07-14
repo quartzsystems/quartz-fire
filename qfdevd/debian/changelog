@@ -1,0 +1,13 @@
+qfdevd (0.1.0) unstable; urgency=medium
+
+  * Initial release: device/client monitoring for QuartzFire.
+    - Neighbor-table collector (ip -j neigh) driving online/offline status.
+    - Kea DHCPv4 lease collector (memfile CSV) with static-reservation
+      detection from the Kea config.
+    - conntrack byte accounting (snapshot + DESTROY-event stream) into 5-minute
+      usage buckets for 1h/24h/7d windows.
+    - MAC OUI vendor lookup + DHCP-hostname device-type/OS fingerprinting.
+    - Shared SQLite inventory (WAL) at /config/quartzfire/devices.db read by the
+      WebUI backend (Monitoring - Devices).
+
+ -- QuartzFire <cwellman@quartz.systems>  Mon, 13 Jul 2026 00:00:00 +0000

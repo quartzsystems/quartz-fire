@@ -342,7 +342,12 @@ def suricata_update(settings, state):
         "ok": ok,
         "message": None if ok else (out.splitlines()[-1] if out else f"exit {code}"),
     }
-    state["update_seq_applied"] = settings.get("update_seq", 0)
+    # Only mark the requested sequence as applied on SUCCESS. Advancing it on a
+    # failed download would make later non-forced runs believe they are already
+    # up to date and never retry — the box would stay stuck on a stale/empty
+    # ruleset until the next --update or manual "Update now".
+    if ok:
+        state["update_seq_applied"] = settings.get("update_seq", 0)
     return ok
 
 
@@ -548,14 +553,30 @@ def main():
         log("IPS disabled — suricata stopped")
         return 0
 
+    # Render our suricata.yaml + drop-in BEFORE fetching signatures.
+    # suricata-update runs a post-download `suricata -T` against
+    # /etc/suricata/suricata.yaml; if that file is still Debian's stock config
+    # (SCADA parsers off — the case on a fresh image, or after an upgrade wipes
+    # the /etc overlay and this boot run re-renders), the SCADA/distribution
+    # rules fail the test and the fetch aborts with no/partial signatures — the
+    # "empty ruleset after boot" failure. Rendering our config first (parsers
+    # on) lets the validation pass. Idempotent, so the re-render below is cheap.
+    render_configs(settings)
+
     # Fetch signatures when explicitly requested (update_seq bumped), when the
-    # daily timer forces it (--update), or when there is no ruleset at all yet
-    # (first enable).
-    need_update = force_update or settings.get("update_seq", 0) > state.get(
-        "update_seq_applied", 0
+    # daily timer forces it (--update), when there is no usable ruleset yet
+    # (first enable), or when the last fetch FAILED — keep retrying each boot
+    # until one succeeds rather than freezing on a bad/empty ruleset.
+    have_rules = os.path.isfile(PRISTINE_FILE) and os.path.getsize(PRISTINE_FILE) > 0
+    last_update_ok = bool((state.get("last_update") or {}).get("ok"))
+    need_update = (
+        force_update
+        or settings.get("update_seq", 0) > state.get("update_seq_applied", 0)
+        or not have_rules
+        or not last_update_ok
     )
-    if need_update or (not os.path.isfile(PRISTINE_FILE) and not os.path.isfile(RULES_FILE)):
-        if not suricata_update(settings, state) and not os.path.isfile(PRISTINE_FILE):
+    if need_update:
+        if not suricata_update(settings, state) and not have_rules:
             # No signatures at all — run the engine anyway (it passes traffic;
             # the firewall's bypass option covers the rest) and surface why.
             error = "signature download failed: " + (
@@ -574,6 +595,8 @@ def main():
     with open(RULES_FILE) as f:
         rules_changed = f.read() != old_rules
 
+    # Re-render now that a downloaded classification.config may exist; this is
+    # the authoritative config-changed signal for the start/reload decision.
     config_changed = render_configs(settings)
     start_error = start_or_reload(config_changed, rules_changed)
     if start_error and not error:

@@ -1,0 +1,36 @@
+# qfdevd — QuartzFire device/client monitoring daemon.
+#
+# Every key is optional; the built-in defaults (shown here commented) are used
+# for anything omitted. Paths under /config persist across image upgrades.
+
+# Shared device inventory (SQLite, WAL). The WebUI backend opens the same file
+# to read the list and write user descriptions.
+# db_path = "/config/quartzfire/devices.db"
+
+# Runtime status snapshot for the WebUI (collector health, poll times). tmpfs.
+# status_path = "/run/qfdevd/status.json"
+
+# Poll intervals (seconds).
+# neigh_interval_secs       = 20     # ip -j neigh show (online/offline signal)
+# lease_interval_secs       = 30     # Kea DHCP leases
+# conntrack_snapshot_secs   = 30     # conntrack -L byte snapshot for long flows
+
+# A device is Online if its neighbor entry is REACHABLE/DELAY/PROBE or it passed
+# traffic within this many seconds.
+# online_timeout_secs = 300
+
+# Maintenance (prune) cadence and retention.
+# maintenance_interval_secs = 3600
+# usage_retention_days      = 30
+# device_retention_days     = 90     # 0 disables device pruning
+
+# Kea DHCPv4 sources.
+# kea_lease_file     = "/config/dhcp/dhcpv4-leases.csv"
+# kea_control_socket = "/run/kea/kea4-ctrl-socket"
+
+# IEEE OUI registry for MAC vendor lookup (from the ieee-data package).
+# oui_file = "/usr/share/ieee-data/oui.txt"
+
+# LAN interface prefixes to trust as client-facing. Empty trusts every
+# non-loopback interface; set this to keep WAN/uplink peers out of the list.
+# lan_interface_prefixes = ["eth1", "br", "bond"]

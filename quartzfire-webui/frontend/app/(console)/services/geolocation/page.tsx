@@ -493,6 +493,24 @@ function PoliciesTab({
     }
   };
 
+  // Remove a policy that no longer maps to an eligible Allow rule (its target
+  // rule was deleted, disabled its Allow action, or moved off a scanned chain).
+  // It is still in the config — counted and enforced — but has no table row, so
+  // this is the only way to clear it from the UI.
+  const removeOrphan = async (p: GeoPolicy) => {
+    const key = `orphan:${p.id}`;
+    setBusyRule(key);
+    try {
+      await deleteGeoPolicy(p.id);
+      setToast("Orphaned policy removed — confirm the change in the banner.");
+      onChanged();
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "Failed to remove the policy.");
+    } finally {
+      setBusyRule(null);
+    }
+  };
+
   if (fwState === "loading")
     return <div className="text-[13px] text-[var(--qz-fg-4)]">Loading firewall rules…</div>;
   if (fwState === "error")
@@ -518,7 +536,20 @@ function PoliciesTab({
     .filter((r) => r.action === "accept")
     .sort((a, b) => (rank[a.chain] - rank[b.chain]) || a.rule - b.rule);
 
-  const boundCount = new Set(config.policies.filter((p) => p.enabled).map((p) => `${p.ruleset}:${p.rule}`)).size;
+  // Policies whose target rule isn't an eligible Allow rule anymore. These
+  // never appear in the rule-driven table above, which is why the tab count
+  // (total policies) can exceed the visible rows.
+  const eligibleKeys = new Set(eligible.map((r) => `${r.chain}:${r.rule}`));
+  const orphans = config.policies.filter((p) => !eligibleKeys.has(`${p.ruleset}:${p.rule}`));
+
+  // "Enforced" = enabled policies actually attached to a live Allow rule.
+  // Orphans are excluded so this count + the orphan count reconcile with the
+  // tab total (total policies).
+  const boundCount = new Set(
+    config.policies
+      .filter((p) => p.enabled && eligibleKeys.has(`${p.ruleset}:${p.rule}`))
+      .map((p) => `${p.ruleset}:${p.rule}`),
+  ).size;
 
   return (
     <div className="flex flex-col gap-3 max-w-[1050px]">
@@ -644,6 +675,77 @@ function PoliciesTab({
           </tbody>
         </table>
       </div>
+
+      {orphans.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 text-[13px] text-[var(--qz-fg-2)]">
+            <AlertTriangle size={14} className="text-[var(--qz-warn)]" />
+            <span>
+              <b>{orphans.length} orphaned polic{orphans.length === 1 ? "y" : "ies"}.</b> These are
+              attached to a firewall rule that is no longer an Allow rule (deleted, disabled, or its
+              action changed), so they have no row above — but they still count toward the tab total
+              and the device still tries to enforce them. Remove them here.
+            </span>
+          </div>
+          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+            <table className="qz-table" style={{ width: "100%" }}>
+              <colgroup>
+                <col style={{ width: 90 }} />
+                <col style={{ width: 130 }} />
+                <col />
+                <col style={{ width: 150 }} />
+                <col style={{ width: 80 }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Rule</th>
+                  <th>Chain</th>
+                  <th>Action</th>
+                  <th>Direction</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {orphans.map((p) => {
+                  const busy = busyRule === `orphan:${p.id}`;
+                  return (
+                    <tr key={`orphan:${p.id}`} style={{ cursor: "default" }}>
+                      <td className="mono text-[var(--qz-fg-3)]">{p.rule}</td>
+                      <td className="text-[var(--qz-fg-3)]">{CHAIN_LABEL[p.ruleset] ?? p.ruleset}</td>
+                      <td>
+                        {actionNames.includes(p.action) ? (
+                          <span className="text-[var(--qz-fg-2)]">{p.action}</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[var(--qz-danger)]" title="Action no longer exists">
+                            <AlertTriangle size={12} /> {p.action}
+                          </span>
+                        )}
+                        {!p.enabled && <span className="badge badge-muted ml-2">Disabled</span>}
+                      </td>
+                      <td className="text-[var(--qz-fg-3)]">{GEO_DIRECTION_LABEL[p.direction]}</td>
+                      <td>
+                        <button
+                          className="icon-btn"
+                          title="Remove orphaned policy"
+                          disabled={busy}
+                          onClick={() => removeOrphan(p)}
+                          style={{
+                            background: "transparent", border: 0,
+                            cursor: busy ? "wait" : "pointer",
+                            color: "var(--qz-danger)", opacity: busy ? 0.5 : 1,
+                          }}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

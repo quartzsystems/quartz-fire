@@ -1,0 +1,37 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Create the qfdevd system user/group (sysusers file also does this on
+        # systemd hosts; this is the belt-and-braces path).
+        if command -v systemd-sysusers >/dev/null 2>&1; then
+            systemd-sysusers /usr/lib/sysusers.d/qfdevd.conf >/dev/null 2>&1 || true
+        fi
+        if ! getent group qfdevd >/dev/null; then
+            addgroup --system qfdevd || true
+        fi
+        if ! getent passwd qfdevd >/dev/null; then
+            adduser --system --no-create-home --ingroup qfdevd \
+                --gecos "QuartzFire Device Monitoring" qfdevd || true
+        fi
+
+        # The shared group the WebUI backend uses to reach the inventory DB.
+        # Created here too (package install order with quartzfire-webui is not
+        # guaranteed); adding qfdevd to it lets it hand the DB over group-owned.
+        if ! getent group quartzfire >/dev/null; then
+            addgroup --system quartzfire || true
+        fi
+        adduser qfdevd quartzfire >/dev/null 2>&1 || true
+
+        # Turn on conntrack accounting now (the drop-in also applies it at every
+        # boot). Failure inside the image-build chroot is harmless.
+        if command -v sysctl >/dev/null 2>&1; then
+            sysctl -w net.netfilter.nf_conntrack_acct=1 >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -285,6 +285,10 @@ export default function ContentFilteringPage() {
   const [live, setLive] = useState<ContentFilteringConfig>(emptyContentFilteringConfig());
   const [draft, setDraft] = useState<ContentFilteringConfig>(emptyContentFilteringConfig());
   const [ssl, setSsl] = useState<SslInspectionConfig>(emptySslInspectionConfig());
+  // null = the SSL Inspection config read succeeded (so `ssl.enabled` is
+  // authoritative); a string = we couldn't read it, so we must NOT infer
+  // "disabled" from the fallback and gate on it.
+  const [sslReadError, setSslReadError] = useState<string | null>(null);
   const [status, setStatus] = useState<CfStatusReport | null>(null);
   const [categories, setCategories] = useState<CfCategory[]>([]);
   const [logs, setLogs] = useState<CfLogEntry[]>([]);
@@ -296,8 +300,17 @@ export default function ContentFilteringPage() {
   const [logFilter, setLogFilter] = useState<{ group: string; action: string }>({ group: "", action: "" });
 
   const reloadConfig = useCallback(async () => {
-    const [cf, s] = await Promise.all([fetchContentFiltering(), fetchSslInspection().catch(() => emptySslInspectionConfig())]);
-    setLive(cf); setDraft(cf); setSsl(s);
+    const cf = await fetchContentFiltering();
+    setLive(cf); setDraft(cf);
+    // Read SSL Inspection separately so a failure here is reported as
+    // "couldn't read" rather than silently collapsing to "disabled" — the
+    // latter fabricates a gate that blocks enabling even when SSL is on.
+    try {
+      setSsl(await fetchSslInspection());
+      setSslReadError(null);
+    } catch (e) {
+      setSslReadError((e as Error).message || "Could not read the SSL Inspection status.");
+    }
   }, []);
 
   const reloadStatus = useCallback(async () => {
@@ -338,7 +351,11 @@ export default function ContentFilteringPage() {
   // Enabling filters all bumped HTTPS fail-closed, so confirm first; disabling
   // is safe and applies straight away. Requires SSL Inspection for plaintext.
   const onToggleRequest = (on: boolean) => {
-    if (on && !ssl.enabled) {
+    // Only block on a KNOWN-disabled read. If the SSL read failed
+    // (sslReadError set), don't fabricate the gate — let the attempt through;
+    // the device's own commit check is authoritative and will refuse with a
+    // clear message if SSL really is off.
+    if (on && sslReadError === null && !ssl.enabled) {
       setToast("Enable SSL Inspection first — Content Filtering needs the decrypted traffic.");
       return;
     }
@@ -414,7 +431,18 @@ export default function ContentFilteringPage() {
 
       <div className="flex-1 overflow-auto px-[36px] pb-8">
         <div className="max-w-[1000px] flex flex-col gap-4">
-          {!ssl.enabled && (
+          {sslReadError !== null ? (
+            <div className="flex items-start gap-3 rounded-md px-3 py-3 text-[13px] text-[var(--qz-fg-2)]"
+              style={{ background: "var(--qz-warn-soft)", border: "1px solid color-mix(in oklab, var(--qz-warn) 35%, transparent)" }}>
+              <AlertTriangle size={16} className="mt-[1px] shrink-0" style={{ color: "var(--qz-warn)" }} />
+              <div>
+                <b>Couldn&apos;t read the SSL Inspection status.</b> Content Filtering needs SSL Inspection
+                enabled, but this page couldn&apos;t confirm its state ({sslReadError}). Check the{" "}
+                <Link href="/services/ssl-inspection" className="text-[var(--qz-info)] underline">SSL Inspection</Link>{" "}
+                page — if it&apos;s enabled there, you can still enable Content Filtering here.
+              </div>
+            </div>
+          ) : !ssl.enabled && (
             <div className="flex items-start gap-3 rounded-md px-3 py-3 text-[13px] text-[var(--qz-fg-2)]"
               style={{ background: "var(--qz-warn-soft)", border: "1px solid color-mix(in oklab, var(--qz-warn) 35%, transparent)" }}>
               <AlertTriangle size={16} className="mt-[1px] shrink-0" style={{ color: "var(--qz-warn)" }} />
@@ -434,8 +462,9 @@ export default function ContentFilteringPage() {
                   detail={status?.e2guardian_active ? "active" : "stopped"} />
                 <Indicator label="ICAP listener" state={status?.icap_listening ? "ok" : "muted"}
                   detail={status?.icap_listening ? `:${status?.icap_port ?? live.listenPort}` : "down"} />
-                <Indicator label="SSL Inspection (required)" state={ssl.enabled ? "ok" : "warn"}
-                  detail={ssl.enabled ? "enabled" : "disabled"} />
+                <Indicator label="SSL Inspection (required)"
+                  state={sslReadError !== null ? "warn" : ssl.enabled ? "ok" : "warn"}
+                  detail={sslReadError !== null ? "unknown" : ssl.enabled ? "enabled" : "disabled"} />
                 <Indicator label="Last apply" state={status?.apply_ok === false ? "warn" : "muted"}
                   detail={status?.apply_error ? "error" : status?.apply_ok ? "ok" : "—"} />
               </section>

@@ -1,0 +1,39 @@
+[package]
+name = "qfdevd"
+description = "QuartzFire device/client monitoring daemon: aggregates the neighbor table, Kea DHCP leases, and conntrack accounting into a shared SQLite device inventory for the WebUI."
+version = "0.1.0"
+edition = "2021"
+license = "GPL-2.0-or-later"
+authors = ["QuartzFire <cwellman@quartz.systems>"]
+repository = "https://github.com/zagdrath/quartz-fire"
+
+[[bin]]
+name = "qfdevd"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive"] }
+# Bundled SQLite so we don't take a libsqlite3 build/runtime dep and the exact
+# version is pinned into the binary (the WebUI backend opens the same DB in WAL
+# mode with its own bundled copy — both agree on the on-disk format).
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "sync", "time", "process", "io-util"] }
+tokio-stream = { version = "0.1", features = ["io-util"] }
+sd-notify = "0.4"
+libc = "0.2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[dev-dependencies]
+tempfile = "3"

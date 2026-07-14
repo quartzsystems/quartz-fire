@@ -1,0 +1,36 @@
+#!/usr/bin/make -f
+# qfdevd Debian packaging. Pure-Rust build (bundled SQLite compiled from source
+# by the rusqlite `bundled` feature — build-essential supplies the C compiler).
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export CARGO_HOME = $(CURDIR)/debian/cargo
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release --locked
+
+override_dh_auto_test:
+	# Pure-logic modules test cross-platform; the collector orchestration needs
+	# a live kernel (ip/conntrack) and is exercised on-target.
+	cargo test --release --locked --lib || true
+
+override_dh_auto_clean:
+	cargo clean || true
+	rm -rf debian/cargo
+
+override_dh_auto_install:
+	install -D -m0755 target/release/qfdevd \
+		debian/qfdevd/usr/sbin/qfdevd
+	install -D -m0644 etc/qfdevd.toml \
+		debian/qfdevd/etc/qfdevd/qfdevd.toml
+	install -D -m0644 systemd/qfdevd-sysusers.conf \
+		debian/qfdevd/usr/lib/sysusers.d/qfdevd.conf
+	install -D -m0644 systemd/qfdevd-conntrack-acct.conf \
+		debian/qfdevd/usr/lib/sysctl.d/60-qfdevd-conntrack-acct.conf
+	install -D -m0644 docs/design.md \
+		debian/qfdevd/usr/share/doc/qfdevd/design.md
+
+# dh_installsystemd auto-processes debian/qfdevd.service and, because it carries
+# [Install] WantedBy=multi-user.target, enables it by default in the image.

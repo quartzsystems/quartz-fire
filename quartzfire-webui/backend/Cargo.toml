@@ -34,3 +34,7 @@ pwhash = "1"
 rand = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Reads the shared device inventory qfdevd maintains (Monitoring → Devices).
+# Bundled so the on-disk format matches qfdevd's bundled SQLite exactly and we
+# take no libsqlite3 build/runtime dependency.
+rusqlite = { version = "0.31", features = ["bundled"] }

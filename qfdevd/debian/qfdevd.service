@@ -1,0 +1,62 @@
+[Unit]
+Description=QuartzFire device/client monitoring daemon (qfdevd)
+Documentation=file:/usr/share/doc/qfdevd/design.md
+# /config mounts late on VyOS (vyos-router is Type=simple), so `After=` does not
+# wait for the bind mount; qfdevd polls for it itself before opening the DB. We
+# only need networking up so `ip`/`conntrack` have interfaces to report on.
+After=network-pre.target vyos-router.service
+Wants=network-pre.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=/usr/sbin/qfdevd --config /etc/qfdevd/qfdevd.toml run
+Restart=on-failure
+RestartSec=2
+WatchdogSec=45
+TimeoutStopSec=15
+
+# Dedicated unprivileged identity. Joins the `quartzfire` group so the DB it
+# creates under /config can be handed to the (DynamicUser) WebUI backend, which
+# is also a member of that group.
+User=qfdevd
+Group=qfdevd
+SupplementaryGroups=quartzfire
+
+# conntrack -L/-E (ctnetlink) needs NET_ADMIN; the neighbor table and Kea lease
+# CSV are read without privilege.
+AmbientCapabilities=CAP_NET_ADMIN
+CapabilityBoundingSet=CAP_NET_ADMIN
+NoNewPrivileges=yes
+
+# Runtime dir for status.json — 0755 so the unprivileged WebUI can read it.
+RuntimeDirectory=qfdevd
+RuntimeDirectoryMode=0755
+ConfigurationDirectory=qfdevd
+
+# The device inventory lives under /config (persists across image upgrades).
+# `-` tolerates absence on dev boxes without /config.
+ReadWritePaths=-/config/quartzfire
+
+# Sandboxing.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# ctnetlink (NET_ADMIN) is AF_NETLINK; the Kea control socket is AF_UNIX.
+RestrictAddressFamilies=AF_UNIX AF_NETLINK AF_INET AF_INET6
+
+# Structured logs to the journal under this identifier.
+SyslogIdentifier=qfdevd
+
+[Install]
+WantedBy=multi-user.target

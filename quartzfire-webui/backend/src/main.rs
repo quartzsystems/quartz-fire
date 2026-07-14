@@ -9,6 +9,7 @@ mod guard;
 mod image;
 mod ips;
 mod monitor;
+mod monitoring;
 mod phy;
 mod proxy;
 mod ssl_inspection;
@@ -91,6 +92,13 @@ async fn main() -> Result<()> {
         // Static routes win over the `/api/*rest` proxy wildcard.
         .route("/api/monitor/firewall-log", get(monitor::firewall_log))
         .route("/api/monitor/system-log", get(monitor::system_log))
+        // Device/client monitoring (Monitoring → Devices): the read side of the
+        // shared inventory qfdevd maintains, plus the user-owned description.
+        .route("/api/monitoring/devices", get(monitoring::list))
+        .route(
+            "/api/monitoring/devices/:mac",
+            get(monitoring::detail).patch(monitoring::patch),
+        )
         .route("/api/ips/status", get(ips::status))
         .route("/api/ips/settings", put(ips::put_settings))
         .route("/api/ips/update", post(ips::request_update))

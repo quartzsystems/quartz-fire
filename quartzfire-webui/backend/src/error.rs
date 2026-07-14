@@ -12,6 +12,8 @@ use thiserror::Error;
 pub enum AppError {
     #[error("{0}")]
     BadRequest(String),
+    #[error("{0}")]
+    NotFound(String),
     /// Deliberately vague — the same message for "no such user" and "wrong
     /// password" so login responses don't leak which usernames exist.
     #[error("invalid credentials")]
@@ -26,6 +28,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status = match &self {
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::Unauthorized => StatusCode::UNAUTHORIZED,
             AppError::Gateway(_) => StatusCode::BAD_GATEWAY,
             AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
