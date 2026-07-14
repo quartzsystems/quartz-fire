@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, Settings, Search, LogOut, Network, Route, ArrowLeftRight, Shield, Server, LucideIcon, ChevronDown, ChevronRight, Cable, Tags, Repeat, Combine, Waypoints, Shuffle, ListOrdered, Boxes, BookMarked, Milestone, Router, Forward, Globe, Activity, ScrollText, ShieldAlert, SlidersHorizontal, Users, KeyRound, Wrench, AppWindow, Earth, Lock, ShieldCheck, HeartPulse, FolderSync, Filter, MonitorSmartphone } from "lucide-react";
+import { Gauge, Settings, Search, LogOut, Network, Route, ArrowLeftRight, Shield, Server, LucideIcon, ChevronDown, ChevronRight, Cable, Tags, Repeat, Combine, Waypoints, Shuffle, ListOrdered, Boxes, BookMarked, Milestone, Router, Forward, Globe, Activity, ScrollText, ShieldAlert, SlidersHorizontal, Users, KeyRound, Wrench, AppWindow, Earth, Lock, ShieldCheck, HeartPulse, FolderSync, Filter, MonitorSmartphone, Spline, Share2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -33,6 +33,7 @@ const ITEMS: NavItem[] = [
       { id: "vlan",     label: "VLAN",     href: "/interfaces/vlan",     icon: Tags },
       { id: "bonding",  label: "Bonding",  href: "/interfaces/bonding",  icon: Combine },
       { id: "bridge",   label: "Bridge",   href: "/interfaces/bridge",   icon: Waypoints },
+      { id: "vxlan",    label: "VXLAN",    href: "/interfaces/vxlan",    icon: Spline },
       { id: "loopback", label: "Loopback", href: "/interfaces/loopback", icon: Repeat },
     ],
   },
@@ -64,6 +65,8 @@ const ITEMS: NavItem[] = [
     href: "/routing",
     children: [
       { id: "static", label: "Static", href: "/routing/static", icon: Milestone },
+      { id: "bgp",    label: "BGP",    href: "/routing/bgp",    icon: Share2 },
+      { id: "policy", label: "Policy", href: "/routing/policy", icon: Filter },
     ],
   },
   { id: "vpn", label: "VPN", icon: ShieldCheck, href: "/vpn" },

@@ -119,6 +119,48 @@ export interface BridgeConfigUpdate {
   enabled: boolean;
 }
 
+/// A VXLAN tunnel endpoint (VTEP). The control plane is inferred from which
+/// fields are set: `external` (parameters external) → BGP-EVPN, `remotes` →
+/// static unicast, `group` → multicast BUM flooding.
+export interface VxlanInterface {
+  name: string;
+  description: string | null;
+  addresses: string[];
+  mtu: number | null;
+  enabled: boolean;
+  vni: number | null;
+  source_address: string | null;
+  source_interface: string | null;
+  /** Static unicast remote VTEPs (multi-value). Empty for EVPN/multicast. */
+  remotes: string[];
+  /** Multicast group for BUM traffic. */
+  group: string | null;
+  port: number | null;
+  /** `parameters external` — hand the control plane to BGP L2VPN/EVPN. */
+  external: boolean;
+  /** `parameters nolearning` — disable dynamic MAC learning (EVPN fabrics). */
+  nolearning: boolean;
+  /** `parameters neighbor-suppress` — ARP/ND suppression (RFC 7432). */
+  neighbor_suppress: boolean;
+}
+
+export interface VxlanConfigUpdate {
+  name: string;
+  description: string | null;
+  addresses: string[];
+  mtu: number | null;
+  enabled: boolean;
+  vni: number | null;
+  source_address: string | null;
+  source_interface: string | null;
+  remotes: string[];
+  group: string | null;
+  port: number | null;
+  external: boolean;
+  nolearning: boolean;
+  neighbor_suppress: boolean;
+}
+
 export interface VyosCommand {
   op: "set" | "delete";
   path: string[];
@@ -291,6 +333,45 @@ export async function fetchBridges(): Promise<BridgeInterface[]> {
         mtu: asMtu(cfg),
         members: asMembers(cfg),
         enabled: isEnabled(cfg),
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/// A multi-value leaf renders as a JSON string for one value, array for several
+/// (same shape as `address`). Used for VXLAN `remote`.
+function asMulti(v: Cfg, key: string): string[] {
+  const a = v[key];
+  if (typeof a === "string") return [a];
+  if (Array.isArray(a)) return a.filter((x): x is string => typeof x === "string");
+  return [];
+}
+
+/// Configured VXLAN interfaces (VTEPs).
+export async function fetchVxlan(): Promise<VxlanInterface[]> {
+  const node = kindNode(await fetchInterfacesConfig(), "vxlan");
+
+  return Object.entries(node)
+    .map(([name, raw]) => {
+      const cfg = (raw ?? {}) as Cfg;
+      const params = (cfg["parameters"] ?? {}) as Cfg;
+      const vniStr = childStr(cfg, "vni");
+      const portStr = childStr(cfg, "port");
+      return {
+        name,
+        description: childStr(cfg, "description"),
+        addresses: asAddresses(cfg),
+        mtu: asMtu(cfg),
+        enabled: isEnabled(cfg),
+        vni: vniStr !== null && Number.isInteger(Number(vniStr)) ? Number(vniStr) : null,
+        source_address: childStr(cfg, "source-address"),
+        source_interface: childStr(cfg, "source-interface"),
+        remotes: asMulti(cfg, "remote"),
+        group: childStr(cfg, "group"),
+        port: portStr !== null && Number.isInteger(Number(portStr)) ? Number(portStr) : null,
+        external: "external" in params,
+        nolearning: "nolearning" in params,
+        neighbor_suppress: "neighbor-suppress" in params,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -667,4 +748,57 @@ export function applyBridge(
 /// Delete a bridge interface.
 export function deleteBridge(name: string): Promise<number> {
   return guardedApply([{ op: "delete", path: ["interfaces", "bridge", name] }]);
+}
+
+// ── VXLAN ───────────────────────────────────────────────────────────────────────
+
+/// Diff a desired VXLAN config against the live row into a minimal set/delete
+/// command list (empty when the config already matches).
+export function diffVxlan(live: VxlanInterface | null, u: VxlanConfigUpdate): VyosCommand[] {
+  const base = ["interfaces", "vxlan", u.name];
+  const out: VyosCommand[] = [];
+
+  diffCommonLeaves(out, base, live, u);
+
+  // Single-value leaves — null/blank means "absent" (delete the leaf).
+  const leaf = (sub: string, liveV: string | null, desiredRaw: string | null) => {
+    const desired = trimmed(desiredRaw);
+    if (desired === (liveV ?? null)) return;
+    if (desired !== null) out.push({ op: "set", path: [...base, sub, desired] });
+    else out.push({ op: "delete", path: [...base, sub] });
+  };
+  leaf("vni", live?.vni != null ? String(live.vni) : null, u.vni != null ? String(u.vni) : null);
+  leaf("source-address", live?.source_address ?? null, u.source_address);
+  leaf("source-interface", live?.source_interface ?? null, u.source_interface);
+  leaf("group", live?.group ?? null, u.group);
+  leaf("port", live?.port != null ? String(live.port) : null, u.port != null ? String(u.port) : null);
+
+  // Remotes (multi-value like address).
+  const liveRemotes = live?.remotes ?? [];
+  const newRemotes = u.remotes.map((r) => r.trim()).filter(Boolean);
+  for (const r of newRemotes) if (!liveRemotes.includes(r)) out.push({ op: "set", path: [...base, "remote", r] });
+  for (const r of liveRemotes) if (!newRemotes.includes(r)) out.push({ op: "delete", path: [...base, "remote", r] });
+
+  // Valueless `parameters` flags — presence toggles.
+  const flag = (name: string, liveV: boolean, desired: boolean) => {
+    if (desired === liveV) return;
+    if (desired) out.push({ op: "set", path: [...base, "parameters", name] });
+    else out.push({ op: "delete", path: [...base, "parameters", name] });
+  };
+  flag("external", live?.external ?? false, u.external);
+  flag("nolearning", live?.nolearning ?? false, u.nolearning);
+  flag("neighbor-suppress", live?.neighbor_suppress ?? false, u.neighbor_suppress);
+
+  ensureCreated(out, base, live === null);
+  return out;
+}
+
+/// Apply a desired VXLAN config. Returns the number of changes applied.
+export function applyVxlan(live: VxlanInterface | null, update: VxlanConfigUpdate): Promise<number> {
+  return guardedApply(diffVxlan(live, update));
+}
+
+/// Delete a VXLAN interface.
+export function deleteVxlan(name: string): Promise<number> {
+  return guardedApply([{ op: "delete", path: ["interfaces", "vxlan", name] }]);
 }
