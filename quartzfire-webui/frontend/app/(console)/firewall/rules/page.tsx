@@ -61,9 +61,16 @@ function EndpointCell({
     return e.name;
   });
   const allIfaces = sel.every((e) => e.kind === "interface" || e.kind === "ifgroup");
+  // Long endpoint lists blow out the column and get truncated mid-word; show
+  // the first few names plus a "+N" overflow chip instead. The full list stays
+  // in the tooltip.
+  const SHOWN = 3;
+  const overflow = names.length - SHOWN;
+  const shown = overflow > 0 ? names.slice(0, SHOWN) : names;
   return (
     <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--qz-fg-1)" }} title={raw.join(", ")}>
-      {names.join(", ")}
+      {shown.join(", ")}
+      {overflow > 0 && <span className="text-[var(--qz-fg-4)]"> +{overflow}</span>}
       {allIfaces && <span className="text-[var(--qz-fg-4)]"> · iface</span>}
     </span>
   );
@@ -385,7 +392,7 @@ export default function FirewallRulesPage() {
 
             {/* Table */}
             <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-              <table className="qz-table" style={{ width: "100%" }}>
+              <table className="qz-table" style={{ width: "100%", tableLayout: "fixed" }}>
                 <colgroup>
                   <col style={{ width: 70 }} />
                   <col style={{ width: 100 }} />
