@@ -71,6 +71,7 @@ const V46_ADDR_RE = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-f:]+$/i;
 export function VxlanFormModal({
   initial,
   interfaces,
+  bridges,
   existing,
   onClose,
   onSaved,
@@ -79,6 +80,8 @@ export function VxlanFormModal({
   initial?: VxlanInterface;
   /** Interface names offered for the source-interface picker. */
   interfaces: string[];
+  /** Configured bridge names offered for the bridge-membership picker. */
+  bridges: string[];
   /** All current VXLANs, for duplicate detection. */
   existing: VxlanInterface[];
   onClose: () => void;
@@ -89,6 +92,7 @@ export function VxlanFormModal({
   const [mode, setMode] = useState<Mode>(initialMode(initial));
   const [name, setName] = useState(initial?.name ?? "");
   const [vnis, setVnis] = useState<VniRow[]>(toVniRows(initial?.vnis));
+  const [bridge, setBridge] = useState(initial?.bridge ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [sourceAddress, setSourceAddress] = useState(initial?.source_address ?? "");
   const [sourceInterface, setSourceInterface] = useState(initial?.source_interface ?? "");
@@ -139,6 +143,7 @@ export function VxlanFormModal({
     }
     const parsedVnis: VniMapping[] = [];
     const seenVni = new Set<number>();
+    const seenVlan = new Set<number>();
     for (const r of vniRows) {
       const n = Number(r.vni);
       if (!Number.isInteger(n) || n < 0 || n > 16777215) {
@@ -157,9 +162,31 @@ export function VxlanFormModal({
           setError("VLAN must be a whole number between 1 and 4094.");
           return;
         }
+        if (seenVlan.has(v)) {
+          setError(`VLAN ${v} is mapped more than once.`);
+          return;
+        }
+        seenVlan.add(v);
         vlan = v;
       }
       parsedVnis.push({ vni: n, vlan });
+    }
+    // VyOS models these two ways and won't mix them on one interface: a single
+    // unmapped VNI is the scalar `vni <n>`; VLAN-mapped VNIs are the SVD
+    // `vlan-to-vni` set (which needs the BGP-EVPN control plane + a bridge).
+    const mapped = parsedVnis.filter((m) => m.vlan != null);
+    const unmapped = parsedVnis.filter((m) => m.vlan == null);
+    if (mapped.length > 0 && unmapped.length > 0) {
+      setError("Give every VNI a VLAN (a Single VXLAN Device), or use one VNI with no VLAN — VyOS can't mix the two on one interface.");
+      return;
+    }
+    if (unmapped.length > 1) {
+      setError("Only one VNI can be unmapped. Assign a VLAN to each VNI to carry several (SVD).");
+      return;
+    }
+    if (mapped.length > 0 && mode !== "evpn") {
+      setError("VLAN-to-VNI mapping (a Single VXLAN Device) requires the BGP-EVPN control plane.");
+      return;
     }
     const src = sourceAddress.trim();
     if (mode === "evpn" && !src) {
@@ -211,6 +238,7 @@ export function VxlanFormModal({
         external: mode === "evpn",
         nolearning,
         neighbor_suppress: neighborSuppress,
+        bridge: bridge.trim() || null,
       });
       onSaved(
         applied === 0
@@ -235,6 +263,11 @@ export function VxlanFormModal({
       <form onSubmit={submit} className="flex flex-col gap-4">
         <datalist id="vxlan-interfaces">
           {interfaces.map((n) => (
+            <option key={n} value={n} />
+          ))}
+        </datalist>
+        <datalist id="vxlan-bridges">
+          {bridges.map((n) => (
             <option key={n} value={n} />
           ))}
         </datalist>
@@ -313,9 +346,23 @@ export function VxlanFormModal({
             ))}
           </div>
           <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[6px]">
-            24-bit segment ID (0–16777215). Map a VNI to a VLAN for an EVPN VLAN-aware bundle; leave VLAN blank for a plain (L3) VNI.
+            24-bit segment ID (0–16777215). Give every VNI a VLAN to carry several on this one device (a Single VXLAN Device →
+            <span className="font-mono"> vlan-to-vni</span>, needs BGP-EVPN + a bridge). Leave VLAN blank for a single plain (L3) VNI.
           </p>
         </div>
+
+        <Field label="Bridge" hint="Add this VTEP to a bridge so its VLANs forward. Required for a Single VXLAN Device; configure the bridge itself under Interfaces → Bridge.">
+          <input
+            list="vxlan-bridges"
+            value={bridge}
+            onChange={(e) => setBridge(e.target.value)}
+            placeholder="br0"
+            className={inputCls}
+            style={monoSt}
+            onFocus={focusBorder}
+            onBlur={blurBorder}
+          />
+        </Field>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field

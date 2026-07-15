@@ -5,7 +5,7 @@ import { AlertTriangle, Plus, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
-import { deleteVxlan, fetchVxlan, VxlanInterface } from "@/lib/interfaces";
+import { deleteVxlan, fetchBridges, fetchVxlan, VxlanInterface } from "@/lib/interfaces";
 import { fetchInterfaceStats } from "@/lib/vyos";
 import { useDashboard } from "@/lib/DashboardContext";
 import { VxlanFormModal } from "./VxlanFormModal";
@@ -101,6 +101,7 @@ export default function VxlanPage() {
   const { setToast } = useDashboard();
   const [rows, setRows] = useState<VxlanInterface[]>([]);
   const [interfaces, setInterfaces] = useState<string[]>([]);
+  const [bridges, setBridges] = useState<string[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -110,13 +111,16 @@ export default function VxlanPage() {
   const load = useCallback(async (mode: "load" | "refresh" = "load") => {
     if (mode === "load") setStatus("loading");
     try {
-      // Interface names feed the source-interface picker; tolerate their failure.
-      const [vx, ifs] = await Promise.all([
+      // Interface + bridge names feed the source-interface / bridge pickers;
+      // tolerate their failure.
+      const [vx, ifs, brs] = await Promise.all([
         fetchVxlan(),
         fetchInterfaceStats().catch(() => []),
+        fetchBridges().catch(() => []),
       ]);
       setRows(vx);
       setInterfaces(ifs.map((i) => i.name).filter((n) => !n.startsWith("vxlan")).sort());
+      setBridges(brs.map((b) => b.name).sort());
       setStatus("ready");
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Failed to load VXLAN interfaces.");
@@ -194,6 +198,7 @@ export default function VxlanPage() {
         <VxlanFormModal
           initial={modal.vxlan}
           interfaces={interfaces}
+          bridges={bridges}
           existing={rows}
           onClose={() => setModal(null)}
           onSaved={(msg) => {

@@ -119,10 +119,11 @@ export interface BridgeConfigUpdate {
   enabled: boolean;
 }
 
-/// One VNI carried by a VXLAN interface. In VyOS 1.4+ `vni` is a tag node, so a
-/// single VTEP can carry many VNIs, each optionally bridged to a VLAN — the
-/// VLAN-aware bundle / single-VXLAN-device model used by EVPN fabrics
-/// (`vni 10010 vlan 10`). A null `vlan` is a plain (usually L3) VNI.
+/// One VNI carried by a VXLAN interface. VyOS expresses these two ways:
+///   * a single unmapped VNI as the scalar leaf `vni <n>` (classic), or
+///   * many VLAN→VNI mappings on one Single VXLAN Device (SVD) via
+///     `vlan-to-vni <vlan> vni <n>` (needs `parameters external`).
+/// A null `vlan` is the scalar case; a set `vlan` is an SVD mapping.
 export interface VniMapping {
   vni: number;
   vlan: number | null;
@@ -152,6 +153,9 @@ export interface VxlanInterface {
   nolearning: boolean;
   /** `parameters neighbor-suppress` — ARP/ND suppression (RFC 7432). */
   neighbor_suppress: boolean;
+  /** Bridge this VTEP is a member of (`interfaces bridge <br> member interface
+   *  <vxlanN>`), needed for SVD VLANs to forward. Null = not bridged. */
+  bridge: string | null;
 }
 
 export interface VxlanConfigUpdate {
@@ -169,6 +173,7 @@ export interface VxlanConfigUpdate {
   external: boolean;
   nolearning: boolean;
   neighbor_suppress: boolean;
+  bridge: string | null;
 }
 
 export interface VyosCommand {
@@ -357,29 +362,45 @@ function asMulti(v: Cfg, key: string): string[] {
   return [];
 }
 
-/// Parse the `vni` node into VNI→VLAN rows. VyOS 1.4+ models `vni` as a tag
-/// node (an object keyed by the VNI, each with an optional `vlan` child); older
-/// single-VNI configs may render it as a bare string. Both are handled so a
-/// multi-VNI VTEP round-trips and a legacy single-VNI one still reads.
-function parseVnis(node: unknown): VniMapping[] {
+/// Parse a VXLAN's VNIs from the two VyOS forms: the scalar leaf `vni <n>`
+/// (a single, usually unmapped, VNI) and the SVD tag node `vlan-to-vni <vlan>
+/// vni <n>` (many VLAN→VNI mappings on one device). Range mappings
+/// (`vlan-to-vni 35-40`) are skipped — the row editor handles single values.
+function parseVnis(cfg: Cfg): VniMapping[] {
   const out: VniMapping[] = [];
-  if (node && typeof node === "object" && !Array.isArray(node)) {
-    for (const [vniKey, raw] of Object.entries(node as Cfg)) {
-      const vni = Number(vniKey);
-      if (!Number.isInteger(vni)) continue;
-      const vlanStr = childStr((raw ?? {}) as Cfg, "vlan");
-      const vlan = vlanStr !== null && Number.isInteger(Number(vlanStr)) ? Number(vlanStr) : null;
-      out.push({ vni, vlan });
-    }
-  } else if (typeof node === "string" && Number.isInteger(Number(node.trim()))) {
-    out.push({ vni: Number(node.trim()), vlan: null });
+  const vniStr = childStr(cfg, "vni");
+  if (vniStr !== null && Number.isInteger(Number(vniStr))) {
+    out.push({ vni: Number(vniStr), vlan: null });
   }
-  return out.sort((a, b) => a.vni - b.vni);
+  const v2v = cfg["vlan-to-vni"];
+  if (v2v && typeof v2v === "object" && !Array.isArray(v2v)) {
+    for (const [vlanKey, raw] of Object.entries(v2v as Cfg)) {
+      const vlan = Number(vlanKey);
+      const vni = Number(childStr((raw ?? {}) as Cfg, "vni") ?? "");
+      if (Number.isInteger(vlan) && Number.isInteger(vni)) out.push({ vni, vlan });
+    }
+  }
+  return out.sort((a, b) => (a.vlan ?? -1) - (b.vlan ?? -1) || a.vni - b.vni);
+}
+
+/// Build a `vxlanName → bridgeName` map from the bridge interfaces' member
+/// lists, so a VTEP knows which bridge it belongs to (SVD needs the VTEP in a
+/// bridge). A VTEP should be in at most one bridge; the first wins.
+function bridgeMembership(interfaces: Cfg): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [brName, raw] of Object.entries(kindNode(interfaces, "bridge"))) {
+    for (const member of asMembers((raw ?? {}) as Cfg)) {
+      if (!(member in out)) out[member] = brName;
+    }
+  }
+  return out;
 }
 
 /// Configured VXLAN interfaces (VTEPs).
 export async function fetchVxlan(): Promise<VxlanInterface[]> {
-  const node = kindNode(await fetchInterfacesConfig(), "vxlan");
+  const interfaces = await fetchInterfacesConfig();
+  const node = kindNode(interfaces, "vxlan");
+  const bridges = bridgeMembership(interfaces);
 
   return Object.entries(node)
     .map(([name, raw]) => {
@@ -392,7 +413,7 @@ export async function fetchVxlan(): Promise<VxlanInterface[]> {
         addresses: asAddresses(cfg),
         mtu: asMtu(cfg),
         enabled: isEnabled(cfg),
-        vnis: parseVnis(cfg["vni"]),
+        vnis: parseVnis(cfg),
         source_address: childStr(cfg, "source-address"),
         source_interface: childStr(cfg, "source-interface"),
         remotes: asMulti(cfg, "remote"),
@@ -401,6 +422,7 @@ export async function fetchVxlan(): Promise<VxlanInterface[]> {
         external: "external" in params,
         nolearning: "nolearning" in params,
         neighbor_suppress: "neighbor-suppress" in params,
+        bridge: bridges[name] ?? null,
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -796,22 +818,23 @@ export function diffVxlan(live: VxlanInterface | null, u: VxlanConfigUpdate): Vy
     if (desired !== null) out.push({ op: "set", path: [...base, sub, desired] });
     else out.push({ op: "delete", path: [...base, sub] });
   };
-  // VNIs are a tag node (`vni <n>` with an optional `vlan <id>` child). Add new
-  // VNIs, drop removed ones, and diff each VNI's VLAN mapping in place.
-  const liveVnis = new Map((live?.vnis ?? []).map((m) => [m.vni, m]));
-  const wantVnis = new Map(u.vnis.map((m) => [m.vni, m]));
-  for (const [vni, m] of wantVnis) {
-    const vniPath = [...base, "vni", String(vni)];
-    const lv = liveVnis.get(vni) ?? null;
-    if (!lv) out.push({ op: "set", path: vniPath });
-    const liveVlan = lv?.vlan ?? null;
-    if (m.vlan !== liveVlan) {
-      if (m.vlan != null) out.push({ op: "set", path: [...vniPath, "vlan", String(m.vlan)] });
-      else out.push({ op: "delete", path: [...vniPath, "vlan"] });
+  // VNIs. VyOS has two forms: a scalar leaf `vni <n>` for a single unmapped VNI,
+  // and the SVD tag node `vlan-to-vni <vlan> vni <n>` for many VLAN→VNI mappings.
+  // A row with no VLAN is the scalar; rows with a VLAN are SVD mappings.
+  const liveScalar = (live?.vnis ?? []).find((m) => m.vlan == null)?.vni ?? null;
+  const wantScalar = u.vnis.find((m) => m.vlan == null)?.vni ?? null;
+  leaf("vni", liveScalar != null ? String(liveScalar) : null, wantScalar != null ? String(wantScalar) : null);
+
+  const liveByVlan = new Map((live?.vnis ?? []).filter((m) => m.vlan != null).map((m) => [m.vlan!, m.vni]));
+  const wantByVlan = new Map(u.vnis.filter((m) => m.vlan != null).map((m) => [m.vlan!, m.vni]));
+  for (const [vlan, vni] of wantByVlan) {
+    // `vni` is a single-value child, so a plain set both creates and updates it.
+    if (liveByVlan.get(vlan) !== vni) {
+      out.push({ op: "set", path: [...base, "vlan-to-vni", String(vlan), "vni", String(vni)] });
     }
   }
-  for (const [vni] of liveVnis) {
-    if (!wantVnis.has(vni)) out.push({ op: "delete", path: [...base, "vni", String(vni)] });
+  for (const [vlan] of liveByVlan) {
+    if (!wantByVlan.has(vlan)) out.push({ op: "delete", path: [...base, "vlan-to-vni", String(vlan)] });
   }
 
   leaf("source-address", live?.source_address ?? null, u.source_address);
@@ -836,6 +859,17 @@ export function diffVxlan(live: VxlanInterface | null, u: VxlanConfigUpdate): Vy
   flag("neighbor-suppress", live?.neighbor_suppress ?? false, u.neighbor_suppress);
 
   ensureCreated(out, base, live === null);
+
+  // Bridge membership lives on the bridge node, not the VXLAN one, so it's
+  // diffed after ensureCreated (which only touches the VXLAN base). Moving
+  // bridges deletes the old membership and adds the new.
+  const liveBridge = live?.bridge ?? null;
+  const wantBridge = trimmed(u.bridge);
+  if (wantBridge !== liveBridge) {
+    if (liveBridge) out.push({ op: "delete", path: ["interfaces", "bridge", liveBridge, "member", "interface", u.name] });
+    if (wantBridge) out.push({ op: "set", path: ["interfaces", "bridge", wantBridge, "member", "interface", u.name] });
+  }
+
   return out;
 }
 
