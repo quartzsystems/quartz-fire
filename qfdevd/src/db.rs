@@ -30,6 +30,9 @@ pub struct Sighting {
     pub mac: String,
     pub seen_at: i64,
     pub current_ip: Option<String>,
+    /// Link-local (or other) IPv6 address, kept out of `current_ip` so the
+    /// WebUI's IPv4 column never shows an `fe80::` address.
+    pub current_ipv6: Option<String>,
     pub hostname: Option<String>,
     pub vendor: Option<String>,
     pub client_type: Option<String>,
@@ -82,6 +85,7 @@ fn init_schema(conn: &Connection) -> Result<()> {
             client_type  TEXT,
             os_guess     TEXT,
             current_ip   TEXT,
+            current_ipv6 TEXT,
             interface    TEXT,
             vlan         TEXT,
             dhcp_static  INTEGER,          -- 1 static, 0 dynamic, NULL unknown
@@ -105,7 +109,24 @@ fn init_schema(conn: &Connection) -> Result<()> {
         "#,
     )
     .context("initializing device DB schema")?;
+
+    // Migrations for DBs created before a column existed. ADD COLUMN errors with
+    // "duplicate column name" when it is already present, so we ignore that and
+    // keep the call idempotent.
+    add_column_if_missing(conn, "ALTER TABLE devices ADD COLUMN current_ipv6 TEXT")?;
     Ok(())
+}
+
+/// Run an `ALTER TABLE … ADD COLUMN`, treating an already-present column as
+/// success. Any other error propagates.
+fn add_column_if_missing(conn: &Connection, sql: &str) -> Result<()> {
+    match conn.execute(sql, []) {
+        Ok(_) => Ok(()),
+        Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if msg.contains("duplicate column name") => {
+            Ok(())
+        }
+        Err(e) => Err(e).with_context(|| format!("running migration: {sql}")),
+    }
 }
 
 /// Merge a sighting. Inserts a new device or updates identity fields over the
@@ -118,9 +139,9 @@ pub fn upsert_sighting(conn: &Connection, s: &Sighting) -> Result<()> {
         r#"
         INSERT INTO devices
             (mac, first_seen, last_seen, hostname, vendor, client_type, os_guess,
-             current_ip, interface, vlan, dhcp_static, lease_expiry, neigh_state, online)
+             current_ip, current_ipv6, interface, vlan, dhcp_static, lease_expiry, neigh_state, online)
         VALUES
-            (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, COALESCE(?13, 0))
+            (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, COALESCE(?14, 0))
         ON CONFLICT(mac) DO UPDATE SET
             last_seen    = MAX(devices.last_seen, excluded.last_seen),
             hostname     = COALESCE(excluded.hostname,     devices.hostname),
@@ -128,12 +149,13 @@ pub fn upsert_sighting(conn: &Connection, s: &Sighting) -> Result<()> {
             client_type  = COALESCE(excluded.client_type,  devices.client_type),
             os_guess     = COALESCE(excluded.os_guess,     devices.os_guess),
             current_ip   = COALESCE(excluded.current_ip,   devices.current_ip),
+            current_ipv6 = COALESCE(excluded.current_ipv6, devices.current_ipv6),
             interface    = COALESCE(excluded.interface,    devices.interface),
             vlan         = COALESCE(excluded.vlan,         devices.vlan),
             dhcp_static  = COALESCE(excluded.dhcp_static,  devices.dhcp_static),
             lease_expiry = COALESCE(excluded.lease_expiry, devices.lease_expiry),
             neigh_state  = COALESCE(excluded.neigh_state,  devices.neigh_state),
-            online       = COALESCE(?13, devices.online)
+            online       = COALESCE(?14, devices.online)
         "#,
         params![
             s.mac,
@@ -143,6 +165,7 @@ pub fn upsert_sighting(conn: &Connection, s: &Sighting) -> Result<()> {
             s.client_type,
             s.os_guess,
             s.current_ip,
+            s.current_ipv6,
             s.interface,
             s.vlan,
             s.dhcp_static.map(|b| b as i64),
@@ -311,6 +334,31 @@ mod tests {
         assert_eq!(vendor.as_deref(), Some("Acme"));
         assert_eq!(ip.as_deref(), Some("10.0.0.5"));
         assert_eq!(state.as_deref(), Some("REACHABLE"));
+    }
+
+    #[test]
+    fn ipv6_sighting_does_not_clobber_ipv4() {
+        let c = mem();
+        // Lease established the IPv4.
+        upsert_sighting(&c, &Sighting {
+            mac: "m".into(),
+            seen_at: 1,
+            current_ip: Some("10.0.0.5".into()),
+            ..Default::default()
+        }).unwrap();
+        // A neighbor sighting carrying only the link-local IPv6 must land in
+        // current_ipv6 and leave current_ip alone.
+        upsert_sighting(&c, &Sighting {
+            mac: "m".into(),
+            seen_at: 2,
+            current_ipv6: Some("fe80::1".into()),
+            ..Default::default()
+        }).unwrap();
+        let (v4, v6): (Option<String>, Option<String>) = c.query_row(
+            "SELECT current_ip, current_ipv6 FROM devices WHERE mac='m'",
+            [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(v4.as_deref(), Some("10.0.0.5"));
+        assert_eq!(v6.as_deref(), Some("fe80::1"));
     }
 
     #[test]

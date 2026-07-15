@@ -96,10 +96,12 @@ async fn main() -> Result<()> {
         // Device/client monitoring (Monitoring → Devices): the read side of the
         // shared inventory qfdevd maintains, plus the user-owned description.
         .route("/api/monitoring/devices", get(monitoring::list))
+        .route("/api/monitoring/usage", get(monitoring::usage))
         .route(
             "/api/monitoring/devices/:mac",
             get(monitoring::detail).patch(monitoring::patch),
         )
+        .route("/api/monitoring/devices/:mac/ping", post(monitoring::ping))
         .route("/api/ips/status", get(ips::status))
         .route("/api/ips/settings", put(ips::put_settings))
         .route("/api/ips/update", post(ips::request_update))
@@ -108,6 +110,7 @@ async fn main() -> Result<()> {
         .route("/api/appcontrol/status", get(appcontrol::status))
         .route("/api/appcontrol/settings", put(appcontrol::put_settings))
         .route("/api/appcontrol/catalog", get(appcontrol::catalog))
+        .route("/api/appcontrol/usage", get(appcontrol::usage))
         .route("/api/appcontrol/alerts", get(appcontrol::alerts))
         .route("/api/appcontrol/alerts/history", get(appcontrol::alerts_history))
         // Geolocation config is real VyOS config (service geolocation …) and

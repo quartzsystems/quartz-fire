@@ -83,6 +83,9 @@ pub struct DeviceRow {
     pub os_guess: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_ip: Option<String>,
+    /// Link-local IPv6, kept separate so the WebUI's IPv4 column stays IPv4.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_ipv6: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interface: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -132,6 +135,32 @@ pub struct DeviceDetail {
     pub device: DeviceRow,
     /// 5-minute usage buckets over the window, oldest first (sparkline input).
     pub usage: Vec<UsagePoint>,
+}
+
+/// Aggregate usage timeseries across every client (GET /api/monitoring/usage).
+#[derive(Debug, Serialize)]
+pub struct UsageSeries {
+    /// 5-minute buckets over the window, oldest first.
+    pub points: Vec<UsagePoint>,
+    /// Window totals (sum of all points), for the header figure.
+    pub bytes_in: i64,
+    pub bytes_out: i64,
+    pub window: String,
+}
+
+/// One-shot ping result (POST /api/monitoring/devices/{mac}/ping).
+#[derive(Debug, Serialize)]
+pub struct PingResult {
+    /// IPv4 that was pinged.
+    pub target: String,
+    pub transmitted: u32,
+    pub received: u32,
+    pub loss_pct: f64,
+    /// Average round-trip in ms; None when nothing came back.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avg_ms: Option<f64>,
+    /// Per-reply round-trip times in ms (the mini latency chart).
+    pub samples: Vec<f64>,
 }
 
 // ── DB access helpers ───────────────────────────────────────────────────────
@@ -280,7 +309,7 @@ pub async fn list(
         let list_sql = format!(
             "{base}
              SELECT mac, description, hostname, vendor, client_type, os_guess,
-                    current_ip, interface, vlan, dhcp_static, lease_expiry,
+                    current_ip, current_ipv6, interface, vlan, dhcp_static, lease_expiry,
                     neigh_state, first_seen, last_seen, online, win_in, win_out
              FROM joined {status_filter}
              ORDER BY {sort} {dir}, last_seen DESC
@@ -320,6 +349,46 @@ pub async fn list(
     Ok(Json(result))
 }
 
+// ── GET /api/monitoring/usage ───────────────────────────────────────────────
+
+/// Combined usage timeseries over every client, for the page's header graph.
+/// Sums the per-device 5-minute buckets by bucket, so it uses the same source
+/// as the per-client sparkline just aggregated across all MACs.
+pub async fn usage(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<ListQuery>,
+) -> Result<Json<UsageSeries>> {
+    let db_path = state.config.devices_db_file.clone();
+    let window = q.window.clone().unwrap_or_else(|| "24h".into());
+    let win_secs = window_secs(q.window.as_deref());
+
+    let series = tokio::task::spawn_blocking(move || -> anyhow::Result<UsageSeries> {
+        let now = now_secs();
+        let since = now - win_secs;
+        let Some(conn) = open_db(&db_path)? else {
+            return Ok(UsageSeries { points: Vec::new(), bytes_in: 0, bytes_out: 0, window });
+        };
+        let mut stmt = conn.prepare(
+            "SELECT bucket_ts, SUM(bytes_in), SUM(bytes_out)
+             FROM usage_buckets WHERE bucket_ts >= :since
+             GROUP BY bucket_ts ORDER BY bucket_ts ASC",
+        )?;
+        let points = stmt
+            .query_map(named(&[(":since", &since)]), |r| {
+                Ok(UsagePoint { ts: r.get(0)?, bytes_in: r.get(1)?, bytes_out: r.get(2)? })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let bytes_in = points.iter().map(|p| p.bytes_in).sum();
+        let bytes_out = points.iter().map(|p| p.bytes_out).sum();
+        Ok(UsageSeries { points, bytes_in, bytes_out, window })
+    })
+    .await
+    .map_err(|e| AppError::Internal(e.into()))?
+    .map_err(AppError::Internal)?;
+
+    Ok(Json(series))
+}
+
 // ── GET /api/monitoring/devices/{mac} ───────────────────────────────────────
 
 pub async fn detail(
@@ -344,7 +413,7 @@ pub async fn detail(
             .query_row(
                 &format!(
                     "SELECT d.mac, d.description, d.hostname, d.vendor, d.client_type, d.os_guess,
-                            d.current_ip, d.interface, d.vlan, d.dhcp_static, d.lease_expiry,
+                            d.current_ip, d.current_ipv6, d.interface, d.vlan, d.dhcp_static, d.lease_expiry,
                             d.neigh_state, d.first_seen, d.last_seen,
                             {ONLINE_EXPR} AS online,
                             COALESCE((SELECT SUM(bytes_in)  FROM usage_buckets WHERE mac=d.mac AND bucket_ts>=:since),0),
@@ -427,7 +496,7 @@ pub async fn patch(
         let row = conn.query_row(
             &format!(
                 "SELECT mac, description, hostname, vendor, client_type, os_guess,
-                        current_ip, interface, vlan, dhcp_static, lease_expiry,
+                        current_ip, current_ipv6, interface, vlan, dhcp_static, lease_expiry,
                         neigh_state, first_seen, last_seen, {ONLINE_EXPR} AS online, 0, 0
                  FROM devices WHERE mac = :mac"
             ),
@@ -445,9 +514,100 @@ pub async fn patch(
         .ok_or_else(|| AppError::NotFound("no such device".into()))
 }
 
+// ── POST /api/monitoring/devices/{mac}/ping ─────────────────────────────────
+
+/// Fire a short ICMP burst at the client's IPv4 and summarize it. The `ping`
+/// binary carries `cap_net_raw`, so the unprivileged backend can run it. The
+/// target is read from the DB and revalidated as IPv4 before it reaches the
+/// command line, so nothing user-controlled is passed to the shell.
+pub async fn ping(
+    State(state): State<Arc<AppState>>,
+    AxumPath(mac): AxumPath<String>,
+) -> Result<Json<PingResult>> {
+    let mac = normalize_mac(&mac)?;
+    let db_path = state.config.devices_db_file.clone();
+
+    let ip: String = tokio::task::spawn_blocking(move || -> anyhow::Result<Option<String>> {
+        let Some(conn) = open_db(&db_path)? else {
+            anyhow::bail!("device monitoring is not running yet");
+        };
+        let ip: Option<String> = conn
+            .query_row("SELECT current_ip FROM devices WHERE mac = ?1", params![mac], |r| r.get(0))
+            .optional()?
+            .flatten();
+        Ok(ip)
+    })
+    .await
+    .map_err(|e| AppError::Internal(e.into()))?
+    .map_err(AppError::Internal)?
+    .ok_or_else(|| AppError::BadRequest("this client has no known IPv4 address to ping".into()))?;
+
+    // Revalidate before spawning: only a real IPv4 literal reaches `ping`.
+    if ip.parse::<std::net::Ipv4Addr>().is_err() {
+        return Err(AppError::BadRequest(format!("{ip:?} is not a pingable IPv4 address")));
+    }
+
+    let out = tokio::process::Command::new("ping")
+        .args(["-n", "-c", "10", "-w", "6", &ip])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("cannot run ping: {e}")))?;
+
+    // ping exits non-zero when every packet is lost — that's a valid result
+    // (100% loss), not an error, so we parse stdout regardless of exit status.
+    let text = String::from_utf8_lossy(&out.stdout);
+    Ok(Json(parse_ping(&ip, &text)))
+}
+
+/// Parse `ping -c` output into a `PingResult`. Reads per-reply `time=…` values,
+/// the `N transmitted, M received, P% packet loss` line, and the
+/// `rtt … = min/avg/max/…` summary. Robust to 100%-loss output (no rtt line).
+fn parse_ping(target: &str, text: &str) -> PingResult {
+    let mut samples = Vec::new();
+    let mut transmitted = 0u32;
+    let mut received = 0u32;
+    let mut loss_pct = 100.0;
+    let mut avg_ms = None;
+
+    for line in text.lines() {
+        let line = line.trim();
+        if let Some(idx) = line.find("time=") {
+            // "… time=0.234 ms"
+            let rest = &line[idx + 5..];
+            let num: String = rest.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+            if let Ok(v) = num.parse::<f64>() {
+                samples.push(v);
+            }
+        } else if line.contains("packets transmitted") {
+            // "10 packets transmitted, 8 received, 20% packet loss, time 9012ms"
+            for part in line.split(',') {
+                let p = part.trim();
+                if let Some(n) = p.strip_suffix(" packets transmitted") {
+                    transmitted = n.trim().parse().unwrap_or(0);
+                } else if let Some(n) = p.strip_suffix(" received") {
+                    received = n.trim().parse().unwrap_or(0);
+                } else if let Some(n) = p.strip_suffix("% packet loss") {
+                    loss_pct = n.trim().parse().unwrap_or(100.0);
+                }
+            }
+        } else if let Some(idx) = line.find('=') {
+            if line.starts_with("rtt") || line.starts_with("round-trip") {
+                // "rtt min/avg/max/mdev = 0.201/0.245/0.300/0.030 ms"
+                let vals = line[idx + 1..].trim();
+                if let Some(avg) = vals.split('/').nth(1) {
+                    avg_ms = avg.trim().split_whitespace().next().and_then(|s| s.parse().ok());
+                }
+            }
+        }
+    }
+
+    PingResult { target: target.to_string(), transmitted, received, loss_pct, avg_ms, samples }
+}
+
 // ── row mapping + helpers ───────────────────────────────────────────────────
 
-/// Map the 17-column device SELECT (in the exact order used everywhere above)
+/// Map the 18-column device SELECT (in the exact order used everywhere above)
 /// into a `DeviceRow`. `bytes_in`/`bytes_out` are the last two columns.
 fn row_to_device(r: &rusqlite::Row) -> rusqlite::Result<DeviceRow> {
     Ok(DeviceRow {
@@ -458,16 +618,17 @@ fn row_to_device(r: &rusqlite::Row) -> rusqlite::Result<DeviceRow> {
         client_type: r.get(4)?,
         os_guess: r.get(5)?,
         current_ip: r.get(6)?,
-        interface: r.get(7)?,
-        vlan: r.get(8)?,
-        dhcp_static: r.get::<_, Option<i64>>(9)?.map(|v| v != 0),
-        lease_expiry: r.get(10)?,
-        neigh_state: r.get(11)?,
-        first_seen: r.get(12)?,
-        last_seen: r.get(13)?,
-        online: r.get::<_, i64>(14)? != 0,
-        bytes_in: r.get(15)?,
-        bytes_out: r.get(16)?,
+        current_ipv6: r.get(7)?,
+        interface: r.get(8)?,
+        vlan: r.get(9)?,
+        dhcp_static: r.get::<_, Option<i64>>(10)?.map(|v| v != 0),
+        lease_expiry: r.get(11)?,
+        neigh_state: r.get(12)?,
+        first_seen: r.get(13)?,
+        last_seen: r.get(14)?,
+        online: r.get::<_, i64>(15)? != 0,
+        bytes_in: r.get(16)?,
+        bytes_out: r.get(17)?,
     })
 }
 
@@ -518,6 +679,41 @@ mod tests {
         // Unknown / injection attempt collapses to the safe default.
         assert_eq!(sort_expr(Some("last_seen; DROP TABLE devices")), "last_seen");
         assert_eq!(sort_expr(None), "last_seen");
+    }
+
+    #[test]
+    fn parses_ping_summary() {
+        let out = "\
+PING 10.0.0.5 (10.0.0.5) 56(84) bytes of data.
+64 bytes from 10.0.0.5: icmp_seq=1 ttl=64 time=0.234 ms
+64 bytes from 10.0.0.5: icmp_seq=2 ttl=64 time=0.300 ms
+
+--- 10.0.0.5 ping statistics ---
+10 packets transmitted, 8 received, 20% packet loss, time 9012ms
+rtt min/avg/max/mdev = 0.201/0.245/0.300/0.030 ms
+";
+        let r = parse_ping("10.0.0.5", out);
+        assert_eq!(r.transmitted, 10);
+        assert_eq!(r.received, 8);
+        assert_eq!(r.loss_pct, 20.0);
+        assert_eq!(r.avg_ms, Some(0.245));
+        assert_eq!(r.samples, vec![0.234, 0.300]);
+    }
+
+    #[test]
+    fn parses_ping_total_loss() {
+        let out = "\
+PING 10.0.0.9 (10.0.0.9) 56(84) bytes of data.
+
+--- 10.0.0.9 ping statistics ---
+10 packets transmitted, 0 received, 100% packet loss, time 9200ms
+";
+        let r = parse_ping("10.0.0.9", out);
+        assert_eq!(r.transmitted, 10);
+        assert_eq!(r.received, 0);
+        assert_eq!(r.loss_pct, 100.0);
+        assert_eq!(r.avg_ms, None);
+        assert!(r.samples.is_empty());
     }
 
     #[test]

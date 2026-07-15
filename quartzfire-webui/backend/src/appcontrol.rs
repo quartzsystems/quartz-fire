@@ -20,7 +20,7 @@
 //! file qfappd also writes (`/var/log/qfappd/events.json`, logrotated).
 
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -439,9 +439,176 @@ fn read_event_tail(path: &Path, tail_bytes: u64, max: usize) -> std::io::Result<
     Ok(out)
 }
 
+// ── application usage (bytes-per-app for the Devices page pie) ───────────────
+
+#[derive(Debug, Deserialize)]
+pub struct UsageQuery {
+    /// `1h`, `24h` (default), or `7d`.
+    #[serde(default)]
+    window: Option<String>,
+    /// Restrict to one client's source IP (per-client pie). Empty = all clients.
+    #[serde(default)]
+    ip: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct AppBytes {
+    pub app: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    pub bytes: u64,
+}
+
+#[derive(Serialize)]
+pub struct AppUsage {
+    /// Apps sorted by bytes, descending.
+    pub apps: Vec<AppBytes>,
+    pub total: u64,
+    /// False when the events file is absent (App Control never reported) — the
+    /// UI shows an empty state rather than an empty pie.
+    pub available: bool,
+}
+
+fn window_secs_ac(window: Option<&str>) -> u64 {
+    match window.unwrap_or("24h") {
+        "1h" => 3_600,
+        "7d" => 7 * 86_400,
+        _ => 86_400,
+    }
+}
+
+/// GET /api/appcontrol/usage — bytes-per-application over the window, optionally
+/// scoped to one client IP. Derived from the same decision-event log the alert
+/// history reads, so it only reflects flows that hit an App Control policy.
+pub async fn usage(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<UsageQuery>,
+) -> Result<Json<AppUsage>> {
+    let path = state.config.appcontrol_events_file.clone();
+    let display = path.display().to_string();
+    let cutoff_ms = now_ms().saturating_sub(window_secs_ac(q.window.as_deref()) * 1000);
+    let ip = q.ip.filter(|s| !s.is_empty());
+
+    let result = tokio::task::spawn_blocking(move || aggregate_usage(&path, cutoff_ms, ip.as_deref()))
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("reading the events log {display}: {e}")))?;
+    Ok(Json(result))
+}
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Tail the events file and sum `bytes` per `app` for app_control events at or
+/// after `cutoff_ms`, optionally filtered to `ip` as the source. Same tail-read
+/// discipline as `read_event_tail` (bounded read, drop a partial first line).
+fn aggregate_usage(path: &Path, cutoff_ms: u64, ip: Option<&str>) -> std::io::Result<AppUsage> {
+    use std::io::{ErrorKind, Read, Seek, SeekFrom};
+    let mut file = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            return Ok(AppUsage { apps: Vec::new(), total: 0, available: false });
+        }
+        Err(e) => return Err(e),
+    };
+    // A day of decisions can be large; cap the scan at the last 8 MiB.
+    const TAIL_BYTES: u64 = 8 * 1024 * 1024;
+    let len = file.metadata()?.len();
+    let start = len.saturating_sub(TAIL_BYTES);
+    file.seek(SeekFrom::Start(start))?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let text = String::from_utf8_lossy(&bytes);
+
+    let mut agg: BTreeMap<String, (Option<String>, u64)> = BTreeMap::new();
+    let mut total: u64 = 0;
+    for line in text.lines().skip(if start > 0 { 1 } else { 0 }) {
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(line.trim()) else { continue };
+        if v.get("event_type").and_then(|x| x.as_str()) != Some("app_control") {
+            continue;
+        }
+        let ts = v.get("timestamp").and_then(|t| t.as_str()).and_then(rfc3339_ms).unwrap_or(0);
+        if ts < cutoff_ms {
+            continue;
+        }
+        if let Some(want) = ip {
+            if v.get("src_ip").and_then(|x| x.as_str()) != Some(want) {
+                continue;
+            }
+        }
+        let b = v.get("bytes").and_then(|x| x.as_u64()).unwrap_or(0);
+        if b == 0 {
+            continue;
+        }
+        let app = v.get("app").and_then(|x| x.as_str()).unwrap_or("Unknown").to_string();
+        let category = v.get("category").and_then(|x| x.as_str()).filter(|c| !c.is_empty()).map(String::from);
+        let entry = agg.entry(app).or_insert((None, 0));
+        if entry.0.is_none() {
+            entry.0 = category;
+        }
+        entry.1 += b;
+        total += b;
+    }
+
+    let mut apps: Vec<AppBytes> = agg
+        .into_iter()
+        .map(|(app, (category, bytes))| AppBytes { app, category, bytes })
+        .collect();
+    apps.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.app.cmp(&b.app)));
+    Ok(AppUsage { apps, total, available: true })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn aggregates_usage_by_app_and_ip() {
+        use std::io::Write;
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("qfappd-usage-test-{}.json", std::process::id()));
+        let mut f = std::fs::File::create(&path).unwrap();
+        // Two ChatGPT flows from .23, one YouTube from .24; a non-app_control line.
+        writeln!(f, r#"{{"timestamp":"2999-01-01T00:00:00.000Z","event_type":"app_control","src_ip":"10.0.1.23","app":"ChatGPT","category":"AI","bytes":1000}}"#).unwrap();
+        writeln!(f, r#"{{"timestamp":"2999-01-01T00:00:01.000Z","event_type":"app_control","src_ip":"10.0.1.23","app":"ChatGPT","category":"AI","bytes":500}}"#).unwrap();
+        writeln!(f, r#"{{"timestamp":"2999-01-01T00:00:02.000Z","event_type":"app_control","src_ip":"10.0.1.24","app":"YouTube","category":"Streaming","bytes":4000}}"#).unwrap();
+        writeln!(f, r#"{{"event_type":"other"}}"#).unwrap();
+        drop(f);
+
+        // All clients: YouTube (4000) ranks above ChatGPT (1500).
+        let all = aggregate_usage(&path, 0, None).unwrap();
+        assert!(all.available);
+        assert_eq!(all.total, 5500);
+        assert_eq!(all.apps.len(), 2);
+        assert_eq!(all.apps[0].app, "YouTube");
+        assert_eq!(all.apps[0].bytes, 4000);
+        assert_eq!(all.apps[1].app, "ChatGPT");
+        assert_eq!(all.apps[1].bytes, 1500);
+
+        // Scoped to .23: only ChatGPT.
+        let one = aggregate_usage(&path, 0, Some("10.0.1.23")).unwrap();
+        assert_eq!(one.apps.len(), 1);
+        assert_eq!(one.apps[0].app, "ChatGPT");
+        assert_eq!(one.total, 1500);
+
+        // Cutoff in the far future drops everything.
+        let none = aggregate_usage(&path, u64::MAX, None).unwrap();
+        assert_eq!(none.total, 0);
+        assert!(none.apps.is_empty());
+
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn usage_missing_file_is_unavailable() {
+        let r = aggregate_usage(Path::new("/nonexistent/qfappd/events.json"), 0, None).unwrap();
+        assert!(!r.available);
+        assert_eq!(r.total, 0);
+    }
 
     #[test]
     fn parses_app_control_event() {

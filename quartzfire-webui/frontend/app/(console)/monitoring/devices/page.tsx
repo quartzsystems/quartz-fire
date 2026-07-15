@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Activity,
   ArrowDown,
   ArrowUp,
   Check,
@@ -27,15 +28,23 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
 import { Sparkline } from "@/components/ui/Sparkline";
+import { UsageChart } from "@/components/ui/UsageChart";
+import { DonutChart } from "@/components/ui/DonutChart";
 import { useDashboard } from "@/lib/DashboardContext";
 import { formatBytes, formatRelative, formatTimestamp } from "@/lib/format";
+import { AppUsage, fetchAppUsage } from "@/lib/appcontrol";
 import {
   Device,
   DeviceDetail,
   DeviceList,
+  UsageSeries,
+  PingResult,
   deviceIdentity,
   fetchDeviceDetail,
   fetchDevices,
+  fetchUsageSeries,
+  isIpv4,
+  pingDevice,
   saveDeviceDescription,
   SortDir,
   SortKey,
@@ -55,6 +64,13 @@ const WINDOWS: { value: UsageWindow; label: string }[] = [
   { value: "7d", label: "7d" },
 ];
 
+/// Usage window label → seconds, for the timeline x-axis span.
+const WINDOW_SECS: Record<UsageWindow, number> = {
+  "1h": 3_600,
+  "24h": 86_400,
+  "7d": 7 * 86_400,
+};
+
 interface ColumnDef {
   key: string;
   header: string;
@@ -62,13 +78,17 @@ interface ColumnDef {
   width?: string;
 }
 
+// Fixed widths on every column except the trailing IPv4 one, which is left
+// width-less so it absorbs the table's slack — that keeps Description tight to
+// MAC/Last Seen instead of stretching and leaving a big empty gap.
 const COLUMNS: ColumnDef[] = [
-  { key: "status", header: "Status", sort: "status", width: "120px" },
-  { key: "description", header: "Description", sort: "description" },
-  { key: "last_seen", header: "Last Seen", sort: "last_seen", width: "150px" },
-  { key: "usage", header: "Usage", sort: "usage", width: "170px" },
-  { key: "type", header: "Client Type / OS", sort: "client_type", width: "160px" },
-  { key: "ip", header: "IPv4 Address", sort: "ip", width: "160px" },
+  { key: "status", header: "Status", sort: "status", width: "110px" },
+  { key: "description", header: "Description", sort: "description", width: "260px" },
+  { key: "mac", header: "MAC", width: "160px" },
+  { key: "last_seen", header: "Last Seen", sort: "last_seen", width: "120px" },
+  { key: "usage", header: "Usage", sort: "usage", width: "160px" },
+  { key: "type", header: "Client Type / OS", sort: "client_type", width: "150px" },
+  { key: "ip", header: "IPv4 Address", sort: "ip" },
 ];
 
 export default function DevicesPage() {
@@ -89,6 +109,10 @@ export default function DevicesPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+
+  // ── header summary state (aggregate usage graph + apps pie) ────────────────
+  const [usageSeries, setUsageSeries] = useState<UsageSeries | null>(null);
+  const [appUsage, setAppUsage] = useState<AppUsage | null>(null);
 
   // Debounce the search box, and reset to page 1 whenever a filter changes.
   useEffect(() => {
@@ -130,6 +154,22 @@ export default function DevicesPage() {
     const id = setInterval(() => load(false), REFRESH_MS);
     return () => clearInterval(id);
   }, [load]);
+
+  // Header summary depends only on the usage window (not search/sort/page).
+  const loadSummary = useCallback(async () => {
+    const [series, apps] = await Promise.allSettled([
+      fetchUsageSeries(usageWindow),
+      fetchAppUsage(usageWindow),
+    ]);
+    if (series.status === "fulfilled") setUsageSeries(series.value);
+    if (apps.status === "fulfilled") setAppUsage(apps.value);
+  }, [usageWindow]);
+
+  useEffect(() => {
+    loadSummary();
+    const id = setInterval(loadSummary, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [loadSummary]);
 
   const toggleSort = (key?: SortKey) => {
     if (!key) return;
@@ -173,6 +213,38 @@ export default function DevicesPage() {
         <div className="flex items-center gap-2">
           <span className="text-[12px] text-[var(--qz-fg-4)]">Usage window</span>
           <Segmented items={WINDOWS} value={usageWindow} onChange={(v) => setUsageWindow(v as UsageWindow)} />
+        </div>
+      </div>
+
+      {/* Usage and clients — combined throughput + application mix */}
+      <div className="mt-6 rounded-md p-5" style={{ border: "1px solid var(--qz-border)", background: "var(--qz-surface)" }}>
+        <div className="grid gap-6" style={{ gridTemplateColumns: "minmax(0, 1.9fr) minmax(260px, 1fr)" }}>
+          {/* Usage graph */}
+          <div>
+            <div className="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
+              <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Network usage</span>
+              {usageSeries && (
+                <span className="text-[12px] text-[var(--qz-fg-4)]">
+                  {formatBytes(usageSeries.bytes_in + usageSeries.bytes_out)}
+                  <span className="mx-1">·</span>
+                  {formatBytes(usageSeries.bytes_in)} ↓ / {formatBytes(usageSeries.bytes_out)} ↑
+                </span>
+              )}
+            </div>
+            <UsageChart
+              points={usageSeries?.points ?? []}
+              windowSecs={WINDOW_SECS[usageWindow]}
+              height={190}
+            />
+          </div>
+          {/* Applications pie */}
+          <div style={{ borderLeft: "1px solid var(--qz-border)" }} className="pl-6">
+            <div className="text-[13px] font-semibold text-[var(--qz-fg-1)] mb-3">Applications</div>
+            <DonutChart
+              slices={(appUsage?.apps ?? []).map((a) => ({ label: a.app, value: a.bytes, sub: a.category }))}
+              available={appUsage?.available ?? false}
+            />
+          </div>
         </div>
       </div>
 
@@ -357,6 +429,13 @@ function DeviceRowView({
           <DescriptionCell device={device} identity={identity} onSaved={onSaved} onError={onError} />
         </td>
 
+        {/* MAC */}
+        <td className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span className="text-[13px] text-[var(--qz-fg-2)]" title={device.mac}>
+            {device.mac}
+          </span>
+        </td>
+
         {/* Last Seen */}
         <td
           title={formatTimestamp(device.last_seen)}
@@ -378,9 +457,9 @@ function DeviceRowView({
         {/* Client Type / OS */}
         <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{typeCell}</td>
 
-        {/* IPv4 + lease/static badge */}
+        {/* IPv4 + lease/static badge (IPv6 is kept out of this column) */}
         <td className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {device.current_ip ? (
+          {isIpv4(device.current_ip) ? (
             <span className="inline-flex items-center gap-[6px]">
               {device.current_ip}
               {device.dhcp_static === true && (
@@ -506,6 +585,7 @@ function DescriptionCell({
 function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: UsageWindow }) {
   const [detail, setDetail] = useState<DeviceDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [apps, setApps] = useState<AppUsage | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -519,18 +599,37 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
     };
   }, [mac, usageWindow]);
 
+  // Per-client application mix, keyed on the client's IPv4 (App Control events
+  // record source IP). Refetch when the client's IP resolves or the window
+  // changes.
+  const clientIp = detail?.current_ip;
+  useEffect(() => {
+    let alive = true;
+    setApps(null);
+    if (!clientIp || !isIpv4(clientIp)) {
+      setApps({ apps: [], total: 0, available: false });
+      return;
+    }
+    fetchAppUsage(usageWindow, clientIp)
+      .then((a) => alive && setApps(a))
+      .catch(() => alive && setApps({ apps: [], total: 0, available: false }));
+    return () => {
+      alive = false;
+    };
+  }, [clientIp, usageWindow]);
+
   if (error) return <div className="px-5 py-4 text-[13px] text-[var(--qz-danger)]">{error}</div>;
   if (!detail) return <div className="px-5 py-4 text-[13px] text-[var(--qz-fg-4)]">Loading detail…</div>;
 
-  // Sparkline over the window's total bytes per bucket. Flat line when idle so
-  // the chart still renders.
-  const points = detail.usage.map((u) => u.bytes_in + u.bytes_out);
-  const sparkData = points.length >= 2 ? points : [0, ...points, 0];
+  const mono = (v: string | null | undefined) =>
+    v ? <span className="mono">{v}</span> : dash;
 
   const facts: [string, React.ReactNode][] = [
+    ["IPv4 address", isIpv4(detail.current_ip) ? mono(detail.current_ip) : dash],
+    ["IPv6 (link-local)", mono(detail.current_ipv6)],
     ["MAC address", <span className="mono" key="mac">{detail.mac}</span>],
     ["Vendor (OUI)", detail.vendor ?? "Unknown"],
-    ["Interface", detail.interface ? <span className="mono">{detail.interface}</span> : dash],
+    ["Interface", mono(detail.interface)],
     ["VLAN", detail.vlan ?? dash],
     ["Neighbor state", detail.neigh_state ?? dash],
     [
@@ -543,25 +642,117 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
   ];
 
   return (
-    <div className="px-5 py-5 grid gap-6" style={{ gridTemplateColumns: "minmax(280px, 1.2fr) minmax(240px, 1fr)" }}>
-      <div className="grid gap-x-6 gap-y-[10px]" style={{ gridTemplateColumns: "auto 1fr", alignContent: "start" }}>
-        {facts.map(([k, v]) => (
-          <div key={k} className="contents">
-            <div className="text-[12px] text-[var(--qz-fg-4)]">{k}</div>
-            <div className="text-[13px] text-[var(--qz-fg-1)]">{v}</div>
-          </div>
-        ))}
-      </div>
-
+    <div className="px-5 py-5 flex flex-col gap-6">
+      {/* Usage over the window */}
       <div>
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[12px] text-[var(--qz-fg-4)]">Usage over {usageWindow}</span>
+        <div className="flex items-baseline justify-between mb-1 gap-3 flex-wrap">
+          <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Usage over {usageWindow}</span>
           <span className="text-[12px] text-[var(--qz-fg-2)]">
+            {formatBytes(detail.bytes_in + detail.bytes_out)}
+            <span className="mx-1 text-[var(--qz-fg-4)]">·</span>
             {formatBytes(detail.bytes_in)} ↓ / {formatBytes(detail.bytes_out)} ↑
           </span>
         </div>
-        <Sparkline data={sparkData} />
+        <UsageChart points={detail.usage} windowSecs={WINDOW_SECS[usageWindow]} height={170} />
       </div>
+
+      {/* Applications + Ping */}
+      <div className="grid gap-6" style={{ gridTemplateColumns: "minmax(0, 1.5fr) minmax(220px, 1fr)" }}>
+        <div>
+          <div className="text-[13px] font-semibold text-[var(--qz-fg-1)] mb-3">Applications</div>
+          <DonutChart
+            slices={(apps?.apps ?? []).map((a) => ({ label: a.app, value: a.bytes, sub: a.category }))}
+            available={apps?.available ?? false}
+            size={130}
+          />
+        </div>
+        <div style={{ borderLeft: "1px solid var(--qz-border)" }} className="pl-6">
+          <PingWidget mac={mac} pingable={isIpv4(detail.current_ip)} />
+        </div>
+      </div>
+
+      {/* Network facts */}
+      <div>
+        <div className="text-[13px] font-semibold text-[var(--qz-fg-1)] mb-3">Network</div>
+        <div
+          className="grid gap-x-6 gap-y-[10px]"
+          style={{ gridTemplateColumns: "max-content 1fr", alignContent: "start", maxWidth: 520 }}
+        >
+          {facts.map(([k, v]) => (
+            <div key={k} className="contents">
+              <div className="text-[12px] text-[var(--qz-fg-4)]">{k}</div>
+              <div className="text-[13px] text-[var(--qz-fg-1)]">{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ping tool ─────────────────────────────────────────────────────────────────
+
+function PingWidget({ mac, pingable }: { mac: string; pingable: boolean }) {
+  const [result, setResult] = useState<PingResult | null>(null);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async () => {
+    if (running) return;
+    setRunning(true);
+    setError(null);
+    try {
+      setResult(await pingDevice(mac));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ping failed.");
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Ping</span>
+        <span title={pingable ? "Send an ICMP burst" : "No IPv4 address to ping"}>
+          <Button
+            kind="secondary"
+            size="sm"
+            icon={Activity}
+            onClick={run}
+            disabled={running || !pingable}
+          >
+            {running ? "Pinging…" : "Run"}
+          </Button>
+        </span>
+      </div>
+
+      {!pingable && (
+        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">This client has no IPv4 address to ping.</p>
+      )}
+      {error && <p className="text-[12px] text-[var(--qz-danger)] m-0">{error}</p>}
+
+      {result && (
+        <>
+          {result.samples.length > 1 && <Sparkline data={result.samples} height={40} />}
+          <div className="grid gap-x-4 gap-y-1 mt-2" style={{ gridTemplateColumns: "max-content 1fr" }}>
+            <span className="text-[12px] text-[var(--qz-fg-4)]">Loss rate</span>
+            <span
+              className="text-[12px] tabular-nums"
+              style={{ color: result.loss_pct > 0 ? "var(--qz-warn)" : "var(--qz-fg-1)" }}
+            >
+              {result.loss_pct.toFixed(0)}% ({result.received}/{result.transmitted})
+            </span>
+            <span className="text-[12px] text-[var(--qz-fg-4)]">Average latency</span>
+            <span className="text-[12px] text-[var(--qz-fg-1)] tabular-nums">
+              {result.avg_ms != null ? `${result.avg_ms.toFixed(1)} ms` : "—"}
+            </span>
+          </div>
+        </>
+      )}
+      {!result && !error && pingable && (
+        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">Run a burst to measure loss and latency.</p>
+      )}
     </div>
   );
 }

@@ -217,3 +217,26 @@ export function fetchAcAlertHistory(): Promise<AcEvent[]> {
 export function eventKey(e: AcEvent): string {
   return `${e.ts}:${e.src ?? ""}:${e.spt ?? ""}:${e.dst ?? ""}:${e.dpt ?? ""}:${e.app}`;
 }
+
+// ── application usage (bytes-per-app, for the Devices page pie) ──────────────
+
+export interface AppBytes {
+  app: string;
+  category?: string;
+  bytes: number;
+}
+
+export interface AppUsage {
+  apps: AppBytes[];
+  total: number;
+  /** False → App Control never reported; the UI shows an empty state. */
+  available: boolean;
+}
+
+/// Bytes-per-application over the window (App Control decision events),
+/// optionally scoped to one client's source IP for the per-client pie.
+export function fetchAppUsage(window: string, ip?: string): Promise<AppUsage> {
+  const p = new URLSearchParams({ window });
+  if (ip) p.set("ip", ip);
+  return apiFetch<AppUsage>(`/appcontrol/usage?${p.toString()}`);
+}

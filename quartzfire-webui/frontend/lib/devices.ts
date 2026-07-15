@@ -23,6 +23,8 @@ export interface Device {
   client_type?: string;
   os_guess?: string;
   current_ip?: string;
+  /** Link-local IPv6 (shown only in the detail panel, never the IPv4 column). */
+  current_ipv6?: string;
   interface?: string;
   vlan?: string;
   /** true = static reservation, false = dynamic lease, undefined = not DHCP. */
@@ -106,6 +108,42 @@ export function fetchDeviceDetail(mac: string, window: UsageWindow = "24h"): Pro
   return apiFetch<DeviceDetail>(`/monitoring/devices/${encodeURIComponent(mac)}?window=${window}`);
 }
 
+/// One aggregate usage bucket across all clients (the page header graph).
+export interface AggregateUsagePoint {
+  ts: number;
+  bytes_in: number;
+  bytes_out: number;
+}
+
+export interface UsageSeries {
+  points: AggregateUsagePoint[];
+  bytes_in: number;
+  bytes_out: number;
+  window: UsageWindow;
+}
+
+/// Combined usage timeseries over every client, for the top-of-page graph.
+export function fetchUsageSeries(window: UsageWindow = "24h"): Promise<UsageSeries> {
+  return apiFetch<UsageSeries>(`/monitoring/usage?window=${window}`);
+}
+
+/// One-shot ping result for a client (the detail-panel ping tool).
+export interface PingResult {
+  target: string;
+  transmitted: number;
+  received: number;
+  loss_pct: number;
+  avg_ms?: number;
+  samples: number[];
+}
+
+/// Fire a short ICMP burst at a client and summarize loss + latency.
+export function pingDevice(mac: string): Promise<PingResult> {
+  return apiFetch<PingResult>(`/monitoring/devices/${encodeURIComponent(mac)}/ping`, {
+    method: "POST",
+  });
+}
+
 /// Set (or clear, with null/empty) a device's user description. Returns the
 /// updated row.
 export function saveDeviceDescription(mac: string, description: string | null): Promise<Device> {
@@ -130,4 +168,13 @@ export function deviceIdentity(d: Device): { label: string; isMac: boolean } {
 /// A device's total bytes over the window.
 export function deviceTotalBytes(d: Device): number {
   return (d.bytes_in ?? 0) + (d.bytes_out ?? 0);
+}
+
+/// True for a dotted-quad IPv4 literal. Used to keep IPv6 (e.g. `fe80::…`) out
+/// of the IPv4 column even if the collector ever records one there.
+export function isIpv4(s: string | null | undefined): boolean {
+  if (!s) return false;
+  const parts = s.split(".");
+  if (parts.length !== 4) return false;
+  return parts.every((p) => /^\d{1,3}$/.test(p) && Number(p) <= 255);
 }

@@ -212,10 +212,18 @@ fn apply_neighbors(shared: &Shared, neighbors: Vec<neigh::Neighbor>) {
             }
             let vendor = fingerprint::vendor(&n.mac);
             let online = matches!(n.state.as_str(), "REACHABLE" | "DELAY" | "PROBE");
+            // Split the neighbor IP by family so an IPv6 link-local never
+            // overwrites the client's IPv4 (the WebUI's IPv4 column).
+            let (current_ip, current_ipv6) = if is_ipv4(&n.ip) {
+                (Some(n.ip.clone()), None)
+            } else {
+                (None, Some(n.ip.clone()))
+            };
             let sighting = Sighting {
                 mac: n.mac.clone(),
                 seen_at: now,
-                current_ip: Some(n.ip.clone()),
+                current_ip,
+                current_ipv6,
                 vendor,
                 interface: Some(n.dev.clone()),
                 vlan: vlan_of(&n.dev),
@@ -604,6 +612,12 @@ fn group_gid(name: &str) -> Option<u32> {
 /// A VLAN sub-interface name ("eth1.20") carries the VLAN id after the dot.
 fn vlan_of(iface: &str) -> Option<String> {
     iface.split_once('.').map(|(_, vid)| vid.to_string())
+}
+
+/// True when `ip` parses as an IPv4 address (so IPv6 neighbors are routed to
+/// `current_ipv6` instead of the IPv4 column).
+fn is_ipv4(ip: &str) -> bool {
+    ip.parse::<std::net::Ipv4Addr>().is_ok()
 }
 
 #[cfg(test)]

@@ -17,6 +17,7 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
  nginx,
+ iputils-ping,
 Recommends:
  suricata,
 Description: QuartzFire web management interface
