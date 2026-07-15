@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
-import { applyBridge, BridgeInterface } from "@/lib/interfaces";
+import { applyBridge, BridgeInterface, BridgeVif } from "@/lib/interfaces";
 
 const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
 const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
@@ -25,6 +25,23 @@ interface AddrRow {
 let addrKeyCounter = 0;
 const nextKey = () => `bridge-addr-${addrKeyCounter++}`;
 const toRows = (values: string[]): AddrRow[] => values.map((value) => ({ key: nextKey(), value }));
+
+/// One VLAN sub-interface (VIF) row while editing. `addresses` is a free-text
+/// field of whitespace/comma-separated CIDRs so a VIF can carry several IPs and
+/// round-trip cleanly.
+interface VifRow {
+  key: string;
+  vlan: string;
+  description: string;
+  addresses: string;
+}
+const toVifRows = (vifs: BridgeVif[]): VifRow[] =>
+  vifs.map((v) => ({
+    key: nextKey(),
+    vlan: String(v.vlan_id),
+    description: v.description ?? "",
+    addresses: v.addresses.join(", "),
+  }));
 
 export function BridgeFormModal({
   initial,
@@ -51,6 +68,8 @@ export function BridgeFormModal({
   const [addresses, setAddresses] = useState<AddrRow[]>(toRows(initial?.addresses ?? []));
   const [mtu, setMtu] = useState(initial?.mtu != null ? String(initial.mtu) : "");
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+  const [vlanAware, setVlanAware] = useState(initial?.vlan_aware ?? false);
+  const [vifs, setVifs] = useState<VifRow[]>(toVifRows(initial?.vifs ?? []));
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -62,6 +81,11 @@ export function BridgeFormModal({
   const removeAddr = (key: string) => setAddresses((p) => p.filter((a) => a.key !== key));
   const updateAddr = (key: string, value: string) =>
     setAddresses((p) => p.map((a) => (a.key === key ? { ...a, value } : a)));
+
+  const addVif = () => setVifs((p) => [...p, { key: nextKey(), vlan: "", description: "", addresses: "" }]);
+  const removeVif = (key: string) => setVifs((p) => p.filter((v) => v.key !== key));
+  const updateVif = (key: string, patch: Partial<Omit<VifRow, "key">>) =>
+    setVifs((p) => p.map((v) => (v.key === key ? { ...v, ...patch } : v)));
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -84,6 +108,30 @@ export function BridgeFormModal({
       }
     }
 
+    // VLAN sub-interfaces (only meaningful on a VLAN-aware bridge).
+    const parsedVifs: BridgeVif[] = [];
+    const seenVlan = new Set<number>();
+    for (const r of vifs) {
+      if (r.vlan.trim() === "" && r.description.trim() === "" && r.addresses.trim() === "") continue;
+      const id = Number(r.vlan);
+      if (!Number.isInteger(id) || id < 1 || id > 4094) {
+        setError("Each VLAN sub-interface needs a VLAN ID between 1 and 4094.");
+        return;
+      }
+      if (seenVlan.has(id)) {
+        setError(`VLAN ${id} is listed more than once.`);
+        return;
+      }
+      seenVlan.add(id);
+      parsedVifs.push({
+        vlan_id: id,
+        description: r.description.trim() || null,
+        addresses: r.addresses.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean),
+      });
+    }
+    // VIFs require VLAN filtering; enable it implicitly so the commit succeeds.
+    const wantVlanAware = vlanAware || parsedVifs.length > 0;
+
     setSaving(true);
     try {
       const applied = await applyBridge(initial ?? null, {
@@ -93,6 +141,8 @@ export function BridgeFormModal({
         mtu: mtu.trim() === "" ? null : Number(mtu),
         members,
         enabled,
+        vlan_aware: wantVlanAware,
+        vifs: parsedVifs,
       });
       onSaved(
         applied === 0
@@ -215,6 +265,87 @@ export function BridgeFormModal({
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-md p-3" style={inputSt}>
+          <label className="flex items-center gap-[10px] cursor-pointer select-none">
+            <Switch on={vlanAware} onChange={setVlanAware} />
+            <span className="text-[13px] text-[var(--qz-fg-2)]">
+              VLAN-aware bridging{" "}
+              <span className="text-[var(--qz-fg-4)]">(enable-vlan)</span>
+            </span>
+          </label>
+          <p className="text-[11px] text-[var(--qz-fg-4)] m-0 -mt-1">
+            VLAN filtering. Required before a VXLAN Single VXLAN Device (SVD) member can carry{" "}
+            <span style={{ fontFamily: "var(--qz-font-mono)" }}>vlan-to-vni</span> mappings, and before VLAN
+            sub-interfaces.
+          </p>
+
+          {vlanAware && (
+            <div>
+              <div className="flex items-center justify-between mb-[6px]">
+                <label className="block text-[12px] text-[var(--qz-fg-3)]">VLAN sub-interfaces (VIFs)</label>
+                <button
+                  type="button"
+                  onClick={addVif}
+                  className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0"
+                >
+                  <Plus size={13} /> Add VIF
+                </button>
+              </div>
+              {vifs.length === 0 ? (
+                <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+                  No VLAN sub-interfaces. Each adds an L3 interface named{" "}
+                  <span style={{ fontFamily: "var(--qz-font-mono)" }}>{name.trim() || "brN"}.&lt;vlan&gt;</span>.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {vifs.map((v) => (
+                    <div key={v.key} className="flex items-start gap-2">
+                      <input
+                        value={v.vlan}
+                        onChange={(e) => updateVif(v.key, { vlan: e.target.value })}
+                        placeholder="VLAN"
+                        className={inputCls}
+                        style={{ ...monoSt, maxWidth: 80 }}
+                        onFocus={focusBorder}
+                        onBlur={blurBorder}
+                      />
+                      <div className="flex flex-col gap-2 flex-1">
+                        <input
+                          value={v.addresses}
+                          onChange={(e) => updateVif(v.key, { addresses: e.target.value })}
+                          placeholder="10.0.10.1/24 (comma-separated for several)"
+                          className={inputCls}
+                          style={monoSt}
+                          onFocus={focusBorder}
+                          onBlur={blurBorder}
+                        />
+                        <input
+                          value={v.description}
+                          onChange={(e) => updateVif(v.key, { description: e.target.value })}
+                          placeholder="Description (optional)"
+                          className={inputCls}
+                          style={inputSt}
+                          onFocus={focusBorder}
+                          onBlur={blurBorder}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeVif(v.key)}
+                        title="Remove VLAN sub-interface"
+                        className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent"
+                        style={{ border: "1px solid var(--qz-border)" }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

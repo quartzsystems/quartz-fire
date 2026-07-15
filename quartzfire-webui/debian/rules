@@ -25,6 +25,11 @@ override_dh_installsystemd:
 	# only; the timer arms at boot (OnBootSec) so we never kick a signature
 	# download from a maintscript.
 	dh_installsystemd --no-start --name=quartzfire-ips-update
+	# Factory reset: arm the .path watcher (enabled + started). The paired
+	# oneshot .service has no [Install] — it fires only on the request file,
+	# never at boot — and does nothing without a valid request, so a start at
+	# install time is harmless.
+	dh_installsystemd --name=quartzfire-factory-reset
 
 override_dh_auto_install:
 	install -D -m0755 backend/target/release/quartzfire-webui \
@@ -33,6 +38,8 @@ override_dh_auto_install:
 		debian/quartzfire-webui/usr/libexec/quartzfire/register-api-key
 	install -D -m0755 scripts/ips-apply \
 		debian/quartzfire-webui/usr/libexec/quartzfire/ips-apply
+	install -D -m0755 scripts/factory-reset \
+		debian/quartzfire-webui/usr/libexec/quartzfire/factory-reset
 	mkdir -p debian/quartzfire-webui/usr/share/quartzfire-webui/www
 	# Frontend export is optional at package time; warn but do not fail.
 	if [ -d backend/www ]; then \

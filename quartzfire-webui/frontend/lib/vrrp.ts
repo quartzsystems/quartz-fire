@@ -9,7 +9,7 @@
 // unless confirmed in the shell banner).
 
 import { vyosApi } from "./api";
-import { VyosCommand, VyosResponse } from "./interfaces";
+import type { VyosCommand, VyosResponse } from "./interfaces";
 import { guardedCommitAndSave } from "./guard";
 
 const commitAndSave = (commands: VyosCommand[], what: string) =>

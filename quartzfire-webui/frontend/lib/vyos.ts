@@ -6,7 +6,7 @@
 // tiles render what they get.
 
 import { vyosApi } from "./api";
-import { VyosResponse } from "./interfaces";
+import type { VyosResponse } from "./interfaces";
 
 export interface LoadAverage {
   one: number | null;

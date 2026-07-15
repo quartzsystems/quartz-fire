@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Eraser,
   FileDown,
   FileUp,
   HardDriveDownload,
@@ -17,6 +18,7 @@ import {
   cleanupImageUpload,
   deleteImage,
   downloadConfigBackup,
+  factoryReset,
   fetchImages,
   imageNameFromIsoName,
   rebootSystem,
@@ -477,12 +479,114 @@ function RestoreConfigModal({
   );
 }
 
+/// Factory reset — the most destructive action in the WebUI. Wipes the whole
+/// configuration back to defaults and reboots; the box comes back at vyos/vyos
+/// on the console with no WebUI/SSH until reconfigured. Gated by a
+/// type-to-confirm so it can't be fired by a stray click.
+const RESET_PHRASE = "factory reset";
+
+function FactoryResetModal({
+  onClose,
+  onConfirmed,
+}: {
+  onClose: () => void;
+  onConfirmed: (message: string) => void;
+}) {
+  const [phrase, setPhrase] = useState("");
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+
+  const armed = phrase.trim().toLowerCase() === RESET_PHRASE;
+
+  const run = async () => {
+    if (!armed) return;
+    setWorking(true);
+    setError("");
+    try {
+      await factoryReset();
+      onConfirmed(
+        "Factory reset started — the firewall wipes its configuration and reboots to defaults. The WebUI will be unreachable until it's reconfigured at the console.",
+      );
+    } catch (e) {
+      // The reboot severs the connection before answering — treat that as success.
+      const msg = e instanceof Error ? e.message : "";
+      if (/network|fetch|unreachable|gateway/i.test(msg)) {
+        onConfirmed("Factory reset started — the firewall is resetting and rebooting.");
+        return;
+      }
+      setError(msg || "Failed to start the factory reset.");
+      setWorking(false);
+    }
+  };
+
+  return (
+    <ModalShell onClose={onClose} maxWidth={480}>
+      <ModalHeader
+        title="Factory Reset"
+        subtitle="Erase all configuration and reboot to defaults"
+        onClose={onClose}
+      />
+      <div className="flex flex-col gap-4">
+        <p className="text-[13px] text-[var(--qz-fg-2)] m-0">
+          This replaces the boot configuration with the factory default and reboots. Every setting —
+          interfaces, firewall, NAT, users, services, this WebUI&apos;s own API access — is erased.
+          The firewall comes back with the default <span className="mono">vyos</span>/<span className="mono">vyos</span>{" "}
+          login, reachable only at the console until it&apos;s reconfigured. There is no undo and no
+          auto-revert.
+        </p>
+        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+          Download a configuration backup first if you might want any of it back. Type
+          {" "}
+          <span className="mono" style={{ color: "var(--qz-fg-2)" }}>{RESET_PHRASE}</span>{" "}
+          below to confirm.
+        </p>
+        <input
+          value={phrase}
+          onChange={(e) => setPhrase(e.target.value)}
+          placeholder={RESET_PHRASE}
+          className={inputCls}
+          style={monoSt}
+          autoFocus
+          onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
+          onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
+        />
+        {error && (
+          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+            {error}
+          </p>
+        )}
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={working}
+            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer disabled:opacity-50"
+            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={working || !armed}
+            onClick={run}
+            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: "var(--qz-danger)", color: "white", opacity: working ? 0.7 : 1 }}
+          >
+            {working ? "Resetting…" : "Erase & reset to defaults"}
+          </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
 export default function MaintenancePage() {
   const { setToast } = useDashboard();
   const [images, setImages] = useState<SystemImage[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [powerModal, setPowerModal] = useState<PowerAction | null>(null);
+  const [resetModal, setResetModal] = useState(false);
   const [addModal, setAddModal] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -592,6 +696,25 @@ export default function MaintenancePage() {
             </div>
           </section>
 
+          {/* Factory reset */}
+          <section
+            className="rounded-lg px-5 py-4"
+            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-danger-soft, var(--qz-input-bg))", boxShadow: "inset 0 0 0 1px var(--qz-danger)" }}
+          >
+            <h2 className="text-[15px] font-semibold text-[var(--qz-fg-1)] m-0">Factory Reset</h2>
+            <p className="text-[13px] text-[var(--qz-fg-4)] mt-1 mb-4">
+              Erase the entire configuration and reboot to factory defaults. The firewall comes back at the
+              default <span className="mono">vyos</span>/<span className="mono">vyos</span> login, reachable
+              only at the console until reconfigured — there is no undo. Download a configuration backup
+              first if you might want any of it back.
+            </p>
+            <div className="flex gap-2">
+              <Button kind="danger" icon={Eraser} onClick={() => setResetModal(true)}>
+                Reset to factory defaults…
+              </Button>
+            </div>
+          </section>
+
           {/* System images */}
           <section
             className="rounded-lg px-5 py-4"
@@ -670,6 +793,16 @@ export default function MaintenancePage() {
           onClose={() => setPowerModal(null)}
           onConfirmed={(msg) => {
             setPowerModal(null);
+            setToast(msg);
+          }}
+        />
+      )}
+
+      {resetModal && (
+        <FactoryResetModal
+          onClose={() => setResetModal(false)}
+          onConfirmed={(msg) => {
+            setResetModal(false);
             setToast(msg);
           }}
         />

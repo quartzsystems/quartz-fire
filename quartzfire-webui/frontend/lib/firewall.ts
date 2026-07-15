@@ -29,7 +29,7 @@
 // straight to the VyOS API, and save to the boot config in the background.
 
 import { vyosApi } from "./api";
-import { VyosCommand, VyosResponse } from "./interfaces";
+import type { VyosCommand, VyosResponse } from "./interfaces";
 import { guardedCommitAndSave } from "./guard";
 import { showText } from "./vyos";
 

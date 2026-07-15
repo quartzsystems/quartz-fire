@@ -101,6 +101,15 @@ export interface BondConfigUpdate {
   enabled: boolean;
 }
 
+/// A VLAN sub-interface (VIF) on a VLAN-aware bridge — an L3 SVI for one VLAN.
+/// VyOS names the resulting interface `<bridge>.<vlan_id>` (e.g. `br0.10`), the
+/// same dotted notation as an ethernet VIF.
+export interface BridgeVif {
+  vlan_id: number;
+  description: string | null;
+  addresses: string[];
+}
+
 export interface BridgeInterface {
   name: string;
   description: string | null;
@@ -108,6 +117,11 @@ export interface BridgeInterface {
   mtu: number | null;
   members: string[];
   enabled: boolean;
+  /** `enable-vlan` — VLAN filtering (VLAN-aware bridging). Required before a
+   *  VXLAN SVD member can carry `vlan-to-vni` mappings, and before VIFs. */
+  vlan_aware: boolean;
+  /** VLAN sub-interfaces (`vif <id>`) — only meaningful on a VLAN-aware bridge. */
+  vifs: BridgeVif[];
 }
 
 export interface BridgeConfigUpdate {
@@ -117,6 +131,8 @@ export interface BridgeConfigUpdate {
   mtu: number | null;
   members: string[];
   enabled: boolean;
+  vlan_aware: boolean;
+  vifs: BridgeVif[];
 }
 
 /// One VNI carried by a VXLAN interface. VyOS expresses these two ways:
@@ -334,6 +350,22 @@ export async function fetchBonds(): Promise<BondInterface[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/// Parse a bridge's VLAN sub-interfaces (`vif <id>` children). Sorted by VLAN id.
+function parseBridgeVifs(cfg: Cfg): BridgeVif[] {
+  const vifs = cfg["vif"];
+  if (!vifs || typeof vifs !== "object") return [];
+  return Object.entries(vifs as Record<string, Cfg>)
+    .map(([vid, raw]) => {
+      const v = (raw ?? {}) as Cfg;
+      return {
+        vlan_id: Number(vid) || 0,
+        description: childStr(v, "description"),
+        addresses: asAddresses(v),
+      };
+    })
+    .sort((a, b) => a.vlan_id - b.vlan_id);
+}
+
 /// Configured bridge interfaces.
 export async function fetchBridges(): Promise<BridgeInterface[]> {
   const node = kindNode(await fetchInterfacesConfig(), "bridge");
@@ -348,9 +380,22 @@ export async function fetchBridges(): Promise<BridgeInterface[]> {
         mtu: asMtu(cfg),
         members: asMembers(cfg),
         enabled: isEnabled(cfg),
+        vlan_aware: "enable-vlan" in cfg,
+        vifs: parseBridgeVifs(cfg),
       };
     })
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/// Interface names of the VLAN sub-interfaces (VIFs) on VLAN-aware bridges —
+/// a bridge `br0` with `vif 10` yields `br0.10`. Offered as selectable
+/// interfaces in the VRRP and firewall pickers (a VRRP group or firewall rule
+/// can bind to `br0.10`). VyOS names a bridge VLAN sub-interface
+/// `<bridge>.<vlan-id>`, the same dotted notation as an ethernet VIF.
+export function bridgeVifInterfaceNames(bridges: BridgeInterface[]): string[] {
+  return bridges
+    .flatMap((b) => b.vifs.map((v) => `${b.name}.${v.vlan_id}`))
+    .sort((a, b) => a.localeCompare(b));
 }
 
 /// A multi-value leaf renders as a JSON string for one value, array for several
@@ -775,6 +820,41 @@ export function deleteBond(name: string): Promise<number> {
   return guardedApply([{ op: "delete", path: ["interfaces", "bonding", name] }]);
 }
 
+/// Diff the VLAN sub-interfaces (`vif <id>`) of a VLAN-aware bridge. Each VIF
+/// carries an optional description and address list; a VIF with neither still
+/// needs its node created (it defines the `<bridge>.<id>` L3 SVI).
+function diffBridgeVifs(out: VyosCommand[], base: string[], live: BridgeVif[], desired: BridgeVif[]): void {
+  const liveByVlan = new Map(live.map((v) => [v.vlan_id, v]));
+  const wantByVlan = new Map(
+    desired.filter((v) => Number.isInteger(v.vlan_id) && v.vlan_id > 0).map((v) => [v.vlan_id, v]),
+  );
+
+  for (const [vlan, v] of wantByVlan) {
+    const vbase = [...base, "vif", String(vlan)];
+    const l = liveByVlan.get(vlan) ?? null;
+
+    const newDesc = trimmed(v.description);
+    if (newDesc !== (l?.description ?? null)) {
+      if (newDesc !== null) out.push({ op: "set", path: [...vbase, "description", newDesc] });
+      else out.push({ op: "delete", path: [...vbase, "description"] });
+    }
+
+    const liveAddrs = l?.addresses ?? [];
+    const newAddrs = v.addresses.map((a) => a.trim()).filter(Boolean);
+    for (const a of newAddrs) if (!liveAddrs.includes(a)) out.push({ op: "set", path: [...vbase, "address", a] });
+    for (const a of liveAddrs) if (!newAddrs.includes(a)) out.push({ op: "delete", path: [...vbase, "address", a] });
+
+    // A brand-new VIF with no leaves still needs its node created explicitly.
+    if (l === null && newDesc === null && newAddrs.length === 0) {
+      out.push({ op: "set", path: vbase });
+    }
+  }
+
+  for (const [vlan] of liveByVlan) {
+    if (!wantByVlan.has(vlan)) out.push({ op: "delete", path: [...base, "vif", String(vlan)] });
+  }
+}
+
 /// Diff a desired bridge config against the live row into a minimal set/delete
 /// command list (empty when the config already matches).
 export function diffBridge(live: BridgeInterface | null, u: BridgeConfigUpdate): VyosCommand[] {
@@ -783,6 +863,16 @@ export function diffBridge(live: BridgeInterface | null, u: BridgeConfigUpdate):
 
   diffCommonLeaves(out, base, live, u);
   diffMembers(out, base, live?.members ?? [], u.members);
+
+  // VLAN-aware filtering (`enable-vlan`) — a valueless flag. Must be set before
+  // (or, since a commit is atomic, together with) a VXLAN SVD member's
+  // `vlan-to-vni` mappings or VIFs, else VyOS rejects the commit.
+  const liveVlanAware = live?.vlan_aware ?? false;
+  if (u.vlan_aware !== liveVlanAware) {
+    out.push({ op: u.vlan_aware ? "set" : "delete", path: [...base, "enable-vlan"] });
+  }
+
+  diffBridgeVifs(out, base, live?.vifs ?? [], u.vifs);
 
   ensureCreated(out, base, live === null);
   return out;
@@ -854,7 +944,13 @@ export function diffVxlan(live: VxlanInterface | null, u: VxlanConfigUpdate): Vy
     if (desired) out.push({ op: "set", path: [...base, "parameters", name] });
     else out.push({ op: "delete", path: [...base, "parameters", name] });
   };
-  flag("external", live?.external ?? false, u.external);
+  // `parameters external` hands the control plane to BGP L2VPN/EVPN and marks
+  // the device VLAN-filtered. VyOS REQUIRES it for any `vlan-to-vni` (SVD)
+  // mapping, so force it on whenever a VNI row is VLAN-mapped — independent of
+  // the chosen control-plane mode. Without it every VLAN-mapped submission is
+  // rejected at commit.
+  const hasVlanMapping = u.vnis.some((m) => m.vlan != null);
+  flag("external", live?.external ?? false, u.external || hasVlanMapping);
   flag("nolearning", live?.nolearning ?? false, u.nolearning);
   flag("neighbor-suppress", live?.neighbor_suppress ?? false, u.neighbor_suppress);
 

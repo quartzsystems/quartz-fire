@@ -178,6 +178,15 @@ pub struct Config {
     #[serde(default = "default_devices_online_timeout_secs")]
     pub devices_online_timeout_secs: u64,
 
+    /// "Factory reset" trigger file watched by quartzfire-factory-reset.path.
+    /// Lives under /config/quartzfire (writable for us) like the other
+    /// desired-state files. The backend only writes it; the root
+    /// quartzfire-factory-reset helper overwrites /config/config.boot with the
+    /// flavor default and reboots. We can't touch /config/config.boot or
+    /// reboot ourselves (DynamicUser), so this is the seam.
+    #[serde(default = "default_factory_reset_request_file")]
+    pub factory_reset_request_file: PathBuf,
+
     /// Per-user dashboard tile layouts (a WebUI preference), keyed by username.
     /// Lives under /config so a saved layout survives image upgrades, and is
     /// writable for us via the unit's ReadWritePaths — same contract as the
@@ -290,6 +299,9 @@ fn default_cf_testurl_helper() -> PathBuf {
 }
 fn default_dashboard_layouts_file() -> PathBuf {
     PathBuf::from("/config/quartzfire/dashboards.json")
+}
+fn default_factory_reset_request_file() -> PathBuf {
+    PathBuf::from("/config/quartzfire/factory-reset-request")
 }
 fn default_devices_db_file() -> PathBuf {
     PathBuf::from("/config/quartzfire/devices.db")

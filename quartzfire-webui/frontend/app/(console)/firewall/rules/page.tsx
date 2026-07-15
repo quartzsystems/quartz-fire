@@ -17,7 +17,7 @@ import {
   setDefaultAction,
 } from "@/lib/firewall";
 import { applyRuleOrderWithCascade, deleteRuleWithCascade } from "@/lib/rule-cascade";
-import { fetchInterfaceDescriptions } from "@/lib/interfaces";
+import { bridgeVifInterfaceNames, fetchBridges, fetchInterfaceDescriptions } from "@/lib/interfaces";
 import { formatBytes } from "@/lib/format";
 import { fetchInterfaceStats } from "@/lib/vyos";
 import { useDashboard } from "@/lib/DashboardContext";
@@ -93,14 +93,19 @@ export default function FirewallRulesPage() {
     try {
       // Interface names populate the rule form's From/To pickers; tolerate
       // their failure so a firewall read still renders.
-      const [fw, ifs, descs, hits] = await Promise.all([
+      const [fw, ifs, descs, bridges, hits] = await Promise.all([
         fetchFirewall(),
         fetchInterfaceStats().catch(() => []),
         fetchInterfaceDescriptions().catch(() => ({})),
+        fetchBridges().catch(() => []),
         fetchRuleCounters().catch(() => new Map<string, RuleCounter>()),
       ]);
       setData(fw);
-      setInterfaces(ifs.map((i) => i.name).sort());
+      // Include config-derived bridge VIFs (e.g. br0.10) so a rule can match on
+      // one — the rule picker is a fixed select, not free text.
+      const names = new Set(ifs.map((i) => i.name));
+      for (const n of bridgeVifInterfaceNames(bridges)) names.add(n);
+      setInterfaces([...names].sort((a, b) => a.localeCompare(b)));
       setIfaceDescriptions(descs);
       setCounters(hits);
       setOrder(fw.rules.map(ruleKey));

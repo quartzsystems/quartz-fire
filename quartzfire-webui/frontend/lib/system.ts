@@ -484,6 +484,18 @@ export function shutdownSystem(): Promise<void> {
   return opApi("poweroff", { op: "poweroff", path: ["now"] }, "shut down");
 }
 
+/// Request a full factory reset: the backend drops a trigger file that the
+/// root quartzfire-factory-reset unit acts on — it overwrites the boot config
+/// with the flavor default and reboots. The running config is left intact
+/// until the reboot, so this call returns before anything is lost; the reboot
+/// then severs the session (the caller treats a dropped connection as success,
+/// like reboot/shutdown). This is a one-way door — everything configured is
+/// wiped, and the box comes back at vyos/vyos on the console with no WebUI
+/// until reconfigured.
+export async function factoryReset(): Promise<void> {
+  await apiFetch("/system/factory-reset", { method: "POST" });
+}
+
 // ══ maintenance: configuration backup / restore ═══════════════════════════════
 
 /// Download the running configuration as a config.boot-style file, named

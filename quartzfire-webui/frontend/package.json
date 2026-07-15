@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build && node -e \"const fs=require('fs');fs.rmSync('../backend/www',{recursive:true,force:true});fs.cpSync('out','../backend/www',{recursive:true})\"",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test --no-warnings --experimental-strip-types --import ./test/register.mjs \"test/**/*.test.ts\""
   },
   "dependencies": {
     "cobe": "^2.0.1",

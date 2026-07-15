@@ -7,6 +7,7 @@ import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { useDashboard } from "@/lib/DashboardContext";
 import { fetchInterfaceStats } from "@/lib/vyos";
+import { bridgeVifInterfaceNames, fetchBridges } from "@/lib/interfaces";
 import {
   VrrpConfig,
   VrrpGroup,
@@ -87,9 +88,17 @@ export default function VrrpPage() {
   const load = useCallback(async (mode: "load" | "refresh" = "load") => {
     if (mode === "load") setStatus("loading");
     try {
-      const [vrrp, ifs] = await Promise.all([fetchVrrp(), fetchInterfaceStats().catch(() => [])]);
+      const [vrrp, ifs, bridges] = await Promise.all([
+        fetchVrrp(),
+        fetchInterfaceStats().catch(() => []),
+        fetchBridges().catch(() => []),
+      ]);
       setCfg(vrrp);
-      setInterfaces(ifs.map((i) => i.name).sort());
+      // Merge operational interface names with config-derived bridge VIFs
+      // (e.g. br0.10) so a VRRP group can bind to one right after it's created.
+      const names = new Set(ifs.map((i) => i.name));
+      for (const n of bridgeVifInterfaceNames(bridges)) names.add(n);
+      setInterfaces([...names].sort((a, b) => a.localeCompare(b)));
       setStatus("ready");
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Failed to load VRRP configuration.");

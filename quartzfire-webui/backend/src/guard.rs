@@ -816,6 +816,45 @@ pub async fn rollback(
     .await
 }
 
+/// POST /api/system/factory-reset — request a full factory reset. Unlike
+/// restore/rollback (which load a config under commit-confirm and keep the
+/// session), a factory reset must NOT auto-revert: it overwrites
+/// /config/config.boot with the flavor default and reboots, so the box comes
+/// back at defaults (vyos/vyos on the console). The backend can't touch
+/// /config/config.boot or reboot under DynamicUser, so it only drops a trigger
+/// file (atomically, temp + rename) that the root quartzfire-factory-reset
+/// path-unit acts on. The reboot severs this session; the client treats a lost
+/// connection as success.
+pub async fn factory_reset(State(state): State<Arc<AppState>>) -> Result<Json<Value>> {
+    let path = &state.config.factory_reset_request_file;
+    let dir = path
+        .parent()
+        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("trigger path has no parent directory")))?;
+    let _ = std::fs::create_dir_all(dir);
+
+    // A confirmation token the root helper checks, so a stray/empty file can't
+    // trip a destructive reboot — only a deliberate request with this marker.
+    let body = json!({
+        "confirm": "factory-reset",
+        "requested_at": std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+    });
+    let tmp = dir.join(".factory-reset-request.tmp");
+    std::fs::write(&tmp, body.to_string()).map_err(|e| {
+        AppError::BadRequest(format!(
+            "cannot write the factory-reset trigger ({}): {e} — ensure quartzfire-webui is installed \
+             and /config/quartzfire is writable",
+            tmp.display()
+        ))
+    })?;
+    std::fs::rename(&tmp, path)
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("activating {}: {e}", path.display())))?;
+
+    Ok(Json(json!({ "requested": true })))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

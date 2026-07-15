@@ -1,0 +1,13 @@
+[Unit]
+Description=Watch for a QuartzFire factory-reset request
+
+[Path]
+# The WebUI backend writes the request atomically (temp file + rename);
+# PathChanged fires on the rename-into-place. The directory may not exist until
+# the first apply run creates it — systemd watches the nearest existing
+# ancestor and re-arms as components appear.
+PathChanged=/config/quartzfire/factory-reset-request
+Unit=quartzfire-factory-reset.service
+
+[Install]
+WantedBy=multi-user.target

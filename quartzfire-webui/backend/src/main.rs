@@ -147,6 +147,11 @@ async fn main() -> Result<()> {
         .route("/api/config/backup", get(guard::backup))
         .route("/api/config/restore", post(guard::restore))
         .route("/api/config/rollback", post(guard::rollback))
+        // Full factory reset (overwrite /config/config.boot with the flavor
+        // default + reboot). Unlike restore/rollback it deliberately does NOT
+        // auto-revert; the root quartzfire-factory-reset units do the privileged
+        // work. See guard::factory_reset.
+        .route("/api/system/factory-reset", post(guard::factory_reset))
         .route("/api/interfaces/phy", get(phy::ethernet_phy))
         // High Availability config (VRRP + virtual-server + config-sync) is real
         // VyOS config edited through the /api proxy + commit guard; this endpoint

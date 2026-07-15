@@ -1,0 +1,66 @@
+#!/bin/bash
+# QuartzFire factory-reset root helper.
+#
+# Triggered by quartzfire-factory-reset.path when the WebUI backend drops the
+# request file (/config/quartzfire/factory-reset-request). The backend runs as
+# an unprivileged DynamicUser and cannot touch /config/config.boot or reboot,
+# so it only writes the request; this script does the privileged work as root:
+#
+#   1. verify the request carries the confirmation token (so a stray or empty
+#      file can never trip a destructive reboot);
+#   2. overwrite the boot config (/config/config.boot) with the flavor's
+#      DEFAULT config.boot, keeping a timestamped copy of the old one;
+#   3. reboot — the box comes back at factory defaults (vyos/vyos on console).
+#
+# The RUNNING config is left untouched until the reboot, so the WebUI/session
+# stays alive right up to the moment we pull the trigger (no sever-then-hang
+# race). This is intentionally a one-way door: everything the user configured
+# is gone after the reboot.
+set -euo pipefail
+
+REQ=/config/quartzfire/factory-reset-request
+BOOT=/config/config.boot
+
+log() { echo "quartzfire-factory-reset: $*" >&2; }
+
+# No request → nothing to do (e.g. the .path re-armed on an unrelated change).
+[ -f "$REQ" ] || exit 0
+
+# Require the confirmation token the backend writes. Consume the request FIRST,
+# unconditionally, so a malformed file can never wedge us into a reboot loop.
+content="$(cat "$REQ" 2>/dev/null || true)"
+rm -f "$REQ"
+if ! printf '%s' "$content" | grep -q '"confirm":[[:space:]]*"factory-reset"'; then
+  log "request file missing the confirmation token; ignoring"
+  exit 0
+fi
+
+# Locate the flavor's default config.boot. Path has moved across VyOS/vyatta
+# releases, so try the known homes in order.
+DEFAULT=""
+for d in \
+  /opt/vyatta/etc/config.boot.default \
+  /opt/vyatta/etc/config/config.boot.default \
+  /usr/share/vyos/config.boot.default \
+  /usr/libexec/vyos/config.boot.default; do
+  if [ -f "$d" ]; then DEFAULT="$d"; break; fi
+done
+if [ -z "$DEFAULT" ]; then
+  log "no default config.boot found (looked in the known vyatta/vyos paths); aborting"
+  exit 1
+fi
+log "using default config from $DEFAULT"
+
+# Keep a copy of the outgoing config next to the boot config, best effort.
+if [ -f "$BOOT" ]; then
+  cp -p "$BOOT" "${BOOT}.pre-factory-reset.$(date +%Y%m%d-%H%M%S)" 2>/dev/null \
+    || log "warning: could not back up the current $BOOT"
+fi
+
+install -m0644 "$DEFAULT" "$BOOT"
+sync
+log "boot config reset to defaults; rebooting"
+
+# Prefer systemctl; fall back to reboot(8) if PID 1 isn't reachable for some
+# reason. Either way this severs the WebUI session — that is expected.
+systemctl reboot || reboot

@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply a QuartzFire factory reset (reset boot config to defaults + reboot)
+# Triggered only by quartzfire-factory-reset.path when the WebUI drops the
+# request file. NOT wanted by any target — there is no boot run: a factory
+# reset must never fire on its own at startup, only on an explicit request.
+After=vyos-router.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/quartzfire/factory-reset
+# The helper reboots on success, so this unit "succeeding" means the request
+# was ignored (missing token / no default found). Do not restart.

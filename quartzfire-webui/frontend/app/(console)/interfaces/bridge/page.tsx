@@ -37,6 +37,21 @@ const columns: Column<BridgeInterface>[] = [
     render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
     mono: true,
   },
+  {
+    key: "vlan",
+    header: "VLAN-aware",
+    value: (r) => (r.vlan_aware ? "yes" : "no"),
+    render: (r) =>
+      r.vlan_aware ? (
+        <span className="badge badge-info">
+          Aware{r.vifs.length ? ` · ${r.vifs.length} VIF${r.vifs.length === 1 ? "" : "s"}` : ""}
+        </span>
+      ) : (
+        <span className="text-[var(--qz-fg-4)]">—</span>
+      ),
+    sortable: true,
+    width: 130,
+  },
   { key: "mtu", header: "MTU", value: (r) => r.mtu, mono: true, sortable: true, width: 80 },
   {
     key: "status",
