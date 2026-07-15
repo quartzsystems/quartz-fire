@@ -5,7 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
-import { applyVxlan, VxlanInterface } from "@/lib/interfaces";
+import { applyVxlan, VniMapping, VxlanInterface } from "@/lib/interfaces";
 
 const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
 const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
@@ -42,6 +42,20 @@ let keyCounter = 0;
 const nextKey = () => `vxlan-row-${keyCounter++}`;
 const toRows = (values: string[]): ListRow[] => values.map((value) => ({ key: nextKey(), value }));
 
+/// A VNI↔VLAN mapping row (strings while editing). `vlan` blank = a plain VNI
+/// with no VLAN binding (typical L3VNI).
+interface VniRow {
+  key: string;
+  vni: string;
+  vlan: string;
+}
+const toVniRows = (vnis?: VniMapping[]): VniRow[] =>
+  (vnis && vnis.length ? vnis : [{ vni: 0, vlan: null }]).map((m) => ({
+    key: nextKey(),
+    vni: m.vni ? String(m.vni) : "",
+    vlan: m.vlan != null ? String(m.vlan) : "",
+  }));
+
 function initialMode(v?: VxlanInterface): Mode {
   if (!v) return "evpn";
   if (v.external) return "evpn";
@@ -74,7 +88,7 @@ export function VxlanFormModal({
 
   const [mode, setMode] = useState<Mode>(initialMode(initial));
   const [name, setName] = useState(initial?.name ?? "");
-  const [vni, setVni] = useState(initial?.vni != null ? String(initial.vni) : "");
+  const [vnis, setVnis] = useState<VniRow[]>(toVniRows(initial?.vnis));
   const [description, setDescription] = useState(initial?.description ?? "");
   const [sourceAddress, setSourceAddress] = useState(initial?.source_address ?? "");
   const [sourceInterface, setSourceInterface] = useState(initial?.source_interface ?? "");
@@ -95,6 +109,11 @@ export function VxlanFormModal({
   const updateRemote = (key: string, value: string) =>
     setRemotes((p) => p.map((r) => (r.key === key ? { ...r, value } : r)));
 
+  const addVni = () => setVnis((p) => [...p, { key: nextKey(), vni: "", vlan: "" }]);
+  const removeVni = (key: string) => setVnis((p) => (p.length > 1 ? p.filter((r) => r.key !== key) : p));
+  const updateVni = (key: string, patch: Partial<Omit<VniRow, "key">>) =>
+    setVnis((p) => p.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+
   const addAddr = () => setAddresses((p) => [...p, { key: nextKey(), value: "" }]);
   const removeAddr = (key: string) => setAddresses((p) => p.filter((a) => a.key !== key));
   const updateAddr = (key: string, value: string) =>
@@ -113,10 +132,34 @@ export function VxlanFormModal({
       setError(`${trimmedName} already exists.`);
       return;
     }
-    const vniNum = Number(vni);
-    if (!vni.trim() || !Number.isInteger(vniNum) || vniNum < 0 || vniNum > 16777215) {
-      setError("VNI must be a whole number between 0 and 16777215.");
+    const vniRows = vnis.filter((r) => r.vni.trim() !== "");
+    if (vniRows.length === 0) {
+      setError("Add at least one VNI.");
       return;
+    }
+    const parsedVnis: VniMapping[] = [];
+    const seenVni = new Set<number>();
+    for (const r of vniRows) {
+      const n = Number(r.vni);
+      if (!Number.isInteger(n) || n < 0 || n > 16777215) {
+        setError("Each VNI must be a whole number between 0 and 16777215.");
+        return;
+      }
+      if (seenVni.has(n)) {
+        setError(`VNI ${n} is listed more than once.`);
+        return;
+      }
+      seenVni.add(n);
+      let vlan: number | null = null;
+      if (r.vlan.trim() !== "") {
+        const v = Number(r.vlan);
+        if (!Number.isInteger(v) || v < 1 || v > 4094) {
+          setError("VLAN must be a whole number between 1 and 4094.");
+          return;
+        }
+        vlan = v;
+      }
+      parsedVnis.push({ vni: n, vlan });
     }
     const src = sourceAddress.trim();
     if (mode === "evpn" && !src) {
@@ -159,7 +202,7 @@ export function VxlanFormModal({
         addresses: addresses.map((a) => a.value.trim()).filter(Boolean),
         mtu: mtu.trim() === "" ? null : Number(mtu),
         enabled,
-        vni: vniNum,
+        vnis: parsedVnis,
         source_address: src || null,
         source_interface: sourceInterface.trim() || null,
         remotes: mode === "static" ? remoteVals : [],
@@ -208,30 +251,70 @@ export function VxlanFormModal({
           />
         </Field>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Name" required>
-            <input
-              value={name}
-              disabled={isEdit}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="vxlan2000"
-              className={`${inputCls} disabled:opacity-70`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            />
-          </Field>
-          <Field label="VNI" required hint="24-bit segment ID (0–16777215).">
-            <input
-              value={vni}
-              onChange={(e) => setVni(e.target.value)}
-              placeholder="2000"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            />
-          </Field>
+        <Field label="Name" required>
+          <input
+            value={name}
+            disabled={isEdit}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="vxlan2000"
+            className={`${inputCls} disabled:opacity-70`}
+            style={monoSt}
+            onFocus={focusBorder}
+            onBlur={blurBorder}
+          />
+        </Field>
+
+        <div>
+          <div className="flex items-center justify-between mb-[6px]">
+            <label className="block text-[12px] text-[var(--qz-fg-3)]">
+              VNIs <span style={{ color: "var(--qz-danger)" }}>*</span>
+            </label>
+            <button
+              type="button"
+              onClick={addVni}
+              className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0"
+            >
+              <Plus size={13} /> Add VNI
+            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            {vnis.map((r) => (
+              <div key={r.key} className="flex items-center gap-2">
+                <input
+                  value={r.vni}
+                  onChange={(e) => updateVni(r.key, { vni: e.target.value })}
+                  placeholder="VNI (e.g. 10010)"
+                  className={inputCls}
+                  style={monoSt}
+                  onFocus={focusBorder}
+                  onBlur={blurBorder}
+                />
+                <span className="text-[12px] text-[var(--qz-fg-4)] flex-shrink-0">↔ VLAN</span>
+                <input
+                  value={r.vlan}
+                  onChange={(e) => updateVni(r.key, { vlan: e.target.value })}
+                  placeholder="opt."
+                  className={inputCls}
+                  style={{ ...monoSt, maxWidth: 96 }}
+                  onFocus={focusBorder}
+                  onBlur={blurBorder}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeVni(r.key)}
+                  disabled={vnis.length === 1}
+                  title="Remove VNI"
+                  className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={{ border: "1px solid var(--qz-border)" }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[6px]">
+            24-bit segment ID (0–16777215). Map a VNI to a VLAN for an EVPN VLAN-aware bundle; leave VLAN blank for a plain (L3) VNI.
+          </p>
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>

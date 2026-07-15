@@ -1,7 +1,7 @@
 [package]
 name = "qfdevd"
 description = "QuartzFire device/client monitoring daemon: aggregates the neighbor table, Kea DHCP leases, and conntrack accounting into a shared SQLite device inventory for the WebUI."
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "GPL-2.0-or-later"
 authors = ["QuartzFire <cwellman@quartz.systems>"]

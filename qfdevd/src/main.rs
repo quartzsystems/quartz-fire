@@ -40,6 +40,13 @@ struct Cli {
 enum Command {
     /// Run the collector daemon (default when no subcommand is given).
     Run,
+    /// Create the persistent store directory (mount-aware, group-writable) and
+    /// exit. The unit invokes this as a privileged `ExecStartPre=+…` so the
+    /// directory exists before the sandboxed daemon — whose ProtectSystem=strict
+    /// namespace only gains a writable /config bind when the dir already exists —
+    /// starts. Without it a fresh install can never create the dir and the unit
+    /// restart-loops.
+    InitStore,
     /// Print the resolved configuration and exit (diagnostics).
     ShowConfig,
 }
@@ -63,6 +70,7 @@ fn main() -> anyhow::Result<()> {
             println!("{config:#?}");
             Ok(())
         }
+        Command::InitStore => init_store(config),
         Command::Run => run(config),
     }
 }
@@ -76,4 +84,14 @@ fn run(config: config::Config) -> anyhow::Result<()> {
 #[cfg(not(target_os = "linux"))]
 fn run(_config: config::Config) -> anyhow::Result<()> {
     anyhow::bail!("qfdevd only runs on Linux (ip/conntrack/Kea); this build is for development only")
+}
+
+#[cfg(target_os = "linux")]
+fn init_store(config: config::Config) -> anyhow::Result<()> {
+    daemon::init_store(&config)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn init_store(_config: config::Config) -> anyhow::Result<()> {
+    anyhow::bail!("qfdevd only runs on Linux; this build is for development only")
 }

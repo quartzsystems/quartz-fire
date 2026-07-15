@@ -30,7 +30,24 @@ const dash = (v: string | null) => (v && v.length ? v : "—");
 
 const columns: Column<VxlanInterface>[] = [
   { key: "name", header: "Interface", value: (r) => r.name, mono: true, sortable: true, width: 120 },
-  { key: "vni", header: "VNI", value: (r) => r.vni ?? 0, mono: true, sortable: true, width: 100 },
+  {
+    key: "vni",
+    header: "VNIs",
+    value: (r) => r.vnis.map((m) => m.vni).join(", "),
+    render: (r) => {
+      if (r.vnis.length === 0) return <span className="text-[var(--qz-fg-4)]">—</span>;
+      const first = r.vnis[0];
+      const label = first.vlan != null ? `${first.vni}→v${first.vlan}` : String(first.vni);
+      return (
+        <span className="font-mono text-[12px]">
+          {label}
+          {r.vnis.length > 1 && <span className="text-[var(--qz-fg-4)]"> +{r.vnis.length - 1}</span>}
+        </span>
+      );
+    },
+    sortable: true,
+    width: 130,
+  },
   {
     key: "plane",
     header: "Control Plane",

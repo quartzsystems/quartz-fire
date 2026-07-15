@@ -119,6 +119,15 @@ export interface BridgeConfigUpdate {
   enabled: boolean;
 }
 
+/// One VNI carried by a VXLAN interface. In VyOS 1.4+ `vni` is a tag node, so a
+/// single VTEP can carry many VNIs, each optionally bridged to a VLAN — the
+/// VLAN-aware bundle / single-VXLAN-device model used by EVPN fabrics
+/// (`vni 10010 vlan 10`). A null `vlan` is a plain (usually L3) VNI.
+export interface VniMapping {
+  vni: number;
+  vlan: number | null;
+}
+
 /// A VXLAN tunnel endpoint (VTEP). The control plane is inferred from which
 /// fields are set: `external` (parameters external) → BGP-EVPN, `remotes` →
 /// static unicast, `group` → multicast BUM flooding.
@@ -128,7 +137,8 @@ export interface VxlanInterface {
   addresses: string[];
   mtu: number | null;
   enabled: boolean;
-  vni: number | null;
+  /** One or more VNIs (each optionally VLAN-mapped) carried by this VTEP. */
+  vnis: VniMapping[];
   source_address: string | null;
   source_interface: string | null;
   /** Static unicast remote VTEPs (multi-value). Empty for EVPN/multicast. */
@@ -150,7 +160,7 @@ export interface VxlanConfigUpdate {
   addresses: string[];
   mtu: number | null;
   enabled: boolean;
-  vni: number | null;
+  vnis: VniMapping[];
   source_address: string | null;
   source_interface: string | null;
   remotes: string[];
@@ -347,6 +357,26 @@ function asMulti(v: Cfg, key: string): string[] {
   return [];
 }
 
+/// Parse the `vni` node into VNI→VLAN rows. VyOS 1.4+ models `vni` as a tag
+/// node (an object keyed by the VNI, each with an optional `vlan` child); older
+/// single-VNI configs may render it as a bare string. Both are handled so a
+/// multi-VNI VTEP round-trips and a legacy single-VNI one still reads.
+function parseVnis(node: unknown): VniMapping[] {
+  const out: VniMapping[] = [];
+  if (node && typeof node === "object" && !Array.isArray(node)) {
+    for (const [vniKey, raw] of Object.entries(node as Cfg)) {
+      const vni = Number(vniKey);
+      if (!Number.isInteger(vni)) continue;
+      const vlanStr = childStr((raw ?? {}) as Cfg, "vlan");
+      const vlan = vlanStr !== null && Number.isInteger(Number(vlanStr)) ? Number(vlanStr) : null;
+      out.push({ vni, vlan });
+    }
+  } else if (typeof node === "string" && Number.isInteger(Number(node.trim()))) {
+    out.push({ vni: Number(node.trim()), vlan: null });
+  }
+  return out.sort((a, b) => a.vni - b.vni);
+}
+
 /// Configured VXLAN interfaces (VTEPs).
 export async function fetchVxlan(): Promise<VxlanInterface[]> {
   const node = kindNode(await fetchInterfacesConfig(), "vxlan");
@@ -355,7 +385,6 @@ export async function fetchVxlan(): Promise<VxlanInterface[]> {
     .map(([name, raw]) => {
       const cfg = (raw ?? {}) as Cfg;
       const params = (cfg["parameters"] ?? {}) as Cfg;
-      const vniStr = childStr(cfg, "vni");
       const portStr = childStr(cfg, "port");
       return {
         name,
@@ -363,7 +392,7 @@ export async function fetchVxlan(): Promise<VxlanInterface[]> {
         addresses: asAddresses(cfg),
         mtu: asMtu(cfg),
         enabled: isEnabled(cfg),
-        vni: vniStr !== null && Number.isInteger(Number(vniStr)) ? Number(vniStr) : null,
+        vnis: parseVnis(cfg["vni"]),
         source_address: childStr(cfg, "source-address"),
         source_interface: childStr(cfg, "source-interface"),
         remotes: asMulti(cfg, "remote"),
@@ -767,7 +796,24 @@ export function diffVxlan(live: VxlanInterface | null, u: VxlanConfigUpdate): Vy
     if (desired !== null) out.push({ op: "set", path: [...base, sub, desired] });
     else out.push({ op: "delete", path: [...base, sub] });
   };
-  leaf("vni", live?.vni != null ? String(live.vni) : null, u.vni != null ? String(u.vni) : null);
+  // VNIs are a tag node (`vni <n>` with an optional `vlan <id>` child). Add new
+  // VNIs, drop removed ones, and diff each VNI's VLAN mapping in place.
+  const liveVnis = new Map((live?.vnis ?? []).map((m) => [m.vni, m]));
+  const wantVnis = new Map(u.vnis.map((m) => [m.vni, m]));
+  for (const [vni, m] of wantVnis) {
+    const vniPath = [...base, "vni", String(vni)];
+    const lv = liveVnis.get(vni) ?? null;
+    if (!lv) out.push({ op: "set", path: vniPath });
+    const liveVlan = lv?.vlan ?? null;
+    if (m.vlan !== liveVlan) {
+      if (m.vlan != null) out.push({ op: "set", path: [...vniPath, "vlan", String(m.vlan)] });
+      else out.push({ op: "delete", path: [...vniPath, "vlan"] });
+    }
+  }
+  for (const [vni] of liveVnis) {
+    if (!wantVnis.has(vni)) out.push({ op: "delete", path: [...base, "vni", String(vni)] });
+  }
+
   leaf("source-address", live?.source_address ?? null, u.source_address);
   leaf("source-interface", live?.source_interface ?? null, u.source_interface);
   leaf("group", live?.group ?? null, u.group);

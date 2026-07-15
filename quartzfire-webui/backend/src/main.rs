@@ -1,6 +1,7 @@
 mod appcontrol;
 mod auth;
 mod config;
+mod config_sync;
 mod content_filtering;
 mod dashboard;
 mod error;
@@ -144,6 +145,11 @@ async fn main() -> Result<()> {
         .route("/api/config/restore", post(guard::restore))
         .route("/api/config/rollback", post(guard::rollback))
         .route("/api/interfaces/phy", get(phy::ethernet_phy))
+        // High Availability config (VRRP + virtual-server + config-sync) is real
+        // VyOS config edited through the /api proxy + commit guard; this endpoint
+        // only adds the config-sync secondary reachability probe the browser
+        // can't run itself (cross-origin + self-signed TLS). See config_sync.rs.
+        .route("/api/high-availability/config-sync/test", post(config_sync::test))
         // ISO uploads are far past the default 2 MB body cap; image::upload
         // enforces its own 4 GB ceiling while streaming.
         .route(

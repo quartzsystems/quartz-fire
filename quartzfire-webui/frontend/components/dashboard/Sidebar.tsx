@@ -92,8 +92,9 @@ const ITEMS: NavItem[] = [
     icon: HeartPulse,
     href: "/high-availability",
     children: [
-      { id: "config-sync", label: "Config Sync", href: "/high-availability/config-sync", icon: FolderSync },
-      { id: "vrrp",        label: "VRRP",        href: "/high-availability/vrrp",        icon: Network },
+      { id: "vrrp",            label: "VRRP",            href: "/high-availability/vrrp",            icon: Network },
+      { id: "virtual-servers", label: "Virtual Servers", href: "/high-availability/virtual-servers", icon: Boxes },
+      { id: "config-sync",     label: "Config Sync",     href: "/high-availability/config-sync",     icon: FolderSync },
     ],
   },
   {

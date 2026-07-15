@@ -58,6 +58,48 @@ fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
+/// Privileged pre-start step: ensure the persistent store directory exists,
+/// mount-aware and group-writable, before the sandboxed daemon starts.
+///
+/// The unit runs this via `ExecStartPre=+…` — the `+` runs it as root *outside*
+/// the ProtectSystem=strict namespace. That matters because systemd only sets up
+/// the `ReadWritePaths=-/config/quartzfire` writable bind for the main process
+/// when the directory already exists at namespace construction. On a fresh
+/// install it does not, so `/config` is read-only inside the daemon's namespace
+/// and its own `create_dir_all` fails with EROFS — the daemon then exits before
+/// signalling READY and the unit restart-loops. Creating the dir here (root,
+/// after the /config mount lands) closes that gap; the same fix the WebUI
+/// backend gets from ordering after the IPS boot unit, kept self-contained.
+pub fn init_store(cfg: &Config) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    let Some(dir) = cfg.db_path.parent() else {
+        return Ok(());
+    };
+    // Land the dir on the persistent volume, not the soon-to-be-shadowed root fs.
+    wait_for_config_mount(&cfg.db_path);
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+
+    // Group `quartzfire` + setgid (2775) so the DB and its WAL sidecars the
+    // daemon later creates inside inherit the group the WebUI backend reads them
+    // by. Best-effort — a dev box without the group just leaves it root-owned.
+    if let Some(gid) = group_gid("quartzfire") {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(cpath) = std::ffi::CString::new(dir.as_os_str().to_string_lossy().as_bytes()) {
+            unsafe {
+                libc::chown(cpath.as_ptr(), 0, gid);
+            }
+        }
+        if let Ok(meta) = std::fs::metadata(dir) {
+            let mut perm = meta.permissions();
+            perm.set_mode(0o2775);
+            let _ = std::fs::set_permissions(dir, perm);
+        }
+    }
+    tracing::info!("store directory ready at {}", dir.display());
+    Ok(())
+}
+
 pub fn run(cfg: Config) -> anyhow::Result<()> {
     // Load the OUI database once (best-effort — absent = unknown vendors).
     fingerprint::init_oui(&cfg.oui_file);

@@ -10,15 +10,25 @@ Wants=network-pre.target
 [Service]
 Type=notify
 NotifyAccess=main
+# Create /config/quartzfire before the sandboxed daemon starts. The `+` runs
+# this as root OUTSIDE the ProtectSystem=strict namespace: with ProtectSystem=
+# strict, systemd only sets up the ReadWritePaths= writable bind below when the
+# directory already exists at namespace construction. On a fresh install it does
+# not, so /config is read-only inside the daemon's namespace and its own mkdir
+# fails (EROFS) — it exits before signalling READY and this unit restart-loops.
+# init-store waits for the (late) /config mount, then creates the dir group-
+# writable, so the main ExecStart's namespace picks up the writable bind.
+ExecStartPre=+/usr/sbin/qfdevd --config /etc/qfdevd/qfdevd.toml init-store
 ExecStart=/usr/sbin/qfdevd --config /etc/qfdevd/qfdevd.toml run
 Restart=on-failure
 RestartSec=2
 WatchdogSec=45
 TimeoutStopSec=15
-# qfdevd polls for the /config persistence mount before opening the DB (bounded
-# to 120s). Give the start phase headroom past that so a genuinely slow mount
-# can never trip systemd's default start timeout and restart-loop the daemon.
-TimeoutStartSec=150
+# The mount wait (bounded to 120s) now happens in the ExecStartPre init-store
+# step; the main process re-checks but finds the mount already up, so the two do
+# not stack. Budget covers ExecStartPre's worst case plus the daemon's own
+# startup with headroom, so a genuinely slow mount never trips the start timeout.
+TimeoutStartSec=180
 
 # Dedicated unprivileged identity. Joins the `quartzfire` group so the DB it
 # creates under /config can be handed to the (DynamicUser) WebUI backend, which

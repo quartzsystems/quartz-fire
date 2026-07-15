@@ -1,3 +1,16 @@
+qfdevd (0.1.1) unstable; urgency=medium
+
+  * Fix qfdevd failing to start on a fresh install. With ProtectSystem=strict,
+    systemd only sets up the ReadWritePaths=-/config/quartzfire writable bind
+    when that directory already exists at namespace construction; on a fresh
+    install it does not, so /config was read-only inside the daemon's namespace
+    and its create_dir_all() failed with EROFS — the daemon exited before
+    signalling READY and the unit restart-looped. Add a privileged, mount-aware
+    `qfdevd init-store` step (ExecStartPre=+…) that creates the dir group-
+    writable before the sandboxed main process starts.
+
+ -- QuartzFire <cwellman@quartz.systems>  Tue, 14 Jul 2026 00:00:00 +0000
+
 qfdevd (0.1.0) unstable; urgency=medium
 
   * Initial release: device/client monitoring for QuartzFire.
