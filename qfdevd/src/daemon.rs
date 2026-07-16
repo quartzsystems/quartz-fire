@@ -49,6 +49,9 @@ struct Health {
     last_neigh: AtomicU64,
     last_lease: AtomicU64,
     last_usage: AtomicU64,
+    /// Set once we've warned that conntrack has entries but no byte counters
+    /// (accounting disabled), so the warning is logged only once per run.
+    acct_off_warned: AtomicBool,
 }
 
 fn now_secs() -> i64 {
@@ -355,6 +358,20 @@ async fn conntrack_snapshot_loop(shared: Arc<Shared>) {
             }
         };
         shared.health.conntrack_ok.store(true, Ordering::Relaxed);
+
+        // A populated conntrack table with no `bytes=` anywhere means byte
+        // accounting is off (net.netfilter.nf_conntrack_acct=0) — usage can
+        // never be attributed. The unit's ExecStartPre enables it, so this is
+        // a belt-and-braces diagnostic; warn once rather than fail silently.
+        if !text.is_empty()
+            && !text.contains("bytes=")
+            && !shared.health.acct_off_warned.swap(true, Ordering::Relaxed)
+        {
+            tracing::warn!(
+                "conntrack has flows but no byte counters — nf_conntrack_acct is disabled; \
+                 per-device usage will stay empty until it is enabled"
+            );
+        }
 
         let ip_snapshot = shared.ip_map.lock().unwrap().clone();
         let resolve = |ip: &str| ip_snapshot.get(ip).cloned();

@@ -60,10 +60,13 @@ function StatusBadge({ status }: { status: IpsStatus }) {
 
 function SettingsTab({
   status,
+  sigNames,
   onSaved,
   onRefresh,
 }: {
   status: IpsStatus;
+  /** SID → signature name, learned from alert history (for exception labels). */
+  sigNames: Record<number, string>;
   onSaved: () => void;
   onRefresh: () => void;
 }) {
@@ -297,26 +300,38 @@ function SettingsTab({
             </div>
             {draft.exceptions.length > 0 && (
               <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-                {draft.exceptions.map((sid, i) => (
-                  <div
-                    key={sid}
-                    className="flex items-center gap-2 px-3 py-[6px]"
-                    style={{ borderTop: i > 0 ? "1px solid var(--qz-border)" : undefined }}
-                  >
-                    <span className="text-[13px] text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
-                      {sid}
-                    </span>
-                    <button
-                      type="button"
-                      title={`Remove exception ${sid}`}
-                      aria-label={`Remove exception ${sid}`}
-                      onClick={() => removeException(sid)}
-                      className="ml-auto grid place-items-center w-6 h-6 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer"
+                {draft.exceptions.map((sid, i) => {
+                  const name = sigNames[sid];
+                  return (
+                    <div
+                      key={sid}
+                      className="flex items-center gap-3 px-3 py-[6px]"
+                      style={{ borderTop: i > 0 ? "1px solid var(--qz-border)" : undefined }}
                     >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
+                      <span
+                        className="text-[13px] text-[var(--qz-fg-1)] flex-shrink-0"
+                        style={{ fontFamily: "var(--qz-font-mono)" }}
+                      >
+                        {sid}
+                      </span>
+                      <span
+                        className={`text-[12px] truncate flex-1 min-w-0 ${name ? "text-[var(--qz-fg-3)]" : "text-[var(--qz-fg-4)] italic"}`}
+                        title={name ?? undefined}
+                      >
+                        {name ?? "Not in recent alerts"}
+                      </span>
+                      <button
+                        type="button"
+                        title={`Remove exception ${sid}`}
+                        aria-label={`Remove exception ${sid}`}
+                        onClick={() => removeException(sid)}
+                        className="grid place-items-center w-6 h-6 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer flex-shrink-0"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
             <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
@@ -801,6 +816,10 @@ export default function IntrusionPreventionPage() {
   const [status, setStatus] = useState<IpsStatus | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
+  // SID → signature name, learned from the EVE alert history so the Settings
+  // tab can label exceptions. Accumulates across refreshes (a SID seen once
+  // keeps its label even after it ages out of the tail).
+  const [sigNames, setSigNames] = useState<Record<number, string>>({});
 
   // Deep-link support (?tab=alerts — used by the dashboard's IPS Alerts tile).
   // Read on mount instead of useSearchParams to avoid the Suspense boundary
@@ -813,7 +832,20 @@ export default function IntrusionPreventionPage() {
   const load = useCallback(async (mode: "load" | "refresh" = "load") => {
     if (mode === "load") setState("loading");
     try {
-      setStatus(await fetchIpsStatus());
+      // History is best-effort — it only enriches exception labels, so its
+      // failure must not block the status the page depends on.
+      const [st, history] = await Promise.all([
+        fetchIpsStatus(),
+        fetchIpsAlertHistory().catch(() => [] as IpsAlert[]),
+      ]);
+      setStatus(st);
+      if (history.length) {
+        setSigNames((prev) => {
+          const next = { ...prev };
+          for (const a of history) if (a.sid && a.signature) next[a.sid] = a.signature;
+          return next;
+        });
+      }
       setState("ready");
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "Failed to load the IPS status.");
@@ -878,7 +910,7 @@ export default function IntrusionPreventionPage() {
               </div>
             )}
             {state === "ready" && status && (
-              <SettingsTab status={status} onSaved={onSaved} onRefresh={() => load("refresh")} />
+              <SettingsTab status={status} sigNames={sigNames} onSaved={onSaved} onRefresh={() => load("refresh")} />
             )}
           </>
         )}

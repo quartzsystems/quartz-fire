@@ -19,6 +19,14 @@ NotifyAccess=main
 # init-store waits for the (late) /config mount, then creates the dir group-
 # writable, so the main ExecStart's namespace picks up the writable bind.
 ExecStartPre=+/usr/sbin/qfdevd --config /etc/qfdevd/qfdevd.toml init-store
+# Enable conntrack byte accounting HERE, not just via the sysctl.d drop-in: the
+# `net.netfilter.nf_conntrack_acct` key only exists once nf_conntrack is loaded,
+# and systemd-sysctl runs at early boot before VyOS loads conntrack — so the
+# boot-time write silently misses and accounting stays off (kernel default 0),
+# leaving every Usage figure empty. Load the module ourselves and set it, as
+# root outside the sandbox (`+`). `sh -c … || true` keeps a container/dev box
+# where this is unavailable from blocking startup.
+ExecStartPre=+/bin/sh -c 'modprobe nf_conntrack 2>/dev/null || true; sysctl -w net.netfilter.nf_conntrack_acct=1 >/dev/null 2>&1 || true'
 ExecStart=/usr/sbin/qfdevd --config /etc/qfdevd/qfdevd.toml run
 Restart=on-failure
 RestartSec=2

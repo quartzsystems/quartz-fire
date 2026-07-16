@@ -180,6 +180,74 @@ pub fn standalone_apply() -> i32 {
 /// anything).
 const UP_TO_DATE_MARKERS: [&str; 3] = ["up to date", "not modified", "is newer than"];
 
+/// How many times to run `location update` before giving up, and the pause
+/// between attempts. The unit runs `After=vyos-router.service` (which returns
+/// immediately for a Type=simple service), so an update can fire before the
+/// WAN has an address — and transient fetch failures also show up as a manual
+/// "Update now" that just needs one retry.
+const UPDATE_ATTEMPTS: usize = 3;
+const UPDATE_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// True when `location update`'s failure is a transient fetch problem worth a
+/// retry — the network not being ready, a mirror hiccup, or an `EBUSY`/`urlopen`
+/// error mid-download — as opposed to a signature/verification failure (which a
+/// retry can't fix, and which we must never paper over).
+fn is_transient_update_error(text: &str) -> bool {
+    let l = text.to_ascii_lowercase();
+    [
+        "urlopen",
+        "resource busy",
+        "temporarily",
+        "timed out",
+        "timeout",
+        "connection",
+        "could not resolve",
+        "name or service not known",
+        "network is unreachable",
+        "no route to host",
+    ]
+    .iter()
+    .any(|m| l.contains(m))
+}
+
+/// One `location update` invocation → (exit code, combined stdout+stderr).
+fn run_location_update_once() -> (i32, String) {
+    match Command::new("location").arg("update").output() {
+        Ok(out) => {
+            let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
+            text.push_str(&String::from_utf8_lossy(&out.stderr));
+            (out.status.code().unwrap_or(-1), text.trim().to_string())
+        }
+        Err(e) => (127, format!("cannot run the location CLI: {e}")),
+    }
+}
+
+/// Run `location update`, retrying transient fetch failures. Stops as soon as
+/// it succeeds or reports the database is already current; a non-transient
+/// failure (e.g. bad signature) is returned immediately without retrying.
+fn run_location_update() -> (i32, String) {
+    let mut last = (127, String::new());
+    for attempt in 1..=UPDATE_ATTEMPTS {
+        let (rc, output) = run_location_update_once();
+        let lower = output.to_ascii_lowercase();
+        let up_to_date = rc != 0 && UP_TO_DATE_MARKERS.iter().any(|m| lower.contains(m));
+        if rc == 0 || up_to_date {
+            return (rc, output);
+        }
+        last = (rc, output);
+        if attempt < UPDATE_ATTEMPTS && is_transient_update_error(&last.1) {
+            log(&format!(
+                "update attempt {attempt}/{UPDATE_ATTEMPTS} failed (transient) — retrying in {}s",
+                UPDATE_RETRY_DELAY.as_secs()
+            ));
+            std::thread::sleep(UPDATE_RETRY_DELAY);
+        } else {
+            break;
+        }
+    }
+    last
+}
+
 /// Download/refresh the libloc database and refresh the loaded sets.
 ///
 /// `location update` (the vendor CLI) downloads over HTTPS, VERIFIES THE
@@ -190,14 +258,7 @@ const UP_TO_DATE_MARKERS: [&str; 3] = ["up to date", "not modified", "is newer t
 pub fn update() -> i32 {
     let version_before = open_db().map(|d| d.created_at());
 
-    let (rc, output) = match Command::new("location").arg("update").output() {
-        Ok(out) => {
-            let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
-            text.push_str(&String::from_utf8_lossy(&out.stderr));
-            (out.status.code().unwrap_or(-1), text.trim().to_string())
-        }
-        Err(e) => (127, format!("cannot run the location CLI: {e}")),
-    };
+    let (rc, output) = run_location_update();
 
     let after = open_db();
     let changed = matches!((&after, version_before), (Some(db), before) if Some(db.created_at()) != before);
@@ -492,5 +553,25 @@ ipv4 2 udp 17 29 src=10.0.0.7 dst=1.1.1.1 sport=5000 dport=53 src=1.1.1.1 dst=20
     #[test]
     fn conntrack_empty_input_is_empty() {
         assert!(count_conntrack_countries("", |_| Some("US".into())).is_empty());
+    }
+
+    #[test]
+    fn transient_update_errors_are_retried() {
+        // The EBUSY the WebUI surfaced, plus the usual network-not-ready cases.
+        assert!(is_transient_update_error(
+            "<urlopen error [Errno 16] Device or resource busy>"
+        ));
+        assert!(is_transient_update_error("Connection timed out"));
+        assert!(is_transient_update_error("Could not resolve host"));
+        assert!(is_transient_update_error("Network is unreachable"));
+    }
+
+    #[test]
+    fn signature_failure_is_not_retried() {
+        // A verification failure can't be fixed by retrying — never treat it as
+        // transient, or we'd re-download a good file forever chasing a local
+        // key/corruption problem.
+        assert!(!is_transient_update_error("database failed signature verification"));
+        assert!(!is_transient_update_error("invalid signature"));
     }
 }

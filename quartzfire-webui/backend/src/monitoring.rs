@@ -557,7 +557,24 @@ pub async fn ping(
     // ping exits non-zero when every packet is lost — that's a valid result
     // (100% loss), not an error, so we parse stdout regardless of exit status.
     let text = String::from_utf8_lossy(&out.stdout);
-    Ok(Json(parse_ping(&ip, &text)))
+    let result = parse_ping(&ip, &text);
+
+    // A real run always prints an "N packets transmitted" line, even at 100%
+    // loss — so transmitted == 0 means ping never got that far (e.g. it could
+    // not open an ICMP socket because it lacks cap_net_raw / the service runs
+    // with NoNewPrivileges, or the gid is outside net.ipv4.ping_group_range).
+    // Surface stderr instead of reporting a misleading "100% loss (0/0)".
+    if result.transmitted == 0 {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let detail = stderr
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty())
+            .unwrap_or("ping produced no output");
+        return Err(AppError::Internal(anyhow::anyhow!("ping could not run: {detail}")));
+    }
+
+    Ok(Json(result))
 }
 
 /// Parse `ping -c` output into a `PingResult`. Reads per-reply `time=…` values,

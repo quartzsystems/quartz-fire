@@ -112,6 +112,11 @@ export function addDhcpRelayEntry(kind: "interface" | "server", value: string): 
   return commitAndSave([{ op: "set", path: [...RELAY_BASE, kind, value.trim()] }]);
 }
 
+/// Add several relay listen interfaces or upstream servers in one transaction.
+export function addDhcpRelayEntries(kind: "interface" | "server", values: string[]): Promise<number> {
+  return commitAndSave(values.map((v) => ({ op: "set", path: [...RELAY_BASE, kind, v.trim()] })));
+}
+
 /// Remove one relay listen interface or upstream server.
 export function deleteDhcpRelayEntry(kind: "interface" | "server", value: string): Promise<number> {
   return commitAndSave([{ op: "delete", path: [...RELAY_BASE, kind, value] }]);

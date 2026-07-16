@@ -29,10 +29,10 @@ import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { UsageChart } from "@/components/ui/UsageChart";
-import { DonutChart } from "@/components/ui/DonutChart";
+import { AppSliceInput, TopAppsDonut } from "@/components/dashboard/TopAppsDonut";
 import { useDashboard } from "@/lib/DashboardContext";
 import { formatBytes, formatRelative, formatTimestamp } from "@/lib/format";
-import { AppUsage, fetchAppUsage } from "@/lib/appcontrol";
+import { AcStatus, AppUsage, fetchAcStatus, fetchAppUsage } from "@/lib/appcontrol";
 import {
   Device,
   DeviceDetail,
@@ -112,7 +112,9 @@ export default function DevicesPage() {
 
   // ── header summary state (aggregate usage graph + apps pie) ────────────────
   const [usageSeries, setUsageSeries] = useState<UsageSeries | null>(null);
-  const [appUsage, setAppUsage] = useState<AppUsage | null>(null);
+  // Overall Applications mix uses App Control's live status snapshot — the same
+  // source as the dashboard's Top Applications tile, so the two render alike.
+  const [acStatus, setAcStatus] = useState<AcStatus | null>(null);
 
   // Debounce the search box, and reset to page 1 whenever a filter changes.
   useEffect(() => {
@@ -155,15 +157,31 @@ export default function DevicesPage() {
     return () => clearInterval(id);
   }, [load]);
 
-  // Header summary depends only on the usage window (not search/sort/page).
+  // The usage graph tracks the window; the apps pie is live (window-independent),
+  // fetched here alongside it so both refresh on the same 30 s cadence.
   const loadSummary = useCallback(async () => {
-    const [series, apps] = await Promise.allSettled([
+    const [series, ac] = await Promise.allSettled([
       fetchUsageSeries(usageWindow),
-      fetchAppUsage(usageWindow),
+      fetchAcStatus(),
     ]);
     if (series.status === "fulfilled") setUsageSeries(series.value);
-    if (apps.status === "fulfilled") setAppUsage(apps.value);
+    if (ac.status === "fulfilled") setAcStatus(ac.value);
   }, [usageWindow]);
+
+  // Overall application mix from the live App Control snapshot.
+  const { appSlices, appTotal } = useMemo(() => {
+    const runtime = acStatus?.status ?? null;
+    const slices: AppSliceInput[] = (runtime?.top_apps ?? [])
+      .filter((a) => a.bytes > 0)
+      .map((a) => ({ id: a.app_id, name: a.app, bytes: a.bytes, flows: a.flows }));
+    const total = runtime?.total_app_bytes ?? slices.reduce((n, a) => n + a.bytes, 0);
+    return { appSlices: slices, appTotal: total };
+  }, [acStatus]);
+  const appsEmpty = !(acStatus?.running ?? false)
+    ? "Application Control is not running."
+    : appSlices.length === 0 || appTotal <= 0
+      ? "No classified traffic yet."
+      : null;
 
   useEffect(() => {
     loadSummary();
@@ -237,13 +255,19 @@ export default function DevicesPage() {
               height={190}
             />
           </div>
-          {/* Applications pie */}
+          {/* Applications pie — live App Control mix (matches the dashboard) */}
           <div style={{ borderLeft: "1px solid var(--qz-border)" }} className="pl-6">
-            <div className="text-[13px] font-semibold text-[var(--qz-fg-1)] mb-3">Applications</div>
-            <DonutChart
-              slices={(appUsage?.apps ?? []).map((a) => ({ label: a.app, value: a.bytes, sub: a.category }))}
-              available={appUsage?.available ?? false}
-            />
+            <div className="flex items-baseline gap-2 mb-3">
+              <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Applications</span>
+              <span className="text-[11px] text-[var(--qz-fg-4)]">by classified bytes</span>
+            </div>
+            {appsEmpty ? (
+              <div className="grid place-items-center text-[12px] text-[var(--qz-fg-4)]" style={{ minHeight: 150 }}>
+                {appsEmpty}
+              </div>
+            ) : (
+              <TopAppsDonut apps={appSlices} totalBytes={appTotal} />
+            )}
           </div>
         </div>
       </div>
@@ -660,11 +684,19 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
       <div className="grid gap-6" style={{ gridTemplateColumns: "minmax(0, 1.5fr) minmax(220px, 1fr)" }}>
         <div>
           <div className="text-[13px] font-semibold text-[var(--qz-fg-1)] mb-3">Applications</div>
-          <DonutChart
-            slices={(apps?.apps ?? []).map((a) => ({ label: a.app, value: a.bytes, sub: a.category }))}
-            available={apps?.available ?? false}
-            size={130}
-          />
+          {(() => {
+            const slices: AppSliceInput[] = (apps?.apps ?? [])
+              .filter((a) => a.bytes > 0)
+              .map((a) => ({ id: a.app, name: a.app, bytes: a.bytes }));
+            if (slices.length === 0) {
+              return (
+                <div className="grid place-items-center text-[12px] text-[var(--qz-fg-4)]" style={{ minHeight: 130 }}>
+                  {apps?.available ? "No application data in this window." : "App Control isn’t reporting yet."}
+                </div>
+              );
+            }
+            return <TopAppsDonut apps={slices} centerSub="in window" minDonut={110} />;
+          })()}
         </div>
         <div style={{ borderLeft: "1px solid var(--qz-border)" }} className="pl-6">
           <PingWidget mac={mac} pingable={isIpv4(detail.current_ip)} />

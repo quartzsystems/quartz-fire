@@ -5,7 +5,7 @@ import { AlertTriangle, Check, Plus, RotateCw, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
-import { addDhcpRelayEntry, deleteDhcpRelayEntry, DhcpRelayConfig, fetchDhcpRelay } from "@/lib/services";
+import { addDhcpRelayEntries, addDhcpRelayEntry, deleteDhcpRelayEntry, DhcpRelayConfig, fetchDhcpRelay } from "@/lib/services";
 import { fetchInterfaceDescriptions } from "@/lib/interfaces";
 import { fetchInterfaceStats } from "@/lib/vyos";
 import { useDashboard } from "@/lib/DashboardContext";
@@ -81,9 +81,9 @@ function DeleteAction({ label, onDelete }: { label: string; onDelete: () => Prom
 
 const KIND_META: Record<EntryKind, { title: string; label: string; hint: string; placeholder: string }> = {
   interface: {
-    title: "Add Listen Interface",
-    label: "Interface",
-    hint: "The relay listens for DHCP requests on this interface.",
+    title: "Add Listen Interfaces",
+    label: "Interfaces",
+    hint: "The relay listens for DHCP requests on the selected interfaces.",
     placeholder: "eth1",
   },
   server: {
@@ -113,7 +113,9 @@ function AddEntryModal({
   onSaved: (message: string) => void;
 }) {
   const meta = KIND_META[kind];
+  // Servers use a single text field; interfaces use a multi-select checklist.
   const [value, setValue] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -122,10 +124,40 @@ function AddEntryModal({
     () => interfaces.filter((n) => !existing.includes(n)),
     [interfaces, existing],
   );
+  const allSelected = available.length > 0 && available.every((n) => selected.has(n));
+
+  const toggle = (n: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(n)) next.delete(n);
+      else next.add(n);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setSelected((prev) => (allSelected ? new Set() : new Set(available)));
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
+
+    if (kind === "interface") {
+      const chosen = available.filter((n) => selected.has(n));
+      if (chosen.length === 0) {
+        setError("Select at least one interface.");
+        return;
+      }
+      setSaving(true);
+      try {
+        await addDhcpRelayEntries("interface", chosen);
+        onSaved(`Added ${chosen.length} listen interface${chosen.length === 1 ? "" : "s"}.`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to apply change.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
 
     const v = value.trim();
     if (!v) {
@@ -153,27 +185,55 @@ function AddEntryModal({
       <ModalHeader title={meta.title} subtitle="DHCP relay" onClose={onClose} />
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div>
-          <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{meta.label}</label>
+          <div className="flex items-center justify-between mb-[6px]">
+            <label className="text-[12px] text-[var(--qz-fg-3)]">
+              {meta.label}
+              {kind === "interface" && selected.size > 0 && (
+                <span className="text-[var(--qz-fg-4)]"> · {selected.size} selected</span>
+              )}
+            </label>
+            {kind === "interface" && available.length > 0 && (
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="text-[11px] text-[var(--qz-accent)] bg-transparent border-0 p-0 cursor-pointer hover:underline"
+              >
+                {allSelected ? "Clear all" : "Select all"}
+              </button>
+            )}
+          </div>
           {kind === "interface" ? (
-            <select
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              autoFocus
-              disabled={available.length === 0}
-              className="w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)", fontFamily: "var(--qz-font-mono)" }}
-              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
-              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
-            >
-              <option value="">
-                {available.length === 0 ? "All interfaces already added" : "Select an interface…"}
-              </option>
-              {available.map((n) => (
-                <option key={n} value={n}>
-                  {descriptions?.[n] ? `${n} — ${descriptions[n]}` : n}
-                </option>
-              ))}
-            </select>
+            available.length === 0 ? (
+              <div
+                className="rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-4)]"
+                style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+              >
+                All interfaces already added.
+              </div>
+            ) : (
+              <div
+                className="rounded-md max-h-[240px] overflow-auto"
+                style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+              >
+                {available.map((n) => (
+                  <label
+                    key={n}
+                    className="flex items-center gap-[10px] px-3 py-[8px] cursor-pointer hover:bg-[color-mix(in_oklab,white_4%,transparent)]"
+                  >
+                    <input
+                      type="checkbox"
+                      className="qz-check"
+                      checked={selected.has(n)}
+                      onChange={() => toggle(n)}
+                    />
+                    <span className="text-[13px] text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
+                      {n}
+                      {descriptions?.[n] && <span className="text-[var(--qz-fg-4)]"> — {descriptions[n]}</span>}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )
           ) : (
             <input
               value={value}
@@ -206,11 +266,15 @@ function AddEntryModal({
           </button>
           <button
             type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
+            disabled={saving || (kind === "interface" && selected.size === 0)}
+            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0 disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)" }}
           >
-            {saving ? "Applying…" : "Add"}
+            {saving
+              ? "Applying…"
+              : kind === "interface" && selected.size > 0
+                ? `Add ${selected.size}`
+                : "Add"}
           </button>
         </div>
       </form>
@@ -304,7 +368,7 @@ export default function DhcpRelayPage() {
                 onRefresh={() => load("refresh")}
                 toolbar={
                   <Button kind="primary" size="sm" icon={Plus} onClick={() => setModal("interface")}>
-                    Add interface
+                    Add interfaces
                   </Button>
                 }
                 actions={(row) => (

@@ -17,6 +17,13 @@ RestartSec=2
 DynamicUser=yes
 SupplementaryGroups=quartzfire systemd-journal
 NoNewPrivileges=yes
+# The Devices → ping tool shells out to `ping`, which must open an ICMP socket.
+# NoNewPrivileges makes the kernel ignore ping's file capability, and the
+# DynamicUser gid falls outside net.ipv4.ping_group_range — so grant CAP_NET_RAW
+# through the ambient set instead (it survives NoNewPrivileges and is inherited
+# by the ping child). The bounding set pins the service to only this one cap.
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
 ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
