@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
-import { deleteVlan, fetchEthernet, fetchVlans, VlanInterface } from "@/lib/interfaces";
+import { MtuCell } from "@/components/dashboard/MtuCell";
+import { deleteVlan, effectiveMtu, fetchEthernet, fetchVlans, VlanInterface } from "@/lib/interfaces";
 import { useDashboard } from "@/lib/DashboardContext";
 import { VlanFormModal } from "./VlanFormModal";
 
@@ -24,7 +25,7 @@ const columns: Column<VlanInterface>[] = [
     render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
     mono: true,
   },
-  { key: "mtu", header: "MTU", value: (r) => r.mtu, mono: true, sortable: true, width: 80 },
+  { key: "mtu", header: "MTU", value: (r) => effectiveMtu(r.mtu, "vlan"), render: (r) => <MtuCell mtu={r.mtu} kind="vlan" />, mono: true, sortable: true, width: 80 },
   {
     key: "status",
     header: "Status",

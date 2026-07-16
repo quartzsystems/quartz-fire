@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Eraser, Pause, Play, Plus, RotateCw, Search, ShieldAlert, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
 import { Switch } from "@/components/ui/Switch";
@@ -551,6 +552,73 @@ function LevelPill({ level }: { level: ThreatLevel }) {
   );
 }
 
+// Toggleable columns for the alerts log. The Level cell depends on the row's
+// alarm state (settings-derived), so content is rendered by ipsAlertCell rather
+// than a static value on the column.
+interface IpsAlertCol {
+  key: string;
+  header: string;
+  width?: number;
+  className?: string;
+  ellipsis?: boolean;
+  title?: (r: AlertRow) => string | undefined;
+}
+
+const IPS_ALERT_COLUMNS: IpsAlertCol[] = [
+  { key: "time", header: "Time", width: 90, className: "mono text-[var(--qz-fg-3)]" },
+  { key: "level", header: "Level", width: 110 },
+  { key: "action", header: "Action", width: 95 },
+  { key: "signature", header: "Signature", ellipsis: true, title: (r) => `SID ${r.sid}${r.category ? ` · ${r.category}` : ""}` },
+  { key: "src", header: "Source", width: 150, className: "mono", ellipsis: true },
+  { key: "dst", header: "Destination", width: 150, className: "mono", ellipsis: true },
+  { key: "proto", header: "Proto", width: 80, className: "mono" },
+];
+
+function ipsAlertCell(key: string, r: AlertRow, alarm: boolean): React.ReactNode {
+  switch (key) {
+    case "time":
+      return r.ts ? new Date(r.ts).toLocaleTimeString(undefined, { hour12: false }) : "—";
+    case "level":
+      return (
+        <span className="inline-flex items-center gap-[5px]">
+          {alarm && <ShieldAlert size={13} className="text-[var(--qz-danger)]" />}
+          <LevelPill level={r.level} />
+        </span>
+      );
+    case "action":
+      return r.action === "blocked" ? (
+        <span className="badge badge-crit">Blocked</span>
+      ) : (
+        <span className="badge badge-ok">Allowed</span>
+      );
+    case "signature":
+      return (
+        <>
+          {r.signature}
+          <span className="text-[11px] text-[var(--qz-fg-4)]"> · {r.sid}</span>
+        </>
+      );
+    case "src":
+      return (
+        <>
+          {r.src ?? dash}
+          {r.spt != null && <span className="text-[var(--qz-fg-4)]">:{r.spt}</span>}
+        </>
+      );
+    case "dst":
+      return (
+        <>
+          {r.dst ?? dash}
+          {r.dpt != null && <span className="text-[var(--qz-fg-4)]">:{r.dpt}</span>}
+        </>
+      );
+    case "proto":
+      return r.proto ?? "—";
+    default:
+      return null;
+  }
+}
+
 function AlertsTab({ settings }: { settings: IpsSettings }) {
   const rowsRef = useRef<AlertRow[]>([]);
   const dirtyRef = useRef(false);
@@ -652,8 +720,8 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
     setRows([]);
   };
 
-  const time = (ts: number) =>
-    ts ? new Date(ts).toLocaleTimeString(undefined, { hour12: false }) : "—";
+  const vis = useColumnVisibility("ips-alerts", IPS_ALERT_COLUMNS);
+  const cols = IPS_ALERT_COLUMNS.filter((c) => vis.isVisible(c.key));
 
   return (
     <div className="flex flex-col gap-3">
@@ -692,6 +760,7 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
           ))}
         </select>
         <div className="ml-auto flex items-center gap-3">
+          <ColumnsMenu vis={vis} />
           <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => { clear(); setStream("connecting"); setStreamGen((g) => g + 1); }}>
             Refresh
           </Button>
@@ -722,29 +791,21 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
         <table className="qz-table" style={{ width: "100%" }}>
           <colgroup>
-            <col style={{ width: 90 }} />
-            <col style={{ width: 110 }} />
-            <col style={{ width: 95 }} />
-            <col />
-            <col style={{ width: 150 }} />
-            <col style={{ width: 150 }} />
-            <col style={{ width: 80 }} />
+            {cols.map((c) => (
+              <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+            ))}
           </colgroup>
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Level</th>
-              <th>Action</th>
-              <th>Signature</th>
-              <th>Source</th>
-              <th>Destination</th>
-              <th>Proto</th>
+              {cols.map((c) => (
+                <th key={c.key}>{c.header}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={cols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
                   {rows.length === 0
                     ? "No alerts yet — alerts appear when inspected traffic matches a signature."
                     : "No alerts match the filter."}
@@ -763,33 +824,16 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
                         : undefined,
                     }}
                   >
-                    <td className="mono text-[var(--qz-fg-3)]">{time(r.ts)}</td>
-                    <td>
-                      <span className="inline-flex items-center gap-[5px]">
-                        {alarm && <ShieldAlert size={13} className="text-[var(--qz-danger)]" />}
-                        <LevelPill level={r.level} />
-                      </span>
-                    </td>
-                    <td>
-                      {r.action === "blocked" ? (
-                        <span className="badge badge-crit">Blocked</span>
-                      ) : (
-                        <span className="badge badge-ok">Allowed</span>
-                      )}
-                    </td>
-                    <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={`SID ${r.sid}${r.category ? ` · ${r.category}` : ""}`}>
-                      {r.signature}
-                      <span className="text-[11px] text-[var(--qz-fg-4)]"> · {r.sid}</span>
-                    </td>
-                    <td className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.src ?? dash}
-                      {r.spt != null && <span className="text-[var(--qz-fg-4)]">:{r.spt}</span>}
-                    </td>
-                    <td className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.dst ?? dash}
-                      {r.dpt != null && <span className="text-[var(--qz-fg-4)]">:{r.dpt}</span>}
-                    </td>
-                    <td className="mono">{r.proto ?? "—"}</td>
+                    {cols.map((c) => (
+                      <td
+                        key={c.key}
+                        className={c.className}
+                        style={c.ellipsis ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : undefined}
+                        title={c.title?.(r)}
+                      >
+                        {ipsAlertCell(c.key, r, alarm)}
+                      </td>
+                    ))}
                   </tr>
                 );
               })

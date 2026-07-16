@@ -4,10 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Pencil, Plus, RotateCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
+import { MtuCell } from "@/components/dashboard/MtuCell";
 import {
   BondInterface,
   BridgeInterface,
   deleteBridge,
+  effectiveMtu,
   fetchBonds,
   fetchBridges,
   fetchEthernet,
@@ -52,7 +54,7 @@ const columns: Column<BridgeInterface>[] = [
     sortable: true,
     width: 130,
   },
-  { key: "mtu", header: "MTU", value: (r) => r.mtu, mono: true, sortable: true, width: 80 },
+  { key: "mtu", header: "MTU", value: (r) => effectiveMtu(r.mtu, "bridge"), render: (r) => <MtuCell mtu={r.mtu} kind="bridge" />, mono: true, sortable: true, width: 80 },
   {
     key: "status",
     header: "Status",

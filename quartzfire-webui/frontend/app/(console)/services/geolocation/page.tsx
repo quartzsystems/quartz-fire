@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { Tabs } from "@/components/ui/Tabs";
 import { useDashboard } from "@/lib/DashboardContext";
 import { emptyFirewallConfig, fetchFirewall, FirewallConfig, FirewallRule } from "@/lib/firewall";
@@ -755,6 +756,26 @@ function PoliciesTab({
 type AlertRow = GeoEvent & { key: string };
 const MAX_GEO_ALERTS = 500;
 
+// Toggleable columns for the block-event log. The Country cell needs the live
+// geo lookup cache, so per-row content is rendered inside the component; the
+// layout + menu labels live here.
+interface GeoAlertCol {
+  key: string;
+  header: string;
+  width?: number;
+  className?: string;
+}
+
+const GEO_ALERT_COLUMNS: GeoAlertCol[] = [
+  { key: "time", header: "Time", width: 110, className: "mono text-[12px] text-[var(--qz-fg-3)]" },
+  { key: "action", header: "Action", width: 160 },
+  { key: "country", header: "Country", width: 170, className: "text-[13px] text-[var(--qz-fg-2)]" },
+  { key: "proto", header: "Proto", width: 90, className: "mono text-[12px] text-[var(--qz-fg-3)]" },
+  { key: "src", header: "Source", className: "mono text-[12px] text-[var(--qz-fg-2)]" },
+  { key: "dst", header: "Destination", className: "mono text-[12px] text-[var(--qz-fg-2)]" },
+  { key: "iface", header: "Interfaces", width: 130, className: "mono text-[12px] text-[var(--qz-fg-4)]" },
+];
+
 function AlertsTab() {
   const rowsRef = useRef<AlertRow[]>([]);
   const dirtyRef = useRef(false);
@@ -876,6 +897,41 @@ function AlertsTab() {
   const clock = (ts: number) => (ts ? new Date(ts).toLocaleTimeString(undefined, { hour12: false }) : "—");
   const endpointText = (ip?: string, port?: number) => (ip ? (port ? `${ip}:${port}` : ip) : "—");
 
+  const vis = useColumnVisibility("geo-alerts", GEO_ALERT_COLUMNS);
+  const cols = GEO_ALERT_COLUMNS.filter((c) => vis.isVisible(c.key));
+
+  const geoCell = (key: string, r: AlertRow): React.ReactNode => {
+    switch (key) {
+      case "time":
+        return clock(r.ts);
+      case "action":
+        return <span className="badge badge-crit">{r.action_name}</span>;
+      case "country": {
+        const ip = blockedIp(r);
+        if (!ip) return dash;
+        const geo = geoByIp[ip];
+        if (geo === undefined) return <span className="text-[var(--qz-fg-4)]">…</span>;
+        if (!geo?.country) return dash;
+        return (
+          <span className="inline-flex items-center gap-[6px]">
+            <span>{flagEmoji(geo.country)}</span>
+            <span>{geo.country_name ?? geo.country}</span>
+          </span>
+        );
+      }
+      case "proto":
+        return r.proto ?? dash;
+      case "src":
+        return endpointText(r.src, r.spt);
+      case "dst":
+        return endpointText(r.dst, r.dpt);
+      case "iface":
+        return (r.iif ?? "—") + " → " + (r.oif ?? "—");
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="flex flex-col gap-3 max-w-[1050px]">
       <p className="text-[13px] text-[var(--qz-fg-4)] m-0">
@@ -896,6 +952,7 @@ function AlertsTab() {
           />
         </div>
         <div className="ml-auto flex items-center gap-3">
+          <ColumnsMenu vis={vis} />
           <Button
             kind="secondary"
             size="sm"
@@ -929,29 +986,21 @@ function AlertsTab() {
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
         <table className="qz-table" style={{ width: "100%" }}>
           <colgroup>
-            <col style={{ width: 110 }} />
-            <col style={{ width: 160 }} />
-            <col style={{ width: 170 }} />
-            <col style={{ width: 90 }} />
-            <col />
-            <col />
-            <col style={{ width: 130 }} />
+            {cols.map((c) => (
+              <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+            ))}
           </colgroup>
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Action</th>
-              <th>Country</th>
-              <th>Proto</th>
-              <th>Source</th>
-              <th>Destination</th>
-              <th>Interfaces</th>
+              {cols.map((c) => (
+                <th key={c.key}>{c.header}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={cols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
                   {rows.length === 0
                     ? "No block events yet — they appear when an action with logging enabled drops traffic."
                     : "No alerts match the filter."}
@@ -960,31 +1009,11 @@ function AlertsTab() {
             ) : (
               visible.map((r) => (
                 <tr key={r.key} style={{ cursor: "default" }}>
-                  <td className="mono text-[12px] text-[var(--qz-fg-3)]">{clock(r.ts)}</td>
-                  <td>
-                    <span className="badge badge-crit">{r.action_name}</span>
-                  </td>
-                  <td className="text-[13px] text-[var(--qz-fg-2)]">
-                    {(() => {
-                      const ip = blockedIp(r);
-                      if (!ip) return dash;
-                      const geo = geoByIp[ip];
-                      if (geo === undefined) return <span className="text-[var(--qz-fg-4)]">…</span>;
-                      if (!geo?.country) return dash;
-                      return (
-                        <span className="inline-flex items-center gap-[6px]">
-                          <span>{flagEmoji(geo.country)}</span>
-                          <span>{geo.country_name ?? geo.country}</span>
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="mono text-[12px] text-[var(--qz-fg-3)]">{r.proto ?? dash}</td>
-                  <td className="mono text-[12px] text-[var(--qz-fg-2)]">{endpointText(r.src, r.spt)}</td>
-                  <td className="mono text-[12px] text-[var(--qz-fg-2)]">{endpointText(r.dst, r.dpt)}</td>
-                  <td className="mono text-[12px] text-[var(--qz-fg-4)]">
-                    {(r.iif ?? "—") + " → " + (r.oif ?? "—")}
-                  </td>
+                  {cols.map((c) => (
+                    <td key={c.key} className={c.className}>
+                      {geoCell(c.key, r)}
+                    </td>
+                  ))}
                 </tr>
               ))
             )}

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Eraser, Pause, Play, RotateCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { Segmented } from "@/components/ui/Segmented";
 import {
   emptyFirewallConfig,
@@ -57,6 +58,89 @@ function ActionPill({ action }: { action: Row["action"] }) {
 }
 
 const dash = <span className="text-[var(--qz-fg-4)]">—</span>;
+
+const time = (ts: number) =>
+  ts ? new Date(ts).toLocaleTimeString(undefined, { hour12: false }) : "—";
+
+// Toggleable columns for the streaming table. Layout + menu labels live here;
+// the per-row content is rendered by monitorCell (it needs the live rule-name
+// map, so it can't be a static value on the column).
+interface MonCol {
+  key: string;
+  header: string;
+  width?: number;
+  className?: string;
+  ellipsis?: boolean;
+}
+
+const MONITOR_COLUMNS: MonCol[] = [
+  { key: "time", header: "Time", width: 90, className: "mono text-[var(--qz-fg-3)]" },
+  { key: "action", header: "Action", width: 100 },
+  { key: "rule", header: "Rule", ellipsis: true },
+  { key: "src", header: "Source", className: "mono", ellipsis: true },
+  { key: "spt", header: "Src Port", width: 70, className: "mono" },
+  { key: "dst", header: "Destination", className: "mono", ellipsis: true },
+  { key: "dpt", header: "Dst Port", width: 70, className: "mono" },
+  { key: "proto", header: "Protocol", width: 90, className: "mono" },
+  { key: "iface", header: "Interface", width: 140, className: "mono text-[var(--qz-fg-3)]" },
+];
+
+function monitorCell(key: string, r: Row, ruleLabel: (r: Row) => string): React.ReactNode {
+  switch (key) {
+    case "time":
+      return time(r.ts);
+    case "action":
+      return (
+        <span className="inline-flex items-center gap-[5px]">
+          <ActionPill action={r.action} />
+          {r.ips && (
+            <span className="badge badge-warn" title="Inspected by the IPS engine">
+              IPS
+            </span>
+          )}
+        </span>
+      );
+    case "rule":
+      return (
+        <>
+          <Link
+            href="/firewall/rules"
+            className="no-underline text-[var(--qz-fg-1)] hover:text-[var(--qz-accent)]"
+            title={r.rule === null ? `${r.chain} default action` : `${r.chain} rule ${r.rule}`}
+          >
+            {ruleLabel(r)}
+          </Link>
+          {r.chain !== "forward" && <span className="text-[11px] text-[var(--qz-fg-4)]"> · {r.chain}</span>}
+        </>
+      );
+    case "src":
+      return r.src ?? dash;
+    case "spt":
+      return r.spt ?? dash;
+    case "dst":
+      return r.dst ?? dash;
+    case "dpt":
+      return r.dpt ?? dash;
+    case "proto":
+      return (
+        <>
+          {r.proto ?? "—"}
+          {r.proto === "icmp" && r.icmp_type != null && (
+            <span className="text-[var(--qz-fg-4)]"> t{r.icmp_type}</span>
+          )}
+        </>
+      );
+    case "iface":
+      return (
+        <>
+          {r.in ?? "—"}
+          {r.out ? ` → ${r.out}` : ""}
+        </>
+      );
+    default:
+      return null;
+  }
+}
 
 export default function TrafficMonitorPage() {
   const { setToast } = useDashboard();
@@ -250,8 +334,8 @@ export default function TrafficMonitorPage() {
     });
   }, [rows, q, actionFilter, protoFilter, ifaceFilter, ruleFilter, ruleLabel]);
 
-  const time = (ts: number) =>
-    ts ? new Date(ts).toLocaleTimeString(undefined, { hour12: false }) : "—";
+  const vis = useColumnVisibility("firewall-monitor", MONITOR_COLUMNS);
+  const cols = MONITOR_COLUMNS.filter((c) => vis.isVisible(c.key));
 
   return (
     <div className="flex flex-col h-full">
@@ -360,6 +444,7 @@ export default function TrafficMonitorPage() {
             </select>
 
             <div className="ml-auto flex items-center gap-3">
+              <ColumnsMenu vis={vis} />
               <Button kind="secondary" size="sm" icon={RotateCw} onClick={refresh}>
                 Refresh
               </Button>
@@ -391,33 +476,21 @@ export default function TrafficMonitorPage() {
           <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
             <table className="qz-table" style={{ width: "100%" }}>
               <colgroup>
-                <col style={{ width: 90 }} />
-                <col style={{ width: 100 }} />
-                <col />
-                <col />
-                <col style={{ width: 70 }} />
-                <col />
-                <col style={{ width: 70 }} />
-                <col style={{ width: 90 }} />
-                <col style={{ width: 140 }} />
+                {cols.map((c) => (
+                  <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+                ))}
               </colgroup>
               <thead>
                 <tr>
-                  <th>Time</th>
-                  <th>Action</th>
-                  <th>Rule</th>
-                  <th>Source</th>
-                  <th>Port</th>
-                  <th>Destination</th>
-                  <th>Port</th>
-                  <th>Protocol</th>
-                  <th>Interface</th>
+                  {cols.map((c) => (
+                    <th key={c.key}>{c.header}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {visible.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                    <td colSpan={cols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
                       {rows.length === 0
                         ? "Waiting for traffic… (only logged rules and default-log traffic appear here)"
                         : "No entries match the filter."}
@@ -426,47 +499,15 @@ export default function TrafficMonitorPage() {
                 ) : (
                   visible.map((r) => (
                     <tr key={r.id} style={{ cursor: "default" }}>
-                      <td className="mono text-[var(--qz-fg-3)]">{time(r.ts)}</td>
-                      <td>
-                        <span className="inline-flex items-center gap-[5px]">
-                          <ActionPill action={r.action} />
-                          {r.ips && (
-                            <span className="badge badge-warn" title="Inspected by the IPS engine">
-                              IPS
-                            </span>
-                          )}
-                        </span>
-                      </td>
-                      <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        <Link
-                          href="/firewall/rules"
-                          className="no-underline text-[var(--qz-fg-1)] hover:text-[var(--qz-accent)]"
-                          title={r.rule === null ? `${r.chain} default action` : `${r.chain} rule ${r.rule}`}
+                      {cols.map((c) => (
+                        <td
+                          key={c.key}
+                          className={c.className}
+                          style={c.ellipsis ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : undefined}
                         >
-                          {ruleLabel(r)}
-                        </Link>
-                        {r.chain !== "forward" && (
-                          <span className="text-[11px] text-[var(--qz-fg-4)]"> · {r.chain}</span>
-                        )}
-                      </td>
-                      <td className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {r.src ?? dash}
-                      </td>
-                      <td className="mono">{r.spt ?? dash}</td>
-                      <td className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {r.dst ?? dash}
-                      </td>
-                      <td className="mono">{r.dpt ?? dash}</td>
-                      <td className="mono">
-                        {r.proto ?? "—"}
-                        {r.proto === "icmp" && r.icmp_type != null && (
-                          <span className="text-[var(--qz-fg-4)]"> t{r.icmp_type}</span>
-                        )}
-                      </td>
-                      <td className="mono text-[var(--qz-fg-3)]">
-                        {r.in ?? "—"}
-                        {r.out ? ` → ${r.out}` : ""}
-                      </td>
+                          {monitorCell(c.key, r, ruleLabel)}
+                        </td>
+                      ))}
                     </tr>
                   ))
                 )}

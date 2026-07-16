@@ -21,6 +21,7 @@ import {
   AlertTriangle, Check, Pencil, Plus, RotateCw, Trash2, ShieldAlert, ShieldCheck, Search, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
@@ -279,6 +280,25 @@ function ConfirmModal({
 
 // ── page ──────────────────────────────────────────────────────────────────────
 
+// Toggleable columns for the access log. Every cell is a plain value, so the
+// render lives right on the column.
+interface CfLogCol {
+  key: string;
+  header: string;
+  className?: string;
+  title?: (l: CfLogEntry) => string | undefined;
+  cell: (l: CfLogEntry) => React.ReactNode;
+}
+
+const CF_LOG_COLUMNS: CfLogCol[] = [
+  { key: "time", header: "Time", className: "mono text-[12px] text-[var(--qz-fg-3)] whitespace-nowrap", cell: (l) => l.ts.replace("T", " ") },
+  { key: "client", header: "Client", className: "mono text-[12px] text-[var(--qz-fg-3)]", cell: (l) => l.client_ip },
+  { key: "group", header: "Group", className: "text-[12px] text-[var(--qz-fg-2)]", cell: (l) => l.group ?? "—" },
+  { key: "url", header: "URL", className: "text-[12px] text-[var(--qz-fg-2)] max-w-[22rem] truncate", title: (l) => l.url, cell: (l) => l.url },
+  { key: "category", header: "Category", className: "text-[12px] text-[var(--qz-fg-3)]", cell: (l) => l.category ?? "—" },
+  { key: "action", header: "Action", cell: (l) => <span className={`badge ${l.action === "blocked" ? "badge-warn" : "badge-ok"}`}>{l.action}</span> },
+];
+
 export default function ContentFilteringPage() {
   const { setToast } = useDashboard();
   const [tab, setTab] = useState("overview");
@@ -292,6 +312,8 @@ export default function ContentFilteringPage() {
   const [status, setStatus] = useState<CfStatusReport | null>(null);
   const [categories, setCategories] = useState<CfCategory[]>([]);
   const [logs, setLogs] = useState<CfLogEntry[]>([]);
+  const logVis = useColumnVisibility("cf-logs", CF_LOG_COLUMNS);
+  const logCols = CF_LOG_COLUMNS.filter((c) => logVis.isVisible(c.key));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<FilterGroup | null>(null);
@@ -626,31 +648,33 @@ export default function ContentFilteringPage() {
                     { value: "blocked", label: "Blocked" },
                     { value: "allowed", label: "Allowed" },
                   ]} />
-                <span className="text-[11px] text-[var(--qz-fg-4)] ml-auto">auto-refresh · {logs.length} shown</span>
+                <div className="ml-auto flex items-center gap-3">
+                  <ColumnsMenu vis={logVis} />
+                  <span className="text-[11px] text-[var(--qz-fg-4)]">auto-refresh · {logs.length} shown</span>
+                </div>
               </div>
               <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
                 <table className="qz-table" style={{ width: "100%" }}>
                   <thead>
                     <tr>
-                      <th>Time</th><th>Client</th><th>Group</th><th>URL</th><th>Category</th><th>Action</th>
+                      {logCols.map((c) => (
+                        <th key={c.key}>{c.header}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {logs.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>No log entries.</td>
+                        <td colSpan={logCols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>No log entries.</td>
                       </tr>
                     )}
                     {logs.map((l, i) => (
                       <tr key={i} style={{ cursor: "default" }}>
-                        <td className="mono text-[12px] text-[var(--qz-fg-3)] whitespace-nowrap">{l.ts.replace("T", " ")}</td>
-                        <td className="mono text-[12px] text-[var(--qz-fg-3)]">{l.client_ip}</td>
-                        <td className="text-[12px] text-[var(--qz-fg-2)]">{l.group ?? "—"}</td>
-                        <td className="text-[12px] text-[var(--qz-fg-2)] max-w-[22rem] truncate" title={l.url}>{l.url}</td>
-                        <td className="text-[12px] text-[var(--qz-fg-3)]">{l.category ?? "—"}</td>
-                        <td>
-                          <span className={`badge ${l.action === "blocked" ? "badge-warn" : "badge-ok"}`}>{l.action}</span>
-                        </td>
+                        {logCols.map((c) => (
+                          <td key={c.key} className={c.className} title={c.title?.(l)}>
+                            {c.cell(l)}
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>

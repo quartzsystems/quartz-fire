@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eraser, Pause, Play, RotateCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { Segmented } from "@/components/ui/Segmented";
 import { emptyFirewallConfig, fetchFirewall, FirewallConfig } from "@/lib/firewall";
 import { fetchCfLogs } from "@/lib/content-filtering";
@@ -57,6 +58,37 @@ function ActionPill({ action }: { action: UnifiedAction }) {
   if (action === "blocked") return <span className="badge badge-crit">Blocked</span>;
   return <span className="badge badge-warn">Alert</span>;
 }
+
+const time = (ts: number) =>
+  ts ? new Date(ts).toLocaleTimeString(undefined, { hour12: false }) : "—";
+
+// Column definitions for the (hand-rolled, streaming) table. Interfaces get
+// their own In-If / Out-If columns so the row reads as a flow: arrived on In-If
+// from src → left on Out-If to dst. Every column is toggleable via ColumnsMenu.
+interface LogCol {
+  key: string;
+  header: string;
+  width?: number;
+  className?: string;
+  ellipsis?: boolean;
+  cell: (r: UnifiedEvent) => React.ReactNode;
+  title?: (r: UnifiedEvent) => string | undefined;
+}
+
+const LOG_COLUMNS: LogCol[] = [
+  { key: "time", header: "Time", width: 90, className: "mono text-[var(--qz-fg-3)]", cell: (r) => time(r.ts) },
+  { key: "source", header: "Source", width: 84, cell: (r) => <SourcePill source={r.source} /> },
+  { key: "action", header: "Action", width: 88, cell: (r) => <ActionPill action={r.action} /> },
+  { key: "event", header: "Event", ellipsis: true, cell: (r) => r.summary, title: (r) => r.summary },
+  { key: "ifin", header: "In If", width: 96, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.ifIn ?? dash, title: (r) => r.ifIn },
+  { key: "src", header: "From", width: 128, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.src ?? dash },
+  { key: "spt", header: "Src Port", width: 62, className: "mono text-[12px]", cell: (r) => (r.spt != null ? r.spt : dash) },
+  { key: "ifout", header: "Out If", width: 96, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.ifOut ?? dash, title: (r) => r.ifOut },
+  { key: "dst", header: "To", width: 128, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.dst ?? dash },
+  { key: "dpt", header: "Dst Port", width: 62, className: "mono text-[12px]", cell: (r) => (r.dpt != null ? r.dpt : dash) },
+  { key: "proto", header: "Proto", width: 56, className: "mono text-[12px]", cell: (r) => r.proto ?? "—" },
+  { key: "detail", header: "Detail", width: 170, className: "text-[12px] text-[var(--qz-fg-3)]", ellipsis: true, cell: (r) => r.detail ?? dash, title: (r) => r.detail ?? "" },
+];
 
 export default function UnifiedLogsPage() {
   // ── firewall config (for rule names) ────────────────────────────────────────
@@ -257,7 +289,7 @@ export default function UnifiedLogsPage() {
       if (actionFilter !== "all" && r.action !== actionFilter) return false;
       if (!q) return true;
       const hay = [
-        SOURCE_META[r.source].label, r.summary, r.src, r.spt, r.dst, r.dpt, r.proto, r.iface, r.detail, r.action,
+        SOURCE_META[r.source].label, r.summary, r.src, r.spt, r.dst, r.dpt, r.proto, r.ifIn, r.ifOut, r.detail, r.action,
       ]
         .filter((v) => v != null && v !== "")
         .join(" ")
@@ -272,8 +304,8 @@ export default function UnifiedLogsPage() {
     return c;
   }, [rows]);
 
-  const time = (ts: number) =>
-    ts ? new Date(ts).toLocaleTimeString(undefined, { hour12: false }) : "—";
+  const vis = useColumnVisibility("logs", LOG_COLUMNS);
+  const cols = LOG_COLUMNS.filter((c) => vis.isVisible(c.key));
 
   return (
     <div className="flex flex-col h-full">
@@ -314,6 +346,7 @@ export default function UnifiedLogsPage() {
             />
 
             <div className="ml-auto flex items-center gap-3">
+              <ColumnsMenu vis={vis} />
               <Button kind="secondary" size="sm" icon={RotateCw} onClick={refresh}>
                 Refresh
               </Button>
@@ -369,35 +402,21 @@ export default function UnifiedLogsPage() {
           <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
             <table className="qz-table" style={{ width: "100%" }}>
               <colgroup>
-                <col style={{ width: 90 }} />
-                <col style={{ width: 84 }} />
-                <col style={{ width: 88 }} />
-                <col />
-                <col style={{ width: 128 }} />
-                <col style={{ width: 62 }} />
-                <col style={{ width: 128 }} />
-                <col style={{ width: 62 }} />
-                <col style={{ width: 56 }} />
-                <col style={{ width: 170 }} />
+                {cols.map((c) => (
+                  <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+                ))}
               </colgroup>
               <thead>
                 <tr>
-                  <th>Time</th>
-                  <th>Source</th>
-                  <th>Action</th>
-                  <th>Event</th>
-                  <th>From</th>
-                  <th>Src Port</th>
-                  <th>To</th>
-                  <th>Dst Port</th>
-                  <th>Proto</th>
-                  <th>Detail</th>
+                  {cols.map((c) => (
+                    <th key={c.key}>{c.header}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {visible.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                    <td colSpan={cols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
                       {rows.length === 0
                         ? "Waiting for events… (firewall traffic needs per-rule logging enabled; the security sources need their features on)"
                         : "No entries match the filter."}
@@ -406,25 +425,16 @@ export default function UnifiedLogsPage() {
                 ) : (
                   visible.map((r) => (
                     <tr key={r.id} style={{ cursor: "default" }}>
-                      <td className="mono text-[var(--qz-fg-3)]">{time(r.ts)}</td>
-                      <td><SourcePill source={r.source} /></td>
-                      <td><ActionPill action={r.action} /></td>
-                      <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.summary}>
-                        {r.summary}
-                        {r.iface && <span className="text-[11px] text-[var(--qz-fg-4)]"> · {r.iface}</span>}
-                      </td>
-                      <td className="mono text-[12px]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {r.src ?? dash}
-                      </td>
-                      <td className="mono text-[12px]">{r.spt != null ? r.spt : dash}</td>
-                      <td className="mono text-[12px]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {r.dst ?? dash}
-                      </td>
-                      <td className="mono text-[12px]">{r.dpt != null ? r.dpt : dash}</td>
-                      <td className="mono text-[12px]">{r.proto ?? "—"}</td>
-                      <td className="text-[12px] text-[var(--qz-fg-3)]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.detail ?? ""}>
-                        {r.detail ?? dash}
-                      </td>
+                      {cols.map((c) => (
+                        <td
+                          key={c.key}
+                          className={c.className}
+                          style={c.ellipsis ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : undefined}
+                          title={c.title?.(r)}
+                        >
+                          {c.cell(r)}
+                        </td>
+                      ))}
                     </tr>
                   ))
                 )}

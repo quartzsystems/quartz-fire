@@ -55,8 +55,10 @@ export interface UnifiedEvent {
   dst?: string;
   dpt?: number;
   proto?: string;
-  /// "in → out" (firewall/geo) or a single interface, when known.
-  iface?: string;
+  /// Ingress interface the packet arrived on (firewall/geo), when known.
+  ifIn?: string;
+  /// Egress interface the packet left on (firewall/geo), when known.
+  ifOut?: string;
   /// Secondary context: category, severity, group, SNI, chain, …
   detail?: string;
 }
@@ -76,7 +78,6 @@ type Raw = Omit<UnifiedEvent, "id">;
 /// The firewall entry needs its rule resolved to a friendly name by the caller
 /// (the page owns the rule-number → name map), so the label is passed in.
 export function normalizeFirewall(e: FirewallLogEntry, ruleLabel: string): Raw {
-  const iface = e.in ? (e.out ? `${e.in} → ${e.out}` : e.in) : e.out;
   const detail = [e.chain !== "forward" ? e.chain : null, e.ips ? "IPS" : null]
     .filter(Boolean)
     .join(" · ");
@@ -91,7 +92,8 @@ export function normalizeFirewall(e: FirewallLogEntry, ruleLabel: string): Raw {
     dst: e.dst,
     dpt: e.dpt,
     proto: e.proto,
-    iface,
+    ifIn: e.in,
+    ifOut: e.out,
     detail: detail || undefined,
   };
 }
@@ -152,7 +154,6 @@ export function normalizeAc(e: AcEvent): Raw {
 }
 
 export function normalizeGeo(e: GeoEvent): Raw {
-  const iface = e.iif ? (e.oif ? `${e.iif} → ${e.oif}` : e.iif) : e.oif;
   // Geolocation logs are emitted on the action's drop rule, so every geo event
   // is a block. Surface the filtered country (resolved backend-side) as detail.
   const country =
@@ -169,7 +170,8 @@ export function normalizeGeo(e: GeoEvent): Raw {
     dst: e.dst,
     dpt: e.dpt,
     proto: e.proto,
-    iface,
+    ifIn: e.iif,
+    ifOut: e.oif,
     detail: country ? (flag ? `${flag} ${country}` : country) : undefined,
   };
 }

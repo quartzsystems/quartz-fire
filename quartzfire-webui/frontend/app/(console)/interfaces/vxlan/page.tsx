@@ -5,7 +5,8 @@ import { AlertTriangle, Plus, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
-import { deleteVxlan, fetchBridges, fetchVxlan, VxlanInterface } from "@/lib/interfaces";
+import { MtuCell } from "@/components/dashboard/MtuCell";
+import { deleteVxlan, effectiveMtu, fetchBridges, fetchVxlan, VxlanInterface } from "@/lib/interfaces";
 import { fetchInterfaceStats } from "@/lib/vyos";
 import { useDashboard } from "@/lib/DashboardContext";
 import { VxlanFormModal } from "./VxlanFormModal";
@@ -71,7 +72,7 @@ const columns: Column<VxlanInterface>[] = [
     mono: true,
   },
   { key: "port", header: "Port", value: (r) => r.port ?? 8472, mono: true, width: 80 },
-  { key: "mtu", header: "MTU", value: (r) => r.mtu, mono: true, sortable: true, width: 80 },
+  { key: "mtu", header: "MTU", value: (r) => effectiveMtu(r.mtu, "vxlan"), render: (r) => <MtuCell mtu={r.mtu} kind="vxlan" />, mono: true, sortable: true, width: 80 },
   {
     key: "status",
     header: "Status",

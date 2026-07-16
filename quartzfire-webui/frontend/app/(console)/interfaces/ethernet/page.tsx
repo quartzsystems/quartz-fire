@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Pencil, Plus, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
+import { MtuCell } from "@/components/dashboard/MtuCell";
 import {
   EthernetInterface,
   LinkState,
   PhyInfo,
+  effectiveMtu,
   fetchEthernet,
   fetchEthernetPhy,
   fetchPhysicalEthernet,
@@ -39,7 +41,7 @@ const columns: Column<EthRow>[] = [
     render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
     mono: true,
   },
-  { key: "mtu", header: "MTU", value: (r) => r.mtu, mono: true, sortable: true, width: 80 },
+  { key: "mtu", header: "MTU", value: (r) => effectiveMtu(r.mtu, "ethernet"), render: (r) => <MtuCell mtu={r.mtu} kind="ethernet" />, mono: true, sortable: true, width: 80 },
   { key: "hw_id", header: "MAC", value: (r) => r.hw_id ?? "", mono: true, width: 150 },
   { key: "vlan_count", header: "VLANs", value: (r) => r.vlan_count, mono: true, sortable: true, width: 80 },
   {

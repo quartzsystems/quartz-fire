@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { Segmented } from "@/components/ui/Segmented";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { UsageChart } from "@/components/ui/UsageChart";
@@ -78,6 +79,8 @@ interface ColumnDef {
   width?: string;
 }
 
+const ELLIPSIS: React.CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+
 // Fixed widths on every column except the trailing IPv4 one, which is left
 // width-less so it absorbs the table's slack — that keeps Description tight to
 // MAC/Last Seen instead of stretching and leaving a big empty gap.
@@ -104,6 +107,9 @@ export default function DevicesPage() {
   const [page, setPage] = useState(1);
 
   // ── data state ────────────────────────────────────────────────────────────
+  const vis = useColumnVisibility("devices", COLUMNS);
+  const visibleColumns = COLUMNS.filter((c) => vis.isVisible(c.key));
+
   const [data, setData] = useState<DeviceList | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -290,6 +296,7 @@ export default function DevicesPage() {
         <Segmented items={statusItems} value={status} onChange={(v) => setStatus(v as StatusFilter)} />
 
         <div className="ml-auto flex items-center gap-3">
+          <ColumnsMenu vis={vis} />
           <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load(true)} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
@@ -313,14 +320,14 @@ export default function DevicesPage() {
         <table className="qz-table" style={{ tableLayout: "fixed", width: "100%" }}>
           <colgroup>
             <col style={{ width: 34 }} />
-            {COLUMNS.map((c) => (
+            {visibleColumns.map((c) => (
               <col key={c.key} style={{ width: c.width }} />
             ))}
           </colgroup>
           <thead>
             <tr>
               <th style={{ width: 34 }} aria-hidden />
-              {COLUMNS.map((c) => (
+              {visibleColumns.map((c) => (
                 <th
                   key={c.key}
                   onClick={() => toggleSort(c.sort)}
@@ -337,7 +344,7 @@ export default function DevicesPage() {
           <tbody>
             {devices.length === 0 ? (
               <tr>
-                <td colSpan={COLUMNS.length + 1} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={visibleColumns.length + 1} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
                   {loading ? "Loading…" : error ? error : "No devices seen yet."}
                 </td>
               </tr>
@@ -346,6 +353,7 @@ export default function DevicesPage() {
                 <DeviceRowView
                   key={d.mac}
                   device={d}
+                  columns={visibleColumns}
                   usageWindow={usageWindow}
                   expanded={expanded === d.mac}
                   onToggle={() => setExpanded((m) => (m === d.mac ? null : d.mac))}
@@ -385,6 +393,7 @@ export default function DevicesPage() {
 
 function DeviceRowView({
   device,
+  columns,
   usageWindow,
   expanded,
   onToggle,
@@ -392,6 +401,7 @@ function DeviceRowView({
   onError,
 }: {
   device: Device;
+  columns: ColumnDef[];
   usageWindow: UsageWindow;
   expanded: boolean;
   onToggle: () => void;
@@ -416,6 +426,87 @@ function DeviceRowView({
       <span className="text-[var(--qz-fg-4)]">Unknown</span>
     );
 
+  // Cell content keyed by column, so the row renders only the visible columns
+  // (and in their order). The chevron column is fixed and lives outside this map.
+  const cells: Record<
+    string,
+    { node: React.ReactNode; className?: string; style?: React.CSSProperties; onClick?: (e: React.MouseEvent) => void }
+  > = {
+    status: {
+      style: ELLIPSIS,
+      node: (
+        <span className="inline-flex items-center gap-[7px]">
+          <Circle
+            size={9}
+            className="flex-shrink-0"
+            style={{
+              fill: device.online ? "var(--qz-success)" : "var(--qz-ink-7)",
+              color: device.online ? "var(--qz-success)" : "var(--qz-ink-7)",
+            }}
+          />
+          <span className={device.online ? "text-[var(--qz-fg-1)]" : "text-[var(--qz-fg-4)]"}>
+            {device.online ? "Online" : "Offline"}
+          </span>
+        </span>
+      ),
+    },
+    description: {
+      style: { overflow: "hidden" },
+      onClick: (e) => e.stopPropagation(),
+      node: <DescriptionCell device={device} identity={identity} onSaved={onSaved} onError={onError} />,
+    },
+    mac: {
+      className: "mono",
+      style: ELLIPSIS,
+      node: (
+        <span className="text-[13px] text-[var(--qz-fg-2)]" title={device.mac}>
+          {device.mac}
+        </span>
+      ),
+    },
+    last_seen: {
+      style: ELLIPSIS,
+      node: <span title={formatTimestamp(device.last_seen)}>{formatRelative(device.last_seen)}</span>,
+    },
+    usage: {
+      style: ELLIPSIS,
+      node: (
+        <div className="flex flex-col leading-tight">
+          <span className="text-[13px] text-[var(--qz-fg-1)]">{formatBytes(down + up)}</span>
+          <span className="text-[11px] text-[var(--qz-fg-4)]">
+            {formatBytes(down)} ↓ / {formatBytes(up)} ↑
+          </span>
+        </div>
+      ),
+    },
+    type: {
+      style: ELLIPSIS,
+      node: typeCell,
+    },
+    ip: {
+      className: "mono",
+      style: ELLIPSIS,
+      node: isIpv4(device.current_ip) ? (
+        <span className="inline-flex items-center gap-[6px]">
+          {device.current_ip}
+          {device.dhcp_static === true && (
+            <span className="badge badge-info" title="Static DHCP reservation">Static</span>
+          )}
+          {device.dhcp_static === false && (
+            <span
+              className="badge badge-muted"
+              title={device.lease_expiry ? `Lease expires ${formatTimestamp(device.lease_expiry)}` : "Dynamic DHCP lease"}
+            >
+              DHCP
+            </span>
+          )}
+        </span>
+      ) : (
+        dash
+      ),
+    },
+  };
+
   return (
     <>
       <tr className={expanded ? "selected" : ""} onClick={onToggle}>
@@ -431,82 +522,20 @@ function DeviceRowView({
           </button>
         </td>
 
-        {/* Status */}
-        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <span className="inline-flex items-center gap-[7px]">
-            <Circle
-              size={9}
-              className="flex-shrink-0"
-              style={{
-                fill: device.online ? "var(--qz-success)" : "var(--qz-ink-7)",
-                color: device.online ? "var(--qz-success)" : "var(--qz-ink-7)",
-              }}
-            />
-            <span className={device.online ? "text-[var(--qz-fg-1)]" : "text-[var(--qz-fg-4)]"}>
-              {device.online ? "Online" : "Offline"}
-            </span>
-          </span>
-        </td>
-
-        {/* Description (inline edit) */}
-        <td style={{ overflow: "hidden" }} onClick={(e) => e.stopPropagation()}>
-          <DescriptionCell device={device} identity={identity} onSaved={onSaved} onError={onError} />
-        </td>
-
-        {/* MAC */}
-        <td className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <span className="text-[13px] text-[var(--qz-fg-2)]" title={device.mac}>
-            {device.mac}
-          </span>
-        </td>
-
-        {/* Last Seen */}
-        <td
-          title={formatTimestamp(device.last_seen)}
-          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-        >
-          {formatRelative(device.last_seen)}
-        </td>
-
-        {/* Usage (down/up split) */}
-        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          <div className="flex flex-col leading-tight">
-            <span className="text-[13px] text-[var(--qz-fg-1)]">{formatBytes(down + up)}</span>
-            <span className="text-[11px] text-[var(--qz-fg-4)]">
-              {formatBytes(down)} ↓ / {formatBytes(up)} ↑
-            </span>
-          </div>
-        </td>
-
-        {/* Client Type / OS */}
-        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{typeCell}</td>
-
-        {/* IPv4 + lease/static badge (IPv6 is kept out of this column) */}
-        <td className="mono" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {isIpv4(device.current_ip) ? (
-            <span className="inline-flex items-center gap-[6px]">
-              {device.current_ip}
-              {device.dhcp_static === true && (
-                <span className="badge badge-info" title="Static DHCP reservation">Static</span>
-              )}
-              {device.dhcp_static === false && (
-                <span
-                  className="badge badge-muted"
-                  title={device.lease_expiry ? `Lease expires ${formatTimestamp(device.lease_expiry)}` : "Dynamic DHCP lease"}
-                >
-                  DHCP
-                </span>
-              )}
-            </span>
-          ) : (
-            dash
-          )}
-        </td>
+        {columns.map((c) => {
+          const cell = cells[c.key];
+          if (!cell) return <td key={c.key} />;
+          return (
+            <td key={c.key} className={cell.className} style={cell.style} onClick={cell.onClick}>
+              {cell.node}
+            </td>
+          );
+        })}
       </tr>
 
       {expanded && (
         <tr style={{ cursor: "default" }}>
-          <td colSpan={COLUMNS.length + 1} style={{ background: "var(--qz-ink-0)", padding: 0 }}>
+          <td colSpan={columns.length + 1} style={{ background: "var(--qz-ink-0)", padding: 0 }}>
             <DeviceDetailPanel mac={device.mac} usageWindow={usageWindow} />
           </td>
         </tr>

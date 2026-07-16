@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
@@ -658,6 +659,41 @@ function PoliciesTab({
 type AlertRow = AcEvent & { key: string };
 const MAX_ALERTS = 500;
 
+// Toggleable columns for the alerts log. Cells are plain values, so the render
+// lives on the column.
+interface AcAlertCol {
+  key: string;
+  header: string;
+  width?: number;
+  className?: string;
+  ellipsis?: boolean;
+  cell: (r: AlertRow) => React.ReactNode;
+}
+
+const AC_ALERT_COLUMNS: AcAlertCol[] = [
+  { key: "time", header: "Time", width: 90, className: "mono text-[var(--qz-fg-3)]", cell: (r) => (r.ts ? new Date(r.ts).toLocaleTimeString(undefined, { hour12: false }) : "—") },
+  { key: "action", header: "Action", width: 90, cell: (r) => (r.action === "block" ? <span className="badge badge-crit">Blocked</span> : <span className="badge badge-ok">Allowed</span>) },
+  { key: "app", header: "Application", width: 150, className: "text-[var(--qz-fg-1)]", cell: (r) => r.app },
+  { key: "category", header: "Category", width: 130, className: "text-[var(--qz-fg-3)]", cell: (r) => r.category ?? dash },
+  {
+    key: "srcdst",
+    header: "Source → Destination",
+    className: "mono text-[12px]",
+    ellipsis: true,
+    cell: (r) => (
+      <>
+        {r.src ?? "?"}
+        {r.spt != null && <span className="text-[var(--qz-fg-4)]">:{r.spt}</span>}
+        {" → "}
+        {r.dst ?? "?"}
+        {r.dpt != null && <span className="text-[var(--qz-fg-4)]">:{r.dpt}</span>}
+      </>
+    ),
+  },
+  { key: "sni", header: "SNI / Host", width: 150, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.sni ?? dash },
+  { key: "policy", header: "Policy", width: 130, className: "text-[12px] text-[var(--qz-fg-3)]", cell: (r) => r.action_name || dash },
+];
+
 function AlertsTab() {
   const rowsRef = useRef<AlertRow[]>([]);
   const dirtyRef = useRef(false);
@@ -748,7 +784,8 @@ function AlertsTab() {
     dirtyRef.current = false;
     setRows([]);
   };
-  const time = (ts: number) => (ts ? new Date(ts).toLocaleTimeString(undefined, { hour12: false }) : "—");
+  const vis = useColumnVisibility("ac-alerts", AC_ALERT_COLUMNS);
+  const cols = AC_ALERT_COLUMNS.filter((c) => vis.isVisible(c.key));
 
   return (
     <div className="flex flex-col gap-3">
@@ -773,6 +810,7 @@ function AlertsTab() {
           onChange={(v) => setActionFilter(v as typeof actionFilter)}
         />
         <div className="ml-auto flex items-center gap-3">
+          <ColumnsMenu vis={vis} />
           <Button
             kind="secondary"
             size="sm"
@@ -806,29 +844,21 @@ function AlertsTab() {
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
         <table className="qz-table" style={{ width: "100%" }}>
           <colgroup>
-            <col style={{ width: 90 }} />
-            <col style={{ width: 90 }} />
-            <col style={{ width: 150 }} />
-            <col style={{ width: 130 }} />
-            <col />
-            <col style={{ width: 150 }} />
-            <col style={{ width: 130 }} />
+            {cols.map((c) => (
+              <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+            ))}
           </colgroup>
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Action</th>
-              <th>Application</th>
-              <th>Category</th>
-              <th>Source → Destination</th>
-              <th>SNI / Host</th>
-              <th>Policy</th>
+              {cols.map((c) => (
+                <th key={c.key}>{c.header}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={cols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
                   {rows.length === 0
                     ? "No alerts yet — they appear when classified traffic matches an action."
                     : "No alerts match the filter."}
@@ -843,27 +873,15 @@ function AlertsTab() {
                     background: r.action === "block" ? "color-mix(in oklab, var(--qz-danger) 7%, transparent)" : undefined,
                   }}
                 >
-                  <td className="mono text-[var(--qz-fg-3)]">{time(r.ts)}</td>
-                  <td>
-                    {r.action === "block" ? (
-                      <span className="badge badge-crit">Blocked</span>
-                    ) : (
-                      <span className="badge badge-ok">Allowed</span>
-                    )}
-                  </td>
-                  <td className="text-[var(--qz-fg-1)]">{r.app}</td>
-                  <td className="text-[var(--qz-fg-3)]">{r.category ?? dash}</td>
-                  <td className="mono text-[12px]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.src ?? "?"}
-                    {r.spt != null && <span className="text-[var(--qz-fg-4)]">:{r.spt}</span>}
-                    {" → "}
-                    {r.dst ?? "?"}
-                    {r.dpt != null && <span className="text-[var(--qz-fg-4)]">:{r.dpt}</span>}
-                  </td>
-                  <td className="mono text-[12px]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.sni ?? dash}
-                  </td>
-                  <td className="text-[12px] text-[var(--qz-fg-3)]">{r.action_name || dash}</td>
+                  {cols.map((c) => (
+                    <td
+                      key={c.key}
+                      className={c.className}
+                      style={c.ellipsis ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : undefined}
+                    >
+                      {c.cell(r)}
+                    </td>
+                  ))}
                 </tr>
               ))
             )}

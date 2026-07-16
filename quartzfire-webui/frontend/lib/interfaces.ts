@@ -218,6 +218,26 @@ function asMtu(v: Cfg): number | null {
   return null;
 }
 
+/// VyOS default MTU per interface kind, applied by the kernel when the running
+/// config sets none. Standard L2 interfaces inherit 1500; VXLAN reserves 50
+/// bytes for its encapsulation header (1500 − 50); the loopback carries the
+/// kernel's 65536. Surfaced (muted) in the tables so an unset MTU still shows
+/// its effective value rather than a bare dash.
+export type InterfaceKind = "ethernet" | "vlan" | "bridge" | "bonding" | "loopback" | "vxlan";
+export const DEFAULT_MTU: Record<InterfaceKind, number> = {
+  ethernet: 1500,
+  vlan: 1500,
+  bridge: 1500,
+  bonding: 1500,
+  loopback: 65536,
+  vxlan: 1450,
+};
+
+/// The MTU the kernel actually uses: the configured value, or the kind default.
+export function effectiveMtu(mtu: number | null, kind: InterfaceKind): number {
+  return mtu ?? DEFAULT_MTU[kind];
+}
+
 /// VyOS renders a multi-value node (`address`) as a JSON string when it holds
 /// one value and a JSON array when it holds several.
 function asAddresses(v: Cfg): string[] {

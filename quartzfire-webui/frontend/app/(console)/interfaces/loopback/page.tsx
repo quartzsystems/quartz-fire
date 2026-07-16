@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Pencil, Plus, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
-import { fetchLoopback, LoopbackInterface } from "@/lib/interfaces";
+import { MtuCell } from "@/components/dashboard/MtuCell";
+import { effectiveMtu, fetchLoopback, LoopbackInterface } from "@/lib/interfaces";
 import { useDashboard } from "@/lib/DashboardContext";
 import { LoopbackFormModal } from "./LoopbackFormModal";
 
@@ -22,7 +23,7 @@ const columns: Column<LoopbackInterface>[] = [
     render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
     mono: true,
   },
-  { key: "mtu", header: "MTU", value: (r) => r.mtu, mono: true, sortable: true, width: 80 },
+  { key: "mtu", header: "MTU", value: (r) => effectiveMtu(r.mtu, "loopback"), render: (r) => <MtuCell mtu={r.mtu} kind="loopback" />, mono: true, sortable: true, width: 80 },
   {
     key: "status",
     header: "Status",
