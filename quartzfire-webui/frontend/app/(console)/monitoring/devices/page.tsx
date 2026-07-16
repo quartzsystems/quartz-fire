@@ -28,7 +28,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { Segmented } from "@/components/ui/Segmented";
-import { Sparkline } from "@/components/ui/Sparkline";
+import { PingChart } from "@/components/ui/PingChart";
 import { UsageChart } from "@/components/ui/UsageChart";
 import { AppSliceInput, TopAppsDonut } from "@/components/dashboard/TopAppsDonut";
 import { useDashboard } from "@/lib/DashboardContext";
@@ -39,13 +39,13 @@ import {
   DeviceDetail,
   DeviceList,
   UsageSeries,
-  PingResult,
+  PingStreamEvent,
   deviceIdentity,
   fetchDeviceDetail,
   fetchDevices,
   fetchUsageSeries,
   isIpv4,
-  pingDevice,
+  pingStreamUrl,
   saveDeviceDescription,
   SortDir,
   SortKey,
@@ -246,7 +246,7 @@ export default function DevicesPage() {
           {/* Usage graph */}
           <div>
             <div className="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
-              <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Network usage</span>
+              <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Network Usage</span>
               {usageSeries && (
                 <span className="text-[12px] text-[var(--qz-fg-4)]">
                   {formatBytes(usageSeries.bytes_in + usageSeries.bytes_out)}
@@ -753,39 +753,112 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
 
 // ── ping tool ─────────────────────────────────────────────────────────────────
 
+interface PingPoint {
+  seq: number;
+  ms: number | null;
+}
+
 function PingWidget({ mac, pingable }: { mac: string; pingable: boolean }) {
-  const [result, setResult] = useState<PingResult | null>(null);
+  const [points, setPoints] = useState<PingPoint[]>([]);
+  const [count, setCount] = useState(0);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
 
-  const run = async () => {
-    if (running) return;
-    setRunning(true);
-    setError(null);
-    try {
-      setResult(await pingDevice(mac));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Ping failed.");
-    } finally {
-      setRunning(false);
-    }
+  const esRef = useRef<EventSource | null>(null);
+  const seqRef = useRef<Map<number, number | null>>(new Map());
+  const countRef = useRef(0);
+  const doneRef = useRef(false);
+
+  // Close any live run when the panel unmounts (row collapsed / navigated away).
+  useEffect(() => () => esRef.current?.close(), []);
+
+  const publish = () => {
+    setPoints([...seqRef.current.entries()].sort((a, b) => a[0] - b[0]).map(([seq, ms]) => ({ seq, ms })));
   };
+
+  const finalize = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    esRef.current?.close();
+    esRef.current = null;
+    setRunning(false);
+    setDone(true);
+  };
+
+  const run = () => {
+    if (running || !pingable) return;
+    esRef.current?.close();
+    seqRef.current = new Map();
+    countRef.current = 0;
+    doneRef.current = false;
+    setPoints([]);
+    setCount(0);
+    setError(null);
+    setDone(false);
+    setRunning(true);
+
+    const es = new EventSource(pingStreamUrl(mac));
+    esRef.current = es;
+
+    es.onmessage = (ev) => {
+      let e: PingStreamEvent;
+      try {
+        e = JSON.parse(ev.data) as PingStreamEvent;
+      } catch {
+        return;
+      }
+      if (e.kind === "start") {
+        countRef.current = e.count;
+        setCount(e.count);
+        return;
+      }
+      if (e.kind === "reply") seqRef.current.set(e.seq, e.ms);
+      else if (e.kind === "timeout" && !seqRef.current.has(e.seq)) seqRef.current.set(e.seq, null);
+      publish();
+      // Every packet is accounted for — the burst is done.
+      if (countRef.current > 0 && seqRef.current.size >= countRef.current) finalize();
+    };
+
+    // SSE has no explicit end: the server just closes the stream when the burst
+    // finishes, which surfaces here as an error. Treat it as terminal (never
+    // auto-reconnect — that would start a fresh ping). Nothing received at all
+    // means ping couldn't run (no cap_net_raw / ping_group_range).
+    es.onerror = () => {
+      if (doneRef.current) return;
+      if (seqRef.current.size > 0) finalize();
+      else {
+        doneRef.current = true;
+        es.close();
+        esRef.current = null;
+        setRunning(false);
+        setError("Ping could not run on this device.");
+      }
+    };
+  };
+
+  const received = points.reduce((n, p) => n + (p.ms != null ? 1 : 0), 0);
+  const total = count || points.length;
+  const avgMs = received > 0 ? points.reduce((s, p) => s + (p.ms ?? 0), 0) / received : null;
+  const lossPct = total > 0 ? ((total - received) / total) * 100 : 0;
+  const started = points.length > 0 || count > 0;
 
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
         <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Ping</span>
-        <span title={pingable ? "Send an ICMP burst" : "No IPv4 address to ping"}>
-          <Button
-            kind="secondary"
-            size="sm"
-            icon={Activity}
-            onClick={run}
-            disabled={running || !pingable}
-          >
-            {running ? "Pinging…" : "Run"}
-          </Button>
-        </span>
+        <div className="flex items-center gap-2">
+          {started && (
+            <span className="text-[12px] text-[var(--qz-fg-4)] tabular-nums">
+              {points.length}/{total || "?"}
+            </span>
+          )}
+          <span title={pingable ? "Send an ICMP burst" : "No IPv4 address to ping"}>
+            <Button kind="secondary" size="sm" icon={Activity} onClick={run} disabled={running || !pingable}>
+              {running ? "Pinging…" : done || error ? "Run again" : "Run"}
+            </Button>
+          </span>
+        </div>
       </div>
 
       {!pingable && (
@@ -793,25 +866,27 @@ function PingWidget({ mac, pingable }: { mac: string; pingable: boolean }) {
       )}
       {error && <p className="text-[12px] text-[var(--qz-danger)] m-0">{error}</p>}
 
-      {result && (
+      {pingable && started && (
         <>
-          {result.samples.length > 1 && <Sparkline data={result.samples} height={40} />}
+          <PingChart points={points} count={total || points.length} />
           <div className="grid gap-x-4 gap-y-1 mt-2" style={{ gridTemplateColumns: "max-content 1fr" }}>
             <span className="text-[12px] text-[var(--qz-fg-4)]">Loss rate</span>
             <span
               className="text-[12px] tabular-nums"
-              style={{ color: result.loss_pct > 0 ? "var(--qz-warn)" : "var(--qz-fg-1)" }}
+              style={{ color: lossPct > 0 ? "var(--qz-warn)" : "var(--qz-fg-1)" }}
             >
-              {result.loss_pct.toFixed(0)}% ({result.received}/{result.transmitted})
+              {lossPct.toFixed(0)}% ({received}/{total})
             </span>
-            <span className="text-[12px] text-[var(--qz-fg-4)]">Average latency</span>
+            <span className="text-[12px] text-[var(--qz-fg-4)]">
+              {running ? "Latency (avg)" : "Average latency"}
+            </span>
             <span className="text-[12px] text-[var(--qz-fg-1)] tabular-nums">
-              {result.avg_ms != null ? `${result.avg_ms.toFixed(1)} ms` : "—"}
+              {avgMs != null ? `${avgMs.toFixed(1)} ms` : "—"}
             </span>
           </div>
         </>
       )}
-      {!result && !error && pingable && (
+      {pingable && !started && !error && (
         <p className="text-[12px] text-[var(--qz-fg-4)] m-0">Run a burst to measure loss and latency.</p>
       )}
     </div>

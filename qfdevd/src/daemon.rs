@@ -49,8 +49,8 @@ struct Health {
     last_neigh: AtomicU64,
     last_lease: AtomicU64,
     last_usage: AtomicU64,
-    /// Set once we've warned that conntrack has entries but no byte counters
-    /// (accounting disabled), so the warning is logged only once per run.
+    /// Set once we've logged about conntrack byte accounting being off (and
+    /// re-enabled, or failed to), so that message appears only once per run.
     acct_off_warned: AtomicBool,
 }
 
@@ -337,12 +337,53 @@ fn fingerprint_device(shared: &Shared, mac: &str) {
 
 // ── conntrack usage collectors ──────────────────────────────────────────────
 
+/// The kernel sysctl gating conntrack byte accounting. With this at 0, conntrack
+/// tracks flows but records no `bytes=`, so per-device usage can never be
+/// attributed and every Usage figure stays empty.
+const CONNTRACK_ACCT_SYSCTL: &str = "/proc/sys/net/netfilter/nf_conntrack_acct";
+
+/// Ensure conntrack byte accounting is on. `Ok(true)` = we just turned it on,
+/// `Ok(false)` = it was already on, `Err` = it couldn't be read/written (the
+/// sandbox must allow writing [`CONNTRACK_ACCT_SYSCTL`] — see the unit's
+/// ReadWritePaths).
+fn enable_conntrack_acct() -> std::io::Result<bool> {
+    if std::fs::read_to_string(CONNTRACK_ACCT_SYSCTL)?.trim() == "1" {
+        return Ok(false);
+    }
+    std::fs::write(CONNTRACK_ACCT_SYSCTL, b"1\n")?;
+    Ok(true)
+}
+
 /// Periodic snapshot: credits growth on long-lived flows that never tear down
 /// inside a window.
 async fn conntrack_snapshot_loop(shared: Arc<Shared>) {
     let mut tick = tokio::time::interval(Duration::from_secs(shared.cfg.conntrack_snapshot_secs.max(5)));
     loop {
         tick.tick().await;
+
+        // Re-assert byte accounting every tick. Our unit sets it at ExecStartPre,
+        // but vyos-router is Type=simple: it reports "started" immediately and
+        // then keeps applying config (reloading nf_conntrack / rewriting conntrack
+        // sysctls) in the background, racing past our one-shot and zeroing the
+        // value — which silently empties all usage. Continuously enforcing it
+        // recovers accounting within one snapshot interval of any such reset.
+        match enable_conntrack_acct() {
+            Ok(true) => {
+                if !shared.health.acct_off_warned.swap(true, Ordering::Relaxed) {
+                    tracing::info!("nf_conntrack_acct was disabled; re-enabled it for usage accounting");
+                }
+            }
+            Ok(false) => {}
+            Err(e) => {
+                if !shared.health.acct_off_warned.swap(true, Ordering::Relaxed) {
+                    tracing::warn!(
+                        "nf_conntrack_acct is disabled and could not be re-enabled ({e}); \
+                         per-device usage will stay empty"
+                    );
+                }
+            }
+        }
+
         let out = Command::new("conntrack").args(["-L", "--output", "extended"]).output().await;
         let text = match out {
             Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
@@ -358,20 +399,6 @@ async fn conntrack_snapshot_loop(shared: Arc<Shared>) {
             }
         };
         shared.health.conntrack_ok.store(true, Ordering::Relaxed);
-
-        // A populated conntrack table with no `bytes=` anywhere means byte
-        // accounting is off (net.netfilter.nf_conntrack_acct=0) — usage can
-        // never be attributed. The unit's ExecStartPre enables it, so this is
-        // a belt-and-braces diagnostic; warn once rather than fail silently.
-        if !text.is_empty()
-            && !text.contains("bytes=")
-            && !shared.health.acct_off_warned.swap(true, Ordering::Relaxed)
-        {
-            tracing::warn!(
-                "conntrack has flows but no byte counters — nf_conntrack_acct is disabled; \
-                 per-device usage will stay empty until it is enabled"
-            );
-        }
 
         let ip_snapshot = shared.ip_map.lock().unwrap().clone();
         let resolve = |ip: &str| ip_snapshot.get(ip).cloned();

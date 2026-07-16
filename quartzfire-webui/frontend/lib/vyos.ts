@@ -32,6 +32,7 @@ export interface StorageMount {
 
 /// Live operational system info for the dashboard pod. All fields best-effort (may be null).
 export interface DeviceSystemInfo {
+  hostname: string | null;
   version: string | null;
   release_train: string | null;
   built_on: string | null;
@@ -229,16 +230,21 @@ function parseInterfaceCounters(text: string): InterfaceStat[] {
 
 export async function fetchSystemInfo(): Promise<DeviceSystemInfo> {
   // Independent best-effort reads — fan them out concurrently.
-  const [versionTxt, uptimeTxt, memoryTxt, storageTxt] = await Promise.all([
+  const [versionTxt, hostnameTxt, uptimeTxt, memoryTxt, storageTxt] = await Promise.all([
     showText(["version"]),
+    showText(["host", "name"]),
     showText(["system", "uptime"]),
     showText(["system", "memory"]),
     showText(["system", "storage"]),
   ]);
 
+  // `show host name` returns the bare hostname (occasionally with a trailing
+  // newline); keep the first non-empty line.
+  const hostname = hostnameTxt?.split("\n").map((l) => l.trim()).find(Boolean) ?? null;
   const { uptime, load } = parseUptime(uptimeTxt);
   return {
     ...parseVersion(versionTxt),
+    hostname,
     uptime,
     load,
     memory: parseMemory(memoryTxt),

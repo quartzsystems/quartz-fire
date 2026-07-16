@@ -59,6 +59,13 @@ ConfigurationDirectory=qfdevd
 # The device inventory lives under /config (persists across image upgrades).
 # `-` tolerates absence on dev boxes without /config.
 ReadWritePaths=-/config/quartzfire
+# ProtectKernelTunables= mounts /proc/sys read-only; punch a narrow writable
+# hole for exactly the conntrack accounting sysctl so the daemon can re-assert
+# it at runtime (vyos-router, being Type=simple, applies config after our
+# ExecStartPre and races it back to 0 — see conntrack_snapshot_loop). `-`
+# tolerates its absence before nf_conntrack loads; the ExecStartPre modprobe
+# above ensures it exists when the main process's namespace is built.
+ReadWritePaths=-/proc/sys/net/netfilter/nf_conntrack_acct
 
 # Sandboxing.
 ProtectSystem=strict

@@ -144,6 +144,19 @@ export function pingDevice(mac: string): Promise<PingResult> {
   });
 }
 
+/// One SSE payload from the streaming ping run (see backend ping_stream).
+export type PingStreamEvent =
+  | { kind: "start"; target: string; count: number }
+  | { kind: "reply"; seq: number; ms: number }
+  | { kind: "timeout"; seq: number };
+
+/// EventSource URL for a live ping run — streams a reply/timeout per packet so
+/// the UI can plot latency and advance a progress counter as the burst runs.
+/// (Absolute `/api` path: EventSource doesn't go through apiFetch's base.)
+export function pingStreamUrl(mac: string): string {
+  return `/api/monitoring/devices/${encodeURIComponent(mac)}/ping/stream`;
+}
+
 /// Set (or clear, with null/empty) a device's user description. Returns the
 /// updated row.
 export function saveDeviceDescription(mac: string, description: string | null): Promise<Device> {

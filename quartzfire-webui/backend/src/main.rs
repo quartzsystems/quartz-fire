@@ -102,6 +102,7 @@ async fn main() -> Result<()> {
             get(monitoring::detail).patch(monitoring::patch),
         )
         .route("/api/monitoring/devices/:mac/ping", post(monitoring::ping))
+        .route("/api/monitoring/devices/:mac/ping/stream", get(monitoring::ping_stream))
         .route("/api/ips/status", get(ips::status))
         .route("/api/ips/settings", put(ips::put_settings))
         .route("/api/ips/update", post(ips::request_update))

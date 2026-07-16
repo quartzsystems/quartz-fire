@@ -69,7 +69,9 @@ export function TopApplicationsTile() {
       {empty ? (
         <div className="flex-1 grid place-items-center text-[12px] text-[var(--qz-fg-4)]">{empty}</div>
       ) : (
-        <div className="flex-1 min-h-0">
+        // Stretch the donut to the tile's full remaining height (the donut
+        // scales to its box); without this it collapses to its min size.
+        <div className="flex-1 min-h-0 flex flex-col [&>*]:flex-1 [&>*]:min-h-0">
           <TopAppsDonut apps={apps} totalBytes={totalBytes} />
         </div>
       )}

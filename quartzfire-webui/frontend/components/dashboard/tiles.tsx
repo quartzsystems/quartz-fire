@@ -39,7 +39,7 @@ export const TILE_REGISTRY: Record<string, TileDef> = {
   },
   "network-speed": {
     type: "network-speed",
-    title: "Network Speed",
+    title: "Network Usage",
     defaultW: 2,
     defaultH: 5,
     minW: 2,

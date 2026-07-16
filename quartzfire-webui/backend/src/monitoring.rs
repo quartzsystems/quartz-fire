@@ -22,12 +22,22 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use std::convert::Infallible;
+use std::process::Stdio;
+
 use axum::{
     extract::{Path as AxumPath, Query, State},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        IntoResponse, Response,
+    },
     Json,
 };
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
+use tokio_stream::{wrappers::LinesStream, StreamExt};
 
 use crate::error::{AppError, Result};
 use crate::AppState;
@@ -516,15 +526,15 @@ pub async fn patch(
 
 // ── POST /api/monitoring/devices/{mac}/ping ─────────────────────────────────
 
-/// Fire a short ICMP burst at the client's IPv4 and summarize it. The `ping`
-/// binary carries `cap_net_raw`, so the unprivileged backend can run it. The
-/// target is read from the DB and revalidated as IPv4 before it reaches the
-/// command line, so nothing user-controlled is passed to the shell.
-pub async fn ping(
-    State(state): State<Arc<AppState>>,
-    AxumPath(mac): AxumPath<String>,
-) -> Result<Json<PingResult>> {
-    let mac = normalize_mac(&mac)?;
+/// Echo requests a ping run sends (one-shot and streaming alike). Paced at one
+/// per second, so a run lasts about this many seconds.
+const PING_COUNT: u32 = 10;
+
+/// Look up the client's current IPv4 from the inventory and revalidate it as an
+/// IPv4 literal before it can reach the `ping` command line — nothing
+/// user-controlled is ever passed to the process.
+async fn resolve_ping_target(state: &Arc<AppState>, mac: &str) -> Result<String> {
+    let mac = normalize_mac(mac)?;
     let db_path = state.config.devices_db_file.clone();
 
     let ip: String = tokio::task::spawn_blocking(move || -> anyhow::Result<Option<String>> {
@@ -542,14 +552,24 @@ pub async fn ping(
     .map_err(AppError::Internal)?
     .ok_or_else(|| AppError::BadRequest("this client has no known IPv4 address to ping".into()))?;
 
-    // Revalidate before spawning: only a real IPv4 literal reaches `ping`.
     if ip.parse::<std::net::Ipv4Addr>().is_err() {
         return Err(AppError::BadRequest(format!("{ip:?} is not a pingable IPv4 address")));
     }
+    Ok(ip)
+}
 
-    let out = tokio::process::Command::new("ping")
-        .args(["-n", "-c", "10", "-w", "6", &ip])
-        .stdin(std::process::Stdio::null())
+/// Fire a short ICMP burst at the client's IPv4 and summarize it. The `ping`
+/// binary carries `cap_net_raw`, so the unprivileged backend can run it. Used
+/// as a non-streaming fallback; the UI drives the streaming variant below.
+pub async fn ping(
+    State(state): State<Arc<AppState>>,
+    AxumPath(mac): AxumPath<String>,
+) -> Result<Json<PingResult>> {
+    let ip = resolve_ping_target(&state, &mac).await?;
+
+    let out = Command::new("ping")
+        .args(["-n", "-c", &PING_COUNT.to_string(), "-w", "12", &ip])
+        .stdin(Stdio::null())
         .output()
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!("cannot run ping: {e}")))?;
@@ -620,6 +640,78 @@ fn parse_ping(target: &str, text: &str) -> PingResult {
     }
 
     PingResult { target: target.to_string(), transmitted, received, loss_pct, avg_ms, samples }
+}
+
+// ── GET /api/monitoring/devices/{mac}/ping/stream ───────────────────────────
+
+/// Run the same ICMP burst as `ping`, but stream each reply/timeout to the
+/// browser over SSE as it happens so the UI can plot latency live and advance a
+/// `k/N` progress counter. Events are JSON, one of:
+///
+/// ```text
+/// {"kind":"start","target":"10.0.0.5","count":10}
+/// {"kind":"reply","seq":1,"ms":0.234}
+/// {"kind":"timeout","seq":2}
+/// ```
+///
+/// `-O` makes `ping` print a "no answer yet for icmp_seq=N" line per lost
+/// packet, so losses stream in real time too — a run that gets neither replies
+/// nor timeouts is one `ping` could not start (the client treats that as an
+/// error). The client derives the final loss/latency summary from the events.
+pub async fn ping_stream(
+    State(state): State<Arc<AppState>>,
+    AxumPath(mac): AxumPath<String>,
+) -> Result<Response> {
+    let ip = resolve_ping_target(&state, &mac).await?;
+
+    let mut child = Command::new("ping")
+        .args(["-n", "-O", "-c", &PING_COUNT.to_string(), "-i", "1", "-W", "1", &ip])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("cannot run ping: {e}")))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("ping produced no output")))?;
+
+    // The filter_map closure owns the child, keeping ping alive for as long as
+    // the browser reads; on disconnect the stream drops and kill_on_drop reaps.
+    let body = LinesStream::new(BufReader::new(stdout).lines()).filter_map(move |line| {
+        let _keep_child_alive = &child;
+        let data = ping_line_event(&line.ok()?)?;
+        Some(Ok::<Event, Infallible>(Event::default().data(data)))
+    });
+
+    // Lead with the target + count so the UI can render "0 / N" immediately,
+    // before the first reply (iputils paces the first echo one interval in).
+    let start =
+        serde_json::json!({ "kind": "start", "target": ip, "count": PING_COUNT }).to_string();
+    let stream = tokio_stream::once(Ok(Event::default().data(start))).chain(body);
+
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()).into_response())
+}
+
+/// Map one line of `ping -O` output to an SSE event payload, or None for lines
+/// that are neither a reply nor a per-packet timeout (banner, stats, rtt).
+fn ping_line_event(line: &str) -> Option<String> {
+    let line = line.trim();
+    // "no answer yet for icmp_seq=2"
+    if let Some(seq) = line.strip_prefix("no answer yet for icmp_seq=") {
+        let seq: u32 = seq.trim().parse().ok()?;
+        return Some(serde_json::json!({ "kind": "timeout", "seq": seq }).to_string());
+    }
+    // "64 bytes from 10.0.0.5: icmp_seq=1 ttl=63 time=0.234 ms"
+    if let (Some(si), Some(ti)) = (line.find("icmp_seq="), line.find("time=")) {
+        let seq: u32 = line[si + 9..].split_whitespace().next()?.parse().ok()?;
+        let num: String =
+            line[ti + 5..].chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+        let ms: f64 = num.parse().ok()?;
+        return Some(serde_json::json!({ "kind": "reply", "seq": seq, "ms": ms }).to_string());
+    }
+    None
 }
 
 // ── row mapping + helpers ───────────────────────────────────────────────────
@@ -731,6 +823,20 @@ PING 10.0.0.9 (10.0.0.9) 56(84) bytes of data.
         assert_eq!(r.loss_pct, 100.0);
         assert_eq!(r.avg_ms, None);
         assert!(r.samples.is_empty());
+    }
+
+    #[test]
+    fn ping_line_events() {
+        // A reply carries seq + rtt.
+        let ev = ping_line_event("64 bytes from 10.0.0.5: icmp_seq=3 ttl=63 time=0.234 ms").unwrap();
+        assert_eq!(ev, r#"{"kind":"reply","ms":0.234,"seq":3}"#);
+        // `-O` emits a per-packet timeout line.
+        let ev = ping_line_event("no answer yet for icmp_seq=2").unwrap();
+        assert_eq!(ev, r#"{"kind":"timeout","seq":2}"#);
+        // Banner / stats / rtt lines are not events.
+        assert!(ping_line_event("PING 10.0.0.5 (10.0.0.5) 56(84) bytes of data.").is_none());
+        assert!(ping_line_event("10 packets transmitted, 8 received, 20% packet loss").is_none());
+        assert!(ping_line_event("rtt min/avg/max/mdev = 0.201/0.245/0.300/0.030 ms").is_none());
     }
 
     #[test]

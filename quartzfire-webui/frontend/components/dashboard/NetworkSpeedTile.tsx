@@ -250,7 +250,7 @@ export function NetworkSpeedTile() {
         <div className="flex items-center gap-[9px] min-w-0">
           <Gauge size={18} className="text-[var(--qz-accent)]" />
           <h2 className="text-[16px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.01em" }}>
-            Network Speed
+            Network Usage
           </h2>
           {names.length > 0 && (
             <div
