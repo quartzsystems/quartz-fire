@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Plus, RotateCw, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Plus, RotateCw, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
@@ -36,6 +36,8 @@ function DeleteAction({ label, onDelete }: { label: string; onDelete: () => Prom
         <>
           <button
             type="button"
+            title="Confirm delete"
+            aria-label="Confirm delete"
             disabled={working}
             onClick={async () => {
               setWorking(true);
@@ -46,18 +48,20 @@ function DeleteAction({ label, onDelete }: { label: string; onDelete: () => Prom
                 setConfirming(false);
               }
             }}
-            className="text-[12px] font-semibold px-[10px] py-[5px] rounded cursor-pointer border-0 disabled:opacity-60"
+            className="grid place-items-center w-7 h-7 rounded-md border-0 cursor-pointer disabled:opacity-60"
             style={{ background: "var(--qz-danger)", color: "white" }}
           >
-            {working ? "…" : "Confirm"}
+            <Check size={14} />
           </button>
           <button
             type="button"
+            title="Cancel"
+            aria-label="Cancel"
             onClick={() => setConfirming(false)}
-            className="text-[12px] px-[10px] py-[5px] rounded cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-3)" }}
+            className="grid place-items-center w-7 h-7 rounded-md cursor-pointer text-[var(--qz-fg-3)] hover:text-[var(--qz-fg-1)]"
+            style={{ background: "transparent", border: "1px solid var(--qz-border)" }}
           >
-            Cancel
+            <X size={14} />
           </button>
         </>
       ) : (
@@ -113,6 +117,12 @@ function AddEntryModal({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Interfaces already added can't be picked again — drop them from the list.
+  const available = useMemo(
+    () => interfaces.filter((n) => !existing.includes(n)),
+    [interfaces, existing],
+  );
+
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
@@ -142,26 +152,40 @@ function AddEntryModal({
     <ModalShell onClose={onClose} maxWidth={440}>
       <ModalHeader title={meta.title} subtitle="DHCP relay" onClose={onClose} />
       <form onSubmit={submit} className="flex flex-col gap-4">
-        {kind === "interface" && (
-          <datalist id="dhcp-relay-interfaces">
-            {interfaces.map((n) => (
-              <option key={n} value={n} label={descriptions?.[n]} />
-            ))}
-          </datalist>
-        )}
         <div>
           <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{meta.label}</label>
-          <input
-            list={kind === "interface" ? "dhcp-relay-interfaces" : undefined}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder={meta.placeholder}
-            autoFocus
-            className="w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none"
-            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)", fontFamily: "var(--qz-font-mono)" }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
-            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
-          />
+          {kind === "interface" ? (
+            <select
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              autoFocus
+              disabled={available.length === 0}
+              className="w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)", fontFamily: "var(--qz-font-mono)" }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
+            >
+              <option value="">
+                {available.length === 0 ? "All interfaces already added" : "Select an interface…"}
+              </option>
+              {available.map((n) => (
+                <option key={n} value={n}>
+                  {descriptions?.[n] ? `${n} — ${descriptions[n]}` : n}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={meta.placeholder}
+              autoFocus
+              className="w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none"
+              style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)", fontFamily: "var(--qz-font-mono)" }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
+            />
+          )}
           <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{meta.hint}</p>
         </div>
 

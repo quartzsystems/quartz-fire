@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Check, Pencil, Trash2, X } from "lucide-react";
 
 /// Per-row edit/delete for the config tables. Delete asks for inline
 /// confirmation before applying.
@@ -24,6 +24,8 @@ export function RowActions({
         <>
           <button
             type="button"
+            title="Confirm delete"
+            aria-label="Confirm delete"
             disabled={working}
             onClick={async () => {
               setWorking(true);
@@ -34,18 +36,20 @@ export function RowActions({
                 setConfirming(false);
               }
             }}
-            className="text-[12px] font-semibold px-[10px] py-[5px] rounded cursor-pointer border-0 disabled:opacity-60"
+            className="grid place-items-center w-7 h-7 rounded-md border-0 cursor-pointer disabled:opacity-60"
             style={{ background: "var(--qz-danger)", color: "white" }}
           >
-            {working ? "…" : "Confirm"}
+            <Check size={14} />
           </button>
           <button
             type="button"
+            title="Cancel"
+            aria-label="Cancel"
             onClick={() => setConfirming(false)}
-            className="text-[12px] px-[10px] py-[5px] rounded cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-3)" }}
+            className="grid place-items-center w-7 h-7 rounded-md cursor-pointer text-[var(--qz-fg-3)] hover:text-[var(--qz-fg-1)]"
+            style={{ background: "transparent", border: "1px solid var(--qz-border)" }}
           >
-            Cancel
+            <X size={14} />
           </button>
         </>
       ) : (
