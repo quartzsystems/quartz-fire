@@ -53,6 +53,7 @@ const ITEMS: NavItem[] = [
     href: "/firewall",
     children: [
       { id: "rules",    label: "Rules",    href: "/firewall/rules",    icon: ListOrdered },
+      { id: "zones",    label: "Zones",    href: "/firewall/zones",    icon: Share2 },
       { id: "policies", label: "Policies", href: "/firewall/policies", icon: Boxes },
       { id: "aliases",  label: "Aliases",  href: "/firewall/aliases",  icon: BookMarked },
       { id: "monitor",  label: "Traffic Monitor", href: "/firewall/monitor", icon: Activity },

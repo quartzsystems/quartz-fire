@@ -8,11 +8,17 @@
 //!     TOS=0x00 TTL=63 DF PROTO=TCP SPT=51000 DPT=443 SYN URGP=0
 //! ```
 //!
-//! (`default-log` hits use `default` in place of the rule number.) This module
-//! follows the kernel journal with `journalctl -k -f -o json`, parses those
-//! lines, and pushes them to the browser as Server-Sent Events. The service
-//! user must be able to read the journal — the systemd unit grants this via
-//! `SupplementaryGroups=systemd-journal`.
+//! (`default-log` hits use `default` in place of the rule number.) Zone rules
+//! live in a named ruleset rather than a base chain, and log as
+//!
+//! ```text
+//! [ipv4-NAM-QZ-Z-LAN-TO-WAN-10-A]IN=eth1 OUT=eth0 SRC=…
+//! ```
+//!
+//! This module follows the kernel journal with `journalctl -k -f -o json`,
+//! parses those lines, and pushes them to the browser as Server-Sent Events.
+//! The service user must be able to read the journal — the systemd unit grants
+//! this via `SupplementaryGroups=systemd-journal`.
 
 use axum::{
     http::StatusCode,
@@ -204,11 +210,17 @@ fn parse_message(msg: &str, ts: u64) -> Option<LogEntry> {
     if family != "ipv4" && family != "ipv6" {
         return None;
     }
-    // Only the base chains the GUI models; named/NAT chains are not ours.
+    // The base chains the GUI models, plus the named rulesets holding zone
+    // rules. `NAM` lines carry the ruleset name in the middle segment, which is
+    // exactly the `name:<ruleset>` scope the frontend keys rules by — a zone
+    // pair's ruleset (QZ-Z-LAN-TO-WAN) contains '-', hence the rejoin. Other
+    // named/NAT chains are not ours, but they're indistinguishable here, so
+    // they surface as scopes the frontend simply won't match to a rule.
     let chain = match parts[1] {
-        "FWD" => "forward",
-        "INP" => "input",
-        "OUT" => "output",
+        "FWD" => "forward".to_string(),
+        "INP" => "input".to_string(),
+        "OUT" => "output".to_string(),
+        "NAM" => format!("name:{}", parts[2..parts.len() - 2].join("-")),
         _ => return None,
     };
     // The letter is the first character of the rule's action. Rules with IPS
@@ -226,7 +238,7 @@ fn parse_message(msg: &str, ts: u64) -> Option<LogEntry> {
     let mut e = LogEntry {
         ts,
         family: family.to_string(),
-        chain: chain.to_string(),
+        chain,
         rule,
         action: action.to_string(),
         ips,
@@ -289,6 +301,35 @@ mod tests {
         assert_eq!(e.rule, Some(10));
         assert_eq!(e.action, "accept");
         assert!(e.ips);
+    }
+
+    #[test]
+    fn parses_zone_rule_in_named_ruleset() {
+        // Zone rules live in `firewall ipv4 name <ruleset>`, which logs with the
+        // NAM hook. The scope must come out as the `name:<ruleset>` key the
+        // frontend builds, and the ruleset's own hyphens must survive.
+        let e = parse_message(
+            "[ipv4-NAM-QZ-Z-LAN-TO-WAN-10-A]IN=eth1 OUT=eth0 SRC=10.0.0.5 DST=1.1.1.1 LEN=60 \
+             PROTO=TCP SPT=51000 DPT=443 SYN URGP=0",
+            1,
+        )
+        .expect("should parse");
+        assert_eq!(e.chain, "name:QZ-Z-LAN-TO-WAN");
+        assert_eq!(e.rule, Some(10));
+        assert_eq!(e.action, "accept");
+    }
+
+    #[test]
+    fn parses_zone_default_action_drop() {
+        let e = parse_message(
+            "[ipv4-NAM-QZ-Z-WAN-TO-LAN-default-D]IN=eth0 OUT=eth1 SRC=192.0.2.9 DST=10.0.0.5 LEN=40 \
+             PROTO=TCP SPT=55555 DPT=23",
+            1,
+        )
+        .expect("should parse");
+        assert_eq!(e.chain, "name:QZ-Z-WAN-TO-LAN");
+        assert_eq!(e.rule, None);
+        assert_eq!(e.action, "drop");
     }
 
     #[test]

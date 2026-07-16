@@ -15,6 +15,7 @@
 // together. Application Control is a separate, non-guarded backend PUT.
 
 import {
+  BaseChain,
   diffRule,
   EndpointSelection,
   FirewallConfig,
@@ -138,7 +139,7 @@ function sslCommands(
 function geoCommands(
   live: GeolocationConfig,
   removeRules: number[],
-  chain: RuleChain,
+  chain: BaseChain,
   add: { rule: number; action: string; direction: GeoDirection } | null,
 ): VyosCommand[] {
   const out: VyosCommand[] = [];
@@ -197,12 +198,14 @@ function nextAcConfig(
   return { next: { ...live, bindings }, changed };
 }
 
-/// Effective chain a rule with these sides lands in — forward unless a Firewall
-/// endpoint steers it into input/output. Falls back to forward if both sides are
-/// Firewall (diffRule rejects that at apply time with a clear error).
-function effectiveChain(u: RuleUpdate): RuleChain {
+/// Effective scope a rule with these sides lands in — forward unless a Firewall
+/// endpoint steers it into input/output, or a zone pair puts it in that pair's
+/// ruleset. Falls back to forward for a selection diffRule will reject anyway
+/// (both sides Firewall, a zone on one side only), which it reports with a
+/// clear error at apply time.
+function effectiveChain(u: RuleUpdate, cfg: FirewallConfig): RuleChain {
   try {
-    return ruleChainFor(u.from, u.to);
+    return ruleChainFor(u.from, u.to, cfg.zones);
   } catch {
     return "forward";
   }
@@ -220,7 +223,7 @@ export async function applyRuleAndServices(
   cfgs: RuleServiceConfigs,
   desired: RuleServiceState,
 ): Promise<number> {
-  const chain = effectiveChain(ruleUpdate);
+  const chain = effectiveChain(ruleUpdate, fwConfig);
   // diffRule renumbers a rule that changes chain — mirror that so the bindings
   // key onto the number the rule actually lands at, and clean up the old one.
   const chainChanged = live != null && live.chain !== chain;
@@ -228,11 +231,15 @@ export async function applyRuleAndServices(
   const removeRules = live && live.rule !== rule ? [live.rule] : [];
 
   // Services bind forward Allow rules only; anything else detaches whatever was
-  // there (the caller already forces `desired` empty when ineligible).
-  const sslAdd = chain === "forward" && desired.ssl !== "off" ? { rule, action: desired.ssl } : null;
-  const geoAdd = desired.geo
-    ? { rule, action: desired.geo.action, direction: desired.geo.direction }
-    : null;
+  // there (the caller already forces `desired` empty when ineligible). Zone
+  // rules are never eligible: qzgeo can only target `firewall ipv4 <chain>
+  // filter`, and an App Control binding is keyed by forward rule number.
+  const onForward = chain === "forward";
+  const sslAdd = onForward && desired.ssl !== "off" ? { rule, action: desired.ssl } : null;
+  const geoAdd =
+    onForward && desired.geo
+      ? { rule, action: desired.geo.action, direction: desired.geo.direction }
+      : null;
 
   // App Control (non-guarded PUT) is validated first so a ceiling breach aborts
   // before we commit any firewall change.
@@ -242,14 +249,17 @@ export async function applyRuleAndServices(
     rule,
     ruleUpdate.name ?? `forward rule ${rule}`,
     acMatchFromSelections(ruleUpdate.from, ruleUpdate.to),
-    chain === "forward" ? desired.appcontrol : null,
+    onForward ? desired.appcontrol : null,
   );
   if ("error" in acResult) throw new Error(acResult.error);
 
   const cmds: VyosCommand[] = [
     ...diffRule(live, ruleUpdate, fwConfig),
     ...sslCommands(cfgs.ssl, [rule, ...removeRules], sslAdd),
-    ...geoCommands(cfgs.geo, [rule, ...removeRules], chain, geoAdd),
+    // Geolocation only ever attaches to forward rules (geoAdd is null for any
+    // other scope), so forward is the only chain this can bind to — for a
+    // non-forward rule the call just detaches stale policies by rule number.
+    ...geoCommands(cfgs.geo, [rule, ...removeRules], "forward", geoAdd),
   ];
 
   const applied = await guardedCommitAndSave(cmds, "Firewall rule change");

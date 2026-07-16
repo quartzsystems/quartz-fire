@@ -59,6 +59,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 const aliasKey = (type: AliasType, name: string) => `alias:${type}:${name}`;
 const ifaceKey = (name: string) => `iface:${name}`;
+const zoneKey = (name: string) => `zone:${name}`;
 const FIREWALL_KEY = "builtin:firewall";
 
 const INLINE_PLACEHOLDER: Record<AliasType, string> = {
@@ -85,12 +86,15 @@ function entryLabel(
   e: EndpointEntry,
   descriptions: Record<string, string> | undefined,
   aliases: FirewallConfig["aliases"],
+  zones: FirewallConfig["zones"] = [],
 ): { main: string; sub: string } {
   switch (e.kind) {
     case "alias": {
       const display = aliases.find((a) => a.type === e.type && a.name === e.name)?.display ?? e.name;
       return { main: display, sub: ALIAS_GROUP[e.type].label };
     }
+    case "zone":
+      return { main: zones.find((z) => z.name === e.name)?.display ?? e.name, sub: "Zone" };
     case "interface": {
       const desc = descriptions?.[e.name];
       return desc ? { main: desc, sub: `${e.name} · Interface` } : { main: e.name, sub: "Interface" };
@@ -121,6 +125,7 @@ function EndpointField({
   interfaces,
   descriptions,
   aliases,
+  zones,
   allowFirewall,
   value,
   onChange,
@@ -129,6 +134,7 @@ function EndpointField({
   interfaces: string[];
   descriptions?: Record<string, string>;
   aliases: FirewallConfig["aliases"];
+  zones: FirewallConfig["zones"];
   /** False when the other side already carries the Firewall entry. */
   allowFirewall: boolean;
   value: EndpointSelection;
@@ -136,6 +142,7 @@ function EndpointField({
 }) {
   const hasIface = value.some((e) => e.kind === "interface" || e.kind === "ifgroup");
   const hasFirewall = value.some((e) => e.kind === "firewall");
+  const hasZone = value.some((e) => e.kind === "zone");
   const aliasEntries = value.filter((e) => e.kind === "alias");
   const inlineEntries = value.filter((e) => e.kind === "inline");
   // Aliases and inline values share one family per side (they end up in one
@@ -144,8 +151,11 @@ function EndpointField({
   // A legacy entry can't be OR-combined with anything — matches would AND.
   const hasLegacy = value.some((e) => e.kind === "ifgroup" || e.kind === "address");
 
+  // A zone is an interface set, so the two can't be OR'd — the zone already
+  // decides which interfaces match. Aliases can join a zone though: the zone
+  // picks the ruleset, the alias narrows the match inside it.
   const addableIfaces =
-    familyType || hasLegacy || hasFirewall
+    familyType || hasLegacy || hasFirewall || hasZone
       ? []
       : interfaces.filter((n) => !value.some((e) => e.kind === "interface" && e.name === n));
   const addableAliases = hasIface || hasLegacy || hasFirewall
@@ -157,21 +167,27 @@ function EndpointField({
         return true;
       });
   const firewallAddable = allowFirewall && value.length === 0;
+  // One zone per side: a rule belongs to exactly one zone pair. The local zone
+  // isn't offered — it's the box itself, which the Firewall entry already says.
+  const addableZones = hasIface || hasLegacy || hasFirewall || hasZone ? [] : zones.filter((z) => !z.local);
 
   // Inline values can join anything in the same family; an FQDN *alias*
   // blocks further FQDN entries (its domain group can't be included).
   const inlineAllowed =
     !hasIface && !hasLegacy && !hasFirewall && !(familyType === "fqdn" && aliasEntries.length > 0);
+
   const inlineTypes: AliasType[] = familyType ? [familyType] : ["host", "network", "fqdn"];
   const [inlineType, setInlineType] = useState<AliasType>("host");
   const [inlineValue, setInlineValue] = useState("");
   const [inlineError, setInlineError] = useState("");
   const effInlineType = inlineTypes.includes(inlineType) ? inlineType : inlineTypes[0];
 
-  const canAdd = addableIfaces.length > 0 || addableAliases.length > 0 || firewallAddable;
+  const canAdd =
+    addableIfaces.length > 0 || addableAliases.length > 0 || addableZones.length > 0 || firewallAddable;
 
   const add = (v: string) => {
     if (v === FIREWALL_KEY) onChange([...value, { kind: "firewall" }]);
+    else if (v.startsWith("zone:")) onChange([...value, { kind: "zone", name: v.slice("zone:".length) }]);
     else if (v.startsWith("iface:")) onChange([...value, { kind: "interface", name: v.slice("iface:".length) }]);
     else if (v.startsWith("alias:")) {
       const [, type, ...rest] = v.split(":");
@@ -205,7 +221,7 @@ function EndpointField({
           <div className="flex items-center justify-center h-[96px] text-[13px] text-[var(--qz-fg-4)]">Any</div>
         ) : (
           value.map((e, i) => {
-            const { main, sub } = entryLabel(e, descriptions, aliases);
+            const { main, sub } = entryLabel(e, descriptions, aliases, zones);
             return (
               <div
                 key={`${e.kind}:${main}:${i}`}
@@ -242,6 +258,15 @@ function EndpointField({
         {firewallAddable && (
           <optgroup label="Built-in">
             <option value={FIREWALL_KEY}>Firewall — this device itself</option>
+          </optgroup>
+        )}
+        {addableZones.length > 0 && (
+          <optgroup label="Zones">
+            {addableZones.map((z) => (
+              <option key={zoneKey(z.name)} value={zoneKey(z.name)}>
+                {z.display}
+              </option>
+            ))}
           </optgroup>
         )}
         {addableIfaces.length > 0 && (
@@ -403,14 +428,14 @@ export function RuleFormModal({
 
   // Services attach only to forward Allow rules (matching the SSL / App Control
   // Policies tabs). A Firewall-endpoint side steers the rule out of the forward
-  // chain, so it's ineligible too.
+  // chain, and a zone puts it in that pair's ruleset, so both are ineligible.
   const chain = useMemo<RuleChain>(() => {
     try {
-      return ruleChainFor(from, to);
+      return ruleChainFor(from, to, config.zones);
     } catch {
       return "forward";
     }
-  }, [from, to]);
+  }, [from, to, config.zones]);
   const servicesEligible = action === "accept" && chain === "forward";
 
   const geoActions = svcConfigs?.geo.actions ?? [];
@@ -515,6 +540,7 @@ export function RuleFormModal({
             interfaces={interfaces}
             descriptions={descriptions}
             aliases={aliases}
+            zones={config.zones}
             allowFirewall={!to.some((e) => e.kind === "firewall")}
             value={from}
             onChange={setFrom}
@@ -524,6 +550,7 @@ export function RuleFormModal({
             interfaces={interfaces}
             descriptions={descriptions}
             aliases={aliases}
+            zones={config.zones}
             allowFirewall={!from.some((e) => e.kind === "firewall")}
             value={to}
             onChange={setTo}

@@ -24,6 +24,7 @@ const ACTIONS: PaletteAction[] = [
   { id: "nav-nat-nat44",  section: "Go to", label: "NAT › NAT44", kbd: "", href: "/nat/nat44" },
   { id: "nav-firewall",   section: "Go to", label: "Firewall",   kbd: "G F", href: "/firewall" },
   { id: "nav-fw-rules",    section: "Go to", label: "Firewall › Rules",    kbd: "", href: "/firewall/rules" },
+  { id: "nav-fw-zones",    section: "Go to", label: "Firewall › Zones",    kbd: "", href: "/firewall/zones" },
   { id: "nav-fw-policies", section: "Go to", label: "Firewall › Policies", kbd: "", href: "/firewall/policies" },
   { id: "nav-fw-aliases",  section: "Go to", label: "Firewall › Aliases",  kbd: "", href: "/firewall/aliases" },
   { id: "nav-fw-monitor",  section: "Go to", label: "Firewall › Traffic Monitor", kbd: "", href: "/firewall/monitor" },

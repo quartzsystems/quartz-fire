@@ -18,7 +18,7 @@
 import { apiFetch, vyosApi } from "./api";
 import { VyosCommand, VyosResponse } from "./interfaces";
 import { guardedCommitAndSave } from "./guard";
-import type { RuleChain } from "./firewall";
+import type { BaseChain } from "./firewall";
 
 /// Geolocation can drop the operator's own traffic (e.g. blocking the country
 /// the admin sits in on an input-chain rule), so writes commit under
@@ -55,7 +55,7 @@ export interface GeoAction {
 export interface GeoPolicy {
   id: number;
   action: string;
-  ruleset: RuleChain;
+  ruleset: BaseChain;
   rule: number;
   direction: GeoDirection;
   enabled: boolean;
@@ -100,7 +100,12 @@ const asMode = (v: string | null): GeoMode | null =>
 const asDirection = (v: string | null): GeoDirection =>
   v === "source" || v === "destination" || v === "both" ? v : "both";
 
-const asRuleset = (v: string | null): RuleChain =>
+/// Geolocation policies can only target a base chain — never a zone rule. The
+/// qzgeo binary reads its target as `firewall ipv4 <ruleset> filter rule <n>`
+/// and rejects anything but forward/input/output (see quartzfire-geoip
+/// src/model.rs), so a zone pair's ruleset has nowhere to go here. The rule
+/// picker filters zone rules out; this collapses anything unexpected.
+const asRuleset = (v: string | null): BaseChain =>
   v === "input" || v === "output" ? v : "forward";
 
 export async function fetchGeolocation(): Promise<GeolocationConfig> {
@@ -252,7 +257,7 @@ export const policyBase = (id: number) => ["service", "geolocation", "policy", S
 export interface GeoPolicyUpdate {
   id: number;
   action: string;
-  ruleset: RuleChain;
+  ruleset: BaseChain;
   rule: number;
   direction: GeoDirection;
   enabled: boolean;

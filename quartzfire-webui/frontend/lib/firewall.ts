@@ -132,13 +132,92 @@ export const BUILTIN_POLICIES: Record<string, { protocol: PolicyProtocol; ports:
 
 export type RuleAction = "accept" | "drop" | "reject";
 
+/// What a zone does with traffic no rule matched, and with traffic between
+/// members of the zone itself. VyOS has no `accept` default-action for zones —
+/// a zone always denies what its pair rulesets don't allow.
+export type ZoneDefaultAction = "drop" | "reject";
+
+/// A firewall zone — a named group of interfaces, with the rules between any
+/// two zones living in that pair's ruleset (see zoneRuleChain).
+///
+/// Stored as native `firewall zone <name>` config:
+///   member interface <if>     the zone's interfaces
+///   local-zone                the firewall itself (no members; at most one)
+///   default-action            what unmatched traffic INTO this zone gets
+///   intra-zone-filtering      what traffic between the zone's own members gets
+///
+/// Friendly names go through the same `[dn:…]` description marker as aliases,
+/// because VyOS zone names can't contain spaces.
+export interface FirewallZone {
+  name: string;
+  /** Friendly name shown in the UI (may contain spaces) — see DN_MARK. */
+  display: string;
+  description: string | null;
+  /** The firewall itself. A local zone has no member interfaces, and there can
+   *  only be one — it backs the built-in Firewall endpoint. */
+  local: boolean;
+  interfaces: string[];
+  /** Unmatched traffic into the zone (null = not set; VyOS then drops). */
+  default_action: ZoneDefaultAction | null;
+  /** Whether default-action hits are logged (feeds the Traffic Monitor). */
+  default_log: boolean;
+  /** Traffic between the zone's own members (null = VyOS default, accept). */
+  intra_zone: RuleAction | null;
+}
+
+/// A zone pair and the ruleset holding its rules — one direction of traffic,
+/// `zone <dst> from <src> firewall name <ruleset>`. Traffic the other way is a
+/// separate pair with its own ruleset.
+export interface ZonePair {
+  src: string;
+  dst: string;
+  ruleset: string;
+}
+
+/// Ruleset name backing a zone pair. Auto-managed: created with the pair's
+/// first rule and removed with its last.
+export const pairRuleset = (src: string, dst: string) => `QZ-Z-${src}-TO-${dst}`;
+
 /// Base chain a rule lives in. Routed traffic uses forward; traffic addressed
 /// to the firewall itself only ever traverses input, and firewall-originated
 /// traffic output — so the built-in Firewall endpoint steers a rule into the
 /// matching chain.
-export type RuleChain = "forward" | "input" | "output";
+///
+/// This is the narrow union: features that can only ever target a base chain
+/// (geolocation, whose qzgeo binary hardcodes `firewall ipv4 <ruleset> filter`)
+/// take BaseChain, not RuleChain.
+export type BaseChain = "forward" | "input" | "output";
 
-const CHAIN_RANK: Record<RuleChain, number> = { forward: 0, input: 1, output: 2 };
+/// Where a rule lives. Either a base chain, or a named ruleset holding the
+/// rules of one zone pair (`name:<ruleset>` → `firewall ipv4 name <ruleset>`).
+///
+/// Zone rules can't live in a base chain: VyOS binds a zone pair to a named
+/// ruleset (`zone <dst> from <src> firewall name <ruleset>`) and jumps to it
+/// from the zone chains. Keeping the scope a plain string preserves the
+/// `${chain}:${rule}` key used by the cascade, the monitor, and the counters.
+export type RuleChain = BaseChain | `name:${string}`;
+
+/// The named ruleset a scope refers to, or null for a base chain.
+export function rulesetName(chain: RuleChain): string | null {
+  return chain.startsWith("name:") ? chain.slice("name:".length) : null;
+}
+
+/// Whether a scope is one of the three base chains (rather than a zone pair's
+/// ruleset) — the guard that lets base-chain-only code narrow.
+export function isBaseChain(chain: RuleChain): chain is BaseChain {
+  return !chain.startsWith("name:");
+}
+
+/// Scope holding the rules of a zone pair.
+export const zoneRuleChain = (ruleset: string): RuleChain => `name:${ruleset}`;
+
+const BASE_CHAIN_RANK: Record<BaseChain, number> = { forward: 0, input: 1, output: 2 };
+
+/// Sort rank — base chains first in forward/input/output order, then zone
+/// rulesets, so the merged Rules table stays stable.
+function chainRank(chain: RuleChain): number {
+  return rulesetName(chain) === null ? BASE_CHAIN_RANK[chain as BaseChain] : 3;
+}
 
 /// Auto-managed OR group backing a multi-entry From/To side.
 export interface AutoGroup {
@@ -231,8 +310,17 @@ export interface FirewallConfig {
   /** `firewall ipv4 forward filter default-action` (null = VyOS default). */
   default_action: string | null;
   /** Per-chain baseline/logging state (input/output back the built-in
-   *  Firewall endpoint; forward backs the traffic-monitor baseline). */
-  setup: Record<RuleChain, ChainSetup>;
+   *  Firewall endpoint; forward backs the traffic-monitor baseline). Keyed on
+   *  the base chains only — a zone pair's ruleset has no baseline of its own
+   *  (replies are handled globally, see ensureStatePolicy). */
+  setup: Record<BaseChain, ChainSetup>;
+  /** Configured zones (`firewall zone`), empty when zones aren't in use. */
+  zones: FirewallZone[];
+  /** Zone pairs and the rulesets holding their rules. */
+  zone_pairs: ZonePair[];
+  /** Whether `firewall global-options state-policy` accepts established and
+   *  related traffic — required for zones to pass reply packets. */
+  state_policy: boolean;
 }
 
 /// Empty config used as the initial page state before the first fetch.
@@ -246,6 +334,9 @@ export function emptyFirewallConfig(): FirewallConfig {
     group_names: [],
     default_action: null,
     setup: { forward: chain(), input: chain(), output: chain() },
+    zones: [],
+    zone_pairs: [],
+    state_policy: false,
   };
 }
 
@@ -411,6 +502,66 @@ function parsePolicies(group: Cfg): FirewallPolicy[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// ── zones ─────────────────────────────────────────────────────────────────────
+
+const asZoneDefault = (v: string | null): ZoneDefaultAction | null =>
+  v === "drop" || v === "reject" ? v : null;
+
+function parseZones(fw: Cfg): FirewallZone[] {
+  const zones = childCfg(fw, "zone") ?? {};
+  return Object.entries(zones)
+    .map(([name, raw]) => {
+      const cfg = (raw ?? {}) as Cfg;
+      const { display, description } = decodeAliasDescription(name, childStr(cfg, "description"));
+      return {
+        name,
+        display,
+        description,
+        local: "local-zone" in cfg,
+        interfaces: childList(childCfg(cfg, "member") ?? {}, "interface"),
+        default_action: asZoneDefault(childStr(cfg, "default-action")),
+        default_log: "default-log" in cfg,
+        intra_zone: asAction(childStr(childCfg(cfg, "intra-zone-filtering") ?? {}, "action")),
+      };
+    })
+    .sort((a, b) => a.display.localeCompare(b.display));
+}
+
+/// Every zone-pair binding in the config, as (src, dst) → ruleset name. Read
+/// from the `zone <dst> from <src> firewall name <ruleset>` nodes; the local
+/// zone is just a zone here, because VyOS synthesizes the from-local direction
+/// itself rather than exposing a separate node.
+function parseZonePairs(fw: Cfg): ZonePair[] {
+  const out: ZonePair[] = [];
+  for (const [dst, raw] of Object.entries(childCfg(fw, "zone") ?? {})) {
+    const from = childCfg((raw ?? {}) as Cfg, "from") ?? {};
+    for (const [src, fraw] of Object.entries(from)) {
+      const ruleset = childStr(childCfg((fraw ?? {}) as Cfg, "firewall") ?? {}, "name");
+      if (ruleset) out.push({ src, dst, ruleset });
+    }
+  }
+  return out;
+}
+
+/// The pair a rule's scope belongs to, or null when the scope is a base chain.
+export function pairForChain(pairs: ZonePair[], chain: RuleChain): ZonePair | null {
+  const name = rulesetName(chain);
+  return name === null ? null : pairs.find((p) => p.ruleset === name) ?? null;
+}
+
+
+/// Whether `firewall global-options state-policy` lets replies through. Zone
+/// chains hook at priority 1, after the base chains at priority 0 — a base
+/// chain's established/related accept only means "carry on to the zone chain",
+/// which has no state match of its own and would fall through to the zone's
+/// default-action. State policy is the global jump the zone chains make, and
+/// is what actually keeps reply traffic alive once zones are in use.
+function parseStatePolicy(fw: Cfg): boolean {
+  const sp = childCfg(childCfg(fw, "global-options") ?? {}, "state-policy") ?? {};
+  const action = (state: string) => childStr(childCfg(sp, state) ?? {}, "action");
+  return action("established") === "accept" && action("related") === "accept";
+}
+
 /// Group references a rule side can carry that the From/To model understands.
 const REF_NODES = ["address-group", "network-group", "domain-group"] as const;
 
@@ -489,26 +640,39 @@ function parseChain(filter: Cfg, chain: RuleChain): { rules: FirewallRule[]; set
   };
 }
 
-/// Configured aliases, policies, and filter rules (all three base chains),
-/// from the running config.
+/// Configured aliases, policies, zones, and filter rules — the three base
+/// chains plus every zone pair's named ruleset — from the running config.
 export async function fetchFirewall(): Promise<FirewallConfig> {
   const fw = await fetchFirewallConfig();
   const group = childCfg(fw, "group") ?? {};
   const ipv4 = childCfg(fw, "ipv4") ?? {};
-  const chainFilter = (chain: RuleChain) => childCfg(childCfg(ipv4, chain) ?? {}, "filter") ?? {};
+  const chainFilter = (chain: BaseChain) => childCfg(childCfg(ipv4, chain) ?? {}, "filter") ?? {};
   const forward = parseChain(chainFilter("forward"), "forward");
   const input = parseChain(chainFilter("input"), "input");
   const output = parseChain(chainFilter("output"), "output");
+
+  // Zone rules live in the named ruleset bound to their pair. Only rulesets a
+  // pair actually points at are read — a stray `firewall ipv4 name` written on
+  // the CLI isn't part of the zone model and stays invisible here.
+  const named = childCfg(ipv4, "name") ?? {};
+  const pairs = parseZonePairs(fw);
+  const zoneRules = [...new Set(pairs.map((p) => p.ruleset))].flatMap(
+    (ruleset) => parseChain(childCfg(named, ruleset) ?? {}, zoneRuleChain(ruleset)).rules,
+  );
+
   return {
     aliases: parseAliases(group),
     policies: parsePolicies(group),
-    rules: [...forward.rules, ...input.rules, ...output.rules].sort(
-      (a, b) => a.rule - b.rule || CHAIN_RANK[a.chain] - CHAIN_RANK[b.chain],
+    rules: [...forward.rules, ...input.rules, ...output.rules, ...zoneRules].sort(
+      (a, b) => a.rule - b.rule || chainRank(a.chain) - chainRank(b.chain),
     ),
     auto_groups: parseAutoGroups(group),
     group_names: parseGroupNames(group),
     default_action: forward.setup.default_action,
     setup: { forward: forward.setup, input: input.setup, output: output.setup },
+    zones: parseZones(fw),
+    zone_pairs: pairs,
+    state_policy: parseStatePolicy(fw),
   };
 }
 
@@ -678,9 +842,184 @@ export function deletePolicy(name: string): Promise<number> {
   return commitAndSave([{ op: "delete", path: policyBase(name) }]);
 }
 
+// ── writes: zones ─────────────────────────────────────────────────────────────
+
+const zoneBase = (name: string) => ["firewall", "zone", name];
+
+/// Desired zone. `original_name` identifies the zone being edited.
+export interface ZoneUpdate {
+  name: string;
+  /** Friendly name (may contain spaces) — stored via the [dn:…] marker. */
+  display: string;
+  description: string | null;
+  local: boolean;
+  interfaces: string[];
+  default_action: ZoneDefaultAction | null;
+  default_log: boolean;
+  intra_zone: RuleAction | null;
+  original_name: string | null;
+}
+
+/// The zone an interface already belongs to, or null. VyOS rejects a commit
+/// that puts one interface in two zones, so the form checks first.
+export function interfaceZone(zones: FirewallZone[], iface: string, exclude?: string | null): FirewallZone | null {
+  return zones.find((z) => z.name !== exclude && z.interfaces.includes(iface)) ?? null;
+}
+
+/// The configured local zone (the firewall itself), or null.
+export const localZone = (zones: FirewallZone[]): FirewallZone | null =>
+  zones.find((z) => z.local) ?? null;
+
+/// Validate a desired zone against the rules VyOS enforces at commit, so the
+/// form can say what's wrong instead of surfacing a commit failure. Returns an
+/// error message, or null when the zone is acceptable.
+export function validateZone(zones: FirewallZone[], u: ZoneUpdate): string | null {
+  if (!u.name.trim()) return "Enter a zone name.";
+  if (!/^[a-zA-Z0-9][\w\-.]*$/.test(u.name)) {
+    return "A zone name must start with a letter or digit, and use only letters, digits, hyphens, dots, or underscores.";
+  }
+  if (u.local) {
+    // A local zone is the firewall itself: it has no interfaces of its own, and
+    // there can only be one.
+    if (u.interfaces.length > 0) return "The Firewall zone can't have member interfaces.";
+    if (u.intra_zone !== null) return "The Firewall zone can't use intra-zone filtering.";
+    const other = zones.find((z) => z.local && z.name !== u.original_name);
+    if (other) return `There's already a Firewall zone (${other.display}). Only one is allowed.`;
+  } else {
+    if (u.interfaces.length === 0) return "Add at least one interface, or make this the Firewall zone.";
+    for (const iface of u.interfaces) {
+      const owner = interfaceZone(zones, iface, u.original_name);
+      if (owner) return `${iface} is already a member of ${owner.display}. An interface can only belong to one zone.`;
+    }
+  }
+  return null;
+}
+
+/// Seed `firewall global-options state-policy` so replies survive once zones
+/// are in use.
+///
+/// The zone chains hook at priority 1, i.e. after the base chains at priority
+/// 0. An `accept` in a base chain doesn't end evaluation — it only means "carry
+/// on to the next chain on this hook" — so the established/related baseline in
+/// the forward chain does NOT spare reply packets from the zone chains. A zone
+/// pair's ruleset matches only what its rules say, so without a global state
+/// match every reply would fall through to the zone's default-action and die.
+/// State policy is the jump the zone chains make for exactly this reason.
+function ensureStatePolicy(out: VyosCommand[], cfg: FirewallConfig): void {
+  if (cfg.state_policy) return;
+  const sp = ["firewall", "global-options", "state-policy"];
+  out.push({ op: "set", path: [...sp, "established", "action", "accept"] });
+  out.push({ op: "set", path: [...sp, "related", "action", "accept"] });
+}
+
+export function diffZone(cfg: FirewallConfig, u: ZoneUpdate): VyosCommand[] {
+  const err = validateZone(cfg.zones, u);
+  if (err) throw new Error(err);
+
+  const out: VyosCommand[] = [];
+  const moved = u.original_name !== null && u.original_name !== u.name;
+  if (moved) out.push({ op: "delete", path: zoneBase(u.original_name!) });
+
+  const live = moved ? null : cfg.zones.find((z) => z.name === u.name) ?? null;
+  const base = zoneBase(u.name);
+  const body: VyosCommand[] = [];
+
+  const newDesc = encodeAliasDescription(u.name, u.display, u.description);
+  const liveDesc = live ? encodeAliasDescription(live.name, live.display, live.description) : null;
+  if (newDesc !== liveDesc) {
+    if (newDesc !== null) body.push({ op: "set", path: [...base, "description", newDesc] });
+    else body.push({ op: "delete", path: [...base, "description"] });
+  }
+
+  if (u.local !== (live?.local ?? false)) {
+    if (u.local) body.push({ op: "set", path: [...base, "local-zone"] });
+    else body.push({ op: "delete", path: [...base, "local-zone"] });
+  }
+
+  // Interfaces hang off the `member` container — NOT directly under the zone.
+  const liveIfaces = live?.interfaces ?? [];
+  const newIfaces = u.interfaces.map((i) => i.trim()).filter(Boolean);
+  for (const i of newIfaces) {
+    if (!liveIfaces.includes(i)) body.push({ op: "set", path: [...base, "member", "interface", i] });
+  }
+  for (const i of liveIfaces) {
+    if (!newIfaces.includes(i)) body.push({ op: "delete", path: [...base, "member", "interface", i] });
+  }
+
+  if (u.default_action !== (live?.default_action ?? null)) {
+    if (u.default_action !== null) body.push({ op: "set", path: [...base, "default-action", u.default_action] });
+    else body.push({ op: "delete", path: [...base, "default-action"] });
+  }
+
+  if (u.default_log !== (live?.default_log ?? false)) {
+    if (u.default_log) body.push({ op: "set", path: [...base, "default-log"] });
+    else body.push({ op: "delete", path: [...base, "default-log"] });
+  }
+
+  if (u.intra_zone !== (live?.intra_zone ?? null)) {
+    if (u.intra_zone !== null) {
+      body.push({ op: "set", path: [...base, "intra-zone-filtering", "action", u.intra_zone] });
+    } else body.push({ op: "delete", path: [...base, "intra-zone-filtering"] });
+  }
+
+  // A new zone with nothing else set still needs the node created.
+  if (live === null && !body.some((c) => c.op === "set")) {
+    body.length = 0;
+    body.push({ op: "set", path: base });
+  }
+  out.push(...body);
+
+  // The first zone brings the global state match with it — see ensureStatePolicy.
+  if (out.length > 0) ensureStatePolicy(out, cfg);
+  return out;
+}
+
+/// Apply a desired zone. Returns the number of changes applied.
+export function applyZone(cfg: FirewallConfig, update: ZoneUpdate): Promise<number> {
+  return commitAndSave(diffZone(cfg, update));
+}
+
+/// Rules scoped to a zone — the rules of every pair the zone takes part in,
+/// keyed `${chain}:${rule}`. Backs the "in use" count and the delete guard.
+export function zoneUsage(cfg: FirewallConfig, zone: FirewallZone): FirewallRule[] {
+  const rulesets = new Set(
+    cfg.zone_pairs
+      .filter((p) => p.src === zone.name || p.dst === zone.name)
+      .map((p) => p.ruleset),
+  );
+  return cfg.rules.filter((r) => {
+    const name = rulesetName(r.chain);
+    return name !== null && rulesets.has(name);
+  });
+}
+
+/// Delete a zone, along with every pair it takes part in and the rulesets
+/// backing them (a pair ruleset belongs to exactly one pair, so nothing else
+/// references it). Leaving a dangling `from` binding would fail the commit.
+export function deleteZone(cfg: FirewallConfig, zone: FirewallZone): Promise<number> {
+  const out: VyosCommand[] = [];
+  for (const p of cfg.zone_pairs) {
+    if (p.src !== zone.name && p.dst !== zone.name) continue;
+    // The binding on the other zone has to go before the ruleset it points at.
+    if (p.dst !== zone.name) {
+      out.push({ op: "delete", path: [...zoneBase(p.dst), "from", p.src] });
+    }
+    out.push({ op: "delete", path: ["firewall", "ipv4", "name", p.ruleset] });
+  }
+  out.push({ op: "delete", path: zoneBase(zone.name) });
+  return commitAndSave(out);
+}
+
 // ── writes: rules ─────────────────────────────────────────────────────────────
 
-const filterBase = (chain: RuleChain) => ["firewall", "ipv4", chain, "filter"];
+/// Config path holding a scope's rules — `firewall ipv4 <chain> filter` for a
+/// base chain, `firewall ipv4 name <ruleset>` for a zone pair's ruleset.
+const filterBase = (chain: RuleChain) => {
+  const ruleset = rulesetName(chain);
+  return ruleset === null
+    ? ["firewall", "ipv4", chain, "filter"]
+    : ["firewall", "ipv4", "name", ruleset];
+};
 const ruleBase = (chain: RuleChain, rule: number) => [...filterBase(chain), "rule", String(rule)];
 
 /// One From/To list entry. `firewall` is the built-in endpoint for the box
@@ -689,6 +1028,10 @@ const ruleBase = (chain: RuleChain, rule: number) => [...filterBase(chain), "rul
 /// kept so CLI-created rules stay editable, not offered for new selections.
 export type EndpointEntry =
   | { kind: "interface"; name: string }
+  /** A zone. Writes no match node of its own — like the Firewall endpoint, it
+   *  picks where the rule lives: the ruleset bound to this side's zone pair.
+   *  Aliases on the same side still narrow the match inside that ruleset. */
+  | { kind: "zone"; name: string }
   | { kind: "alias"; type: AliasType; name: string }
   /** Inline value typed straight into the rule — an IPv4 host, network, or
    *  FQDN that isn't worth a named alias. Stored as a literal member of the
@@ -760,21 +1103,92 @@ export function endpointToSelection(e: RuleEndpoint, autoGroups: AutoGroup[]): E
   return out;
 }
 
-/// The From/To list for a rule side, including the synthetic Firewall entry
-/// implied by the rule's chain (input = To Firewall, output = From Firewall).
-export function ruleSelection(rule: FirewallRule, side: "from" | "to", autoGroups: AutoGroup[]): EndpointSelection {
+/// The From/To list for a rule side, including the synthetic entry implied by
+/// where the rule lives: the Firewall endpoint for the input/output chains, or
+/// the side's zone for a zone pair's ruleset. Neither is stored as a match node
+/// — the rule's location is what expresses them.
+export function ruleSelection(
+  rule: FirewallRule,
+  side: "from" | "to",
+  autoGroups: AutoGroup[],
+  cfg?: Pick<FirewallConfig, "zone_pairs" | "zones">,
+): EndpointSelection {
   const sel = endpointToSelection(side === "from" ? rule.from : rule.to, autoGroups);
   if ((side === "to" && rule.chain === "input") || (side === "from" && rule.chain === "output")) {
     sel.unshift({ kind: "firewall" });
+    return sel;
+  }
+  const pair = cfg ? pairForChain(cfg.zone_pairs, rule.chain) : null;
+  if (pair) {
+    const name = side === "from" ? pair.src : pair.dst;
+    // The local zone is the firewall itself — show it as the Firewall endpoint
+    // rather than as a zone, so both ways of reaching the box read the same.
+    const zone = cfg!.zones.find((z) => z.name === name);
+    sel.unshift(zone?.local ? { kind: "firewall" } : { kind: "zone", name });
   }
   return sel;
 }
 
-/// Which chain a rule with these sides belongs in.
-export function ruleChainFor(from: EndpointSelection, to: EndpointSelection): RuleChain {
+/// The zone a side resolves to, or null. The Firewall endpoint resolves to the
+/// local zone, because that's what VyOS calls the box itself.
+function sideZone(sel: EndpointSelection, zones: FirewallZone[]): string | null {
+  const zone = sel.find((e) => e.kind === "zone");
+  if (zone) return zone.name;
+  if (sel.some((e) => e.kind === "firewall")) return localZone(zones)?.name ?? null;
+  return null;
+}
+
+/// The zone pair a rule with these sides belongs to, or null when neither side
+/// names a zone (an ordinary base-chain rule).
+///
+/// Throws when the sides describe a pair VyOS can't express — a zone on one
+/// side only, or a zone to itself.
+export function zonePairFor(
+  from: EndpointSelection,
+  to: EndpointSelection,
+  zones: FirewallZone[] = [],
+): ZonePair | null {
+  if (from.filter((e) => e.kind === "zone").length > 1 || to.filter((e) => e.kind === "zone").length > 1) {
+    throw new Error("A rule side can only carry one zone — a rule belongs to a single zone pair.");
+  }
+  const namesZone = (sel: EndpointSelection) => sel.some((e) => e.kind === "zone");
+  if (!namesZone(from) && !namesZone(to)) return null;
+
+  // VyOS binds rules to an ordered pair of zones, so a zone on one side needs a
+  // zone (or the Firewall, which is the local zone) on the other. There's
+  // nowhere to put a zone-to-anywhere rule.
+  const src = sideZone(from, zones);
+  const dst = sideZone(to, zones);
+  if (src === null || dst === null) {
+    const emptySide = src === null ? from : to;
+    if (emptySide.some((e) => e.kind === "firewall")) {
+      throw new Error("Set a Firewall zone on the Zones page first — a zone rule to or from the firewall needs one.");
+    }
+    throw new Error(
+      `Pick a zone for ${src === null ? "From" : "To"} too. A zone rule always goes from one zone to another.`,
+    );
+  }
+  if (src === dst) {
+    throw new Error("From and To are the same zone. Traffic inside a zone is controlled by its intra-zone filtering.");
+  }
+  return { src, dst, ruleset: pairRuleset(src, dst) };
+}
+
+/// Where a rule with these sides lives — a base chain, or the ruleset bound to
+/// its zone pair.
+///
+/// `zones` is optional so callers that predate zones keep working; without it a
+/// zone entry can't be resolved and is rejected.
+export function ruleChainFor(
+  from: EndpointSelection,
+  to: EndpointSelection,
+  zones: FirewallZone[] = [],
+): RuleChain {
   const f = from.some((e) => e.kind === "firewall");
   const t = to.some((e) => e.kind === "firewall");
   if (f && t) throw new Error("Only one side of a rule can be the Firewall itself.");
+  const pair = zonePairFor(from, to, zones);
+  if (pair) return zoneRuleChain(pair.ruleset);
   return t ? "input" : f ? "output" : "forward";
 }
 
@@ -864,8 +1278,9 @@ function diffEndpoint(
   ctx: AutoCtx,
 ): void {
   const base = ruleBase(chain, rule);
-  // The Firewall endpoint writes no match node — it's expressed by the chain.
-  const sel = selIn.filter((e) => e.kind !== "firewall");
+  // Neither the Firewall endpoint nor a zone writes a match node — both are
+  // expressed by where the rule lives (its chain, or its pair's ruleset).
+  const sel = selIn.filter((e) => e.kind !== "firewall" && e.kind !== "zone");
   const findAuto = (node: string | null, name: string | null) =>
     (node && name && ctx.autoGroups.find((g) => g.node === node && g.name === name)) || null;
 
@@ -1039,6 +1454,24 @@ function ensureIpsFlowBaseline(out: VyosCommand[], cfg: FirewallConfig): void {
   out.push({ op: "set", path: [...r2, "description", `${SYS_MARK} allow established/related replies`] });
 }
 
+/// Tear down a zone pair whose last rule is going away: the `from` binding and
+/// the ruleset it points at. An empty bound ruleset isn't harmless — VyOS would
+/// keep jumping into it, and a pair that exists but matches nothing reads as
+/// "configured" on the Zones page while behaving as if it weren't.
+///
+/// `removing` are the rules being deleted in this same commit.
+function emptyPairCleanup(cfg: FirewallConfig, chain: RuleChain, removing: FirewallRule[]): VyosCommand[] {
+  const pair = pairForChain(cfg.zone_pairs, chain);
+  if (!pair) return [];
+  const gone = new Set(removing.map((r) => `${r.chain}:${r.rule}`));
+  const left = cfg.rules.some((r) => r.chain === chain && !gone.has(`${r.chain}:${r.rule}`));
+  if (left) return [];
+  return [
+    { op: "delete", path: ["firewall", "zone", pair.dst, "from", pair.src] },
+    { op: "delete", path: ["firewall", "ipv4", "name", pair.ruleset] },
+  ];
+}
+
 /// Deletes for the auto-managed OR groups backing a rule's sides (auto groups
 /// are per-side, so no other rule references them).
 function autoGroupDeletes(rule: FirewallRule, autoGroups: AutoGroup[]): VyosCommand[] {
@@ -1057,8 +1490,25 @@ function autoGroupDeletes(rule: FirewallRule, autoGroups: AutoGroup[]): VyosComm
   return out;
 }
 
+/// Bind a zone pair, seeding its ruleset and the global state match on first
+/// use. The `from` binding is what makes VyOS jump into the ruleset at all —
+/// without it the rules would sit in the config doing nothing.
+///
+/// The pair is passed in rather than parsed back out of the ruleset name: zone
+/// names can contain hyphens, so `QZ-Z-LAN-TO-X-TO-WAN` is genuinely ambiguous
+/// (LAN-TO-X → WAN, or LAN → X-TO-WAN?) and guessing would silently bind the
+/// wrong pair.
+function ensureZonePair(out: VyosCommand[], cfg: FirewallConfig, pair: ZonePair): void {
+  ensureStatePolicy(out, cfg);
+  if (cfg.zone_pairs.some((p) => p.ruleset === pair.ruleset)) return;
+  const base = ["firewall", "ipv4", "name", pair.ruleset];
+  out.push({ op: "set", path: [...base, "description", `${AUTO_MARK} ${pair.src} to ${pair.dst}`] });
+  out.push({ op: "set", path: ["firewall", "zone", pair.dst, "from", pair.src, "firewall", "name", pair.ruleset] });
+}
+
 export function diffRule(liveIn: FirewallRule | null, u: RuleUpdate, cfg: FirewallConfig): VyosCommand[] {
-  const chain = ruleChainFor(u.from, u.to);
+  const pair = zonePairFor(u.from, u.to, cfg.zones);
+  const chain = pair ? zoneRuleChain(pair.ruleset) : ruleChainFor(u.from, u.to, cfg.zones);
   const out: VyosCommand[] = [];
 
   // A chain change can't be edited in place — the old rule is dropped (with
@@ -1068,10 +1518,12 @@ export function diffRule(liveIn: FirewallRule | null, u: RuleUpdate, cfg: Firewa
   if (live && live.chain !== chain) {
     out.push({ op: "delete", path: ruleBase(live.chain, live.rule) });
     out.push(...autoGroupDeletes(live, cfg.auto_groups));
+    out.push(...emptyPairCleanup(cfg, live.chain, [live]));
     live = null;
     rule = nextRuleNumber(cfg.rules);
   }
-  if (chain !== "forward") ensureChainSetup(out, chain, cfg);
+  if (pair) ensureZonePair(out, cfg, pair);
+  else if (isBaseChain(chain) && chain !== "forward") ensureChainSetup(out, chain, cfg);
 
   const base = ruleBase(chain, rule);
   const leaf = (sub: string[], liveV: string | null, desiredRaw: string | null) => {
@@ -1187,17 +1639,20 @@ export function applyRuleIps(
 }
 
 /// Delete a filter rule, along with the auto-managed OR groups backing its
-/// sides. `extraCommands` ride the same commit — used by the delete cascade to
-/// drop the security-feature config that referenced this rule atomically with
-/// it (see lib/rule-cascade).
+/// sides and — when it was the last rule of a zone pair — the pair binding and
+/// its ruleset. `extraCommands` ride the same commit — used by the delete
+/// cascade to drop the security-feature config that referenced this rule
+/// atomically with it (see lib/rule-cascade).
 export function deleteRule(
   rule: FirewallRule,
   autoGroups: AutoGroup[],
   extraCommands: VyosCommand[] = [],
+  cfg?: FirewallConfig,
 ): Promise<number> {
   return commitAndSave([
     { op: "delete", path: ruleBase(rule.chain, rule.rule) },
     ...autoGroupDeletes(rule, autoGroups),
+    ...(cfg ? emptyPairCleanup(cfg, rule.chain, [rule]) : []),
     ...extraCommands,
   ]);
 }
@@ -1281,20 +1736,36 @@ export async function applyRuleOrder(
 
 // ── writes: default action ────────────────────────────────────────────────────
 
+/// Why the forward default-action can't be set to drop, or null when it can.
+///
+/// The zone chains hook at priority 1, i.e. after the forward chain at priority
+/// 0. Traffic dropped there never reaches them, so a deny default would
+/// black-hole every zone rule's traffic while the Zones page still showed the
+/// rules as allowing it. Zones express their own denial through each zone's
+/// default-action instead.
+export function defaultDropBlockedReason(cfg: FirewallConfig): string | null {
+  if (cfg.zones.length === 0) return null;
+  return "Zones are configured. Deny by default is set per zone on the Zones page — denying here would block all zone traffic before any zone rule is consulted.";
+}
+
 /// Set `firewall ipv4 forward filter default-action` (what happens to traffic
 /// no rule matches). Setting drop first seeds the hidden established/related
 /// baseline — without it a deny default would cut off the reply half of every
 /// connection already allowed out.
 export function setDefaultAction(cfg: FirewallConfig, action: "accept" | "drop"): Promise<number> {
   const out: VyosCommand[] = [];
-  if (action === "drop") ensureForwardBaseline(out, cfg);
+  if (action === "drop") {
+    const blocked = defaultDropBlockedReason(cfg);
+    if (blocked) throw new Error(blocked);
+    ensureForwardBaseline(out, cfg);
+  }
   out.push({ op: "set", path: [...filterBase("forward"), "default-action", action] });
   return commitAndSave(out);
 }
 
 // ── traffic logging (Traffic Monitor) ─────────────────────────────────────────
 
-const ALL_CHAINS: RuleChain[] = ["forward", "input", "output"];
+const ALL_CHAINS: BaseChain[] = ["forward", "input", "output"];
 
 /// How completely traffic logging is enabled — drives the monitor page's
 /// setup banner.
@@ -1302,7 +1773,7 @@ export interface LoggingStatus {
   total_rules: number;
   logged_rules: number;
   /** Chains still missing `default-log`. */
-  chains_without_default_log: RuleChain[];
+  chains_without_default_log: BaseChain[];
   forward_baseline: boolean;
   /** Every rule logs, every chain default-logs, and the forward baseline is in. */
   complete: boolean;
@@ -1369,15 +1840,25 @@ function parseCounters(chain: RuleChain, text: string, out: Map<string, RuleCoun
   }
 }
 
-/// Live per-rule packet/byte counters (from `show firewall ipv4 <chain>
-/// filter`), keyed by counterKey. Best-effort: a chain that fails to read or
-/// parse contributes nothing.
-export async function fetchRuleCounters(): Promise<Map<string, RuleCounter>> {
-  const texts = await Promise.all(ALL_CHAINS.map((c) => showText(["firewall", "ipv4", c, "filter"])));
+/// Live per-rule packet/byte counters, keyed by counterKey — read from `show
+/// firewall ipv4 <chain> filter` for the base chains and `show firewall ipv4
+/// name <ruleset>` for each zone pair. Best-effort: a scope that fails to read
+/// or parse contributes nothing.
+///
+/// `zonePairs` comes from the fetched config; omit it to read base chains only.
+export async function fetchRuleCounters(zonePairs: ZonePair[] = []): Promise<Map<string, RuleCounter>> {
+  const scopes: { chain: RuleChain; path: string[] }[] = [
+    ...ALL_CHAINS.map((c) => ({ chain: c as RuleChain, path: ["firewall", "ipv4", c, "filter"] })),
+    ...[...new Set(zonePairs.map((p) => p.ruleset))].map((r) => ({
+      chain: zoneRuleChain(r),
+      path: ["firewall", "ipv4", "name", r],
+    })),
+  ];
+  const texts = await Promise.all(scopes.map((s) => showText(s.path)));
   const out = new Map<string, RuleCounter>();
-  ALL_CHAINS.forEach((c, i) => {
+  scopes.forEach((s, i) => {
     const t = texts[i];
-    if (t) parseCounters(c, t, out);
+    if (t) parseCounters(s.chain, t, out);
   });
   return out;
 }

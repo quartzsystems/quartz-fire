@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { Tabs } from "@/components/ui/Tabs";
 import { useDashboard } from "@/lib/DashboardContext";
-import { emptyFirewallConfig, fetchFirewall, FirewallConfig, FirewallRule } from "@/lib/firewall";
+import { emptyFirewallConfig, fetchFirewall, FirewallConfig, FirewallRule, isBaseChain } from "@/lib/firewall";
 import {
   actionUsage,
   applyGeoAction,
@@ -441,6 +441,9 @@ function PoliciesTab({
   // Attach/detach an action on a rule. Empty action removes the policy; any
   // action (re)creates it, re-enabling a previously disabled one.
   const setRuleAction = async (rule: FirewallRule, action: string) => {
+    // Only base-chain rules are listed (see `eligible`) — qzgeo can't target a
+    // zone pair's ruleset.
+    if (!isBaseChain(rule.chain)) return;
     const key = `${rule.chain}:${rule.rule}`;
     const existing = policyByRule.get(key) ?? null;
     setBusyRule(key);
@@ -529,12 +532,16 @@ function PoliciesTab({
       </div>
     );
 
-  // Every Allow rule, across the forward/input/output chains, is eligible to
-  // carry a geolocation policy. Ordered forward → input → output, then by rule
-  // number, so the table reads like the firewall.
+  // Every Allow rule in the forward/input/output chains is eligible to carry a
+  // geolocation policy. Ordered forward → input → output, then by rule number,
+  // so the table reads like the firewall.
+  //
+  // Zone rules can't: qzgeo resolves its target as `firewall ipv4 <ruleset>
+  // filter rule <n>` and rejects anything but a base chain, so a policy on a
+  // zone rule would never enforce (see lib/geolocation asRuleset).
   const rank: Record<string, number> = { forward: 0, input: 1, output: 2 };
   const eligible = fw.rules
-    .filter((r) => r.action === "accept")
+    .filter((r) => r.action === "accept" && isBaseChain(r.chain))
     .sort((a, b) => (rank[a.chain] - rank[b.chain]) || a.rule - b.rule);
 
   // Policies whose target rule isn't an eligible Allow rule anymore. These

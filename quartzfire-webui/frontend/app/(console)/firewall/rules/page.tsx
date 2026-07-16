@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, GripVertical, Plus, RotateCw, Search, Undo2 } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, Check, GripVertical, Info, Plus, RotateCw, Search, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import {
   aliasDisplayName,
   counterKey,
+  defaultDropBlockedReason,
   emptyFirewallConfig,
   fetchFirewall,
   fetchRuleCounters,
@@ -45,9 +47,9 @@ function EndpointCell({
   config: FirewallConfig;
   descriptions: Record<string, string>;
 }) {
-  const sel = ruleSelection(rule, side, config.auto_groups);
+  const sel = ruleSelection(rule, side, config.auto_groups, config);
   if (sel.length === 0) return <span className="text-[var(--qz-fg-4)]">Any</span>;
-  // Friendly names — interface descriptions and alias display names; the
+  // Friendly names — interface descriptions, alias and zone display names; the
   // tooltip keeps the technical names.
   const raw = sel.map((e) =>
     e.kind === "address" ? e.address : e.kind === "inline" ? e.value : e.kind === "firewall" ? "Firewall" : e.name,
@@ -58,6 +60,7 @@ function EndpointCell({
     if (e.kind === "firewall") return "Firewall";
     if (e.kind === "interface") return descriptions[e.name] ?? e.name;
     if (e.kind === "alias") return aliasDisplayName(config.aliases, e.type, e.name);
+    if (e.kind === "zone") return config.zones.find((z) => z.name === e.name)?.display ?? e.name;
     return e.name;
   });
   const allIfaces = sel.every((e) => e.kind === "interface" || e.kind === "ifgroup");
@@ -100,13 +103,15 @@ export default function FirewallRulesPage() {
     try {
       // Interface names populate the rule form's From/To pickers; tolerate
       // their failure so a firewall read still renders.
-      const [fw, ifs, descs, bridges, hits] = await Promise.all([
+      const [fw, ifs, descs, bridges] = await Promise.all([
         fetchFirewall(),
         fetchInterfaceStats().catch(() => []),
         fetchInterfaceDescriptions().catch(() => ({})),
         fetchBridges().catch(() => []),
-        fetchRuleCounters().catch(() => new Map<string, RuleCounter>()),
       ]);
+      // Counters wait on the firewall read: which zone-pair rulesets to read
+      // counters from is only known once the pairs are.
+      const hits = await fetchRuleCounters(fw.zone_pairs).catch(() => new Map<string, RuleCounter>());
       setData(fw);
       // Include config-derived bridge VIFs (e.g. br0.10) so a rule can match on
       // one — the rule picker is a fixed select, not free text.
@@ -223,6 +228,7 @@ export default function FirewallRulesPage() {
       const { removedGeoPolicies, removedAcBinding } = await deleteRuleWithCascade(
         rule,
         data.auto_groups,
+        data,
       );
       const also: string[] = [];
       if (removedAcBinding) also.push("Application Control binding");
@@ -239,6 +245,10 @@ export default function FirewallRulesPage() {
       setToast(e instanceof Error ? e.message : `Failed to delete rule ${rule.rule}.`);
     }
   };
+
+  // Denying by default in the forward chain would black-hole every zone rule's
+  // traffic before the zone chains ever run — see defaultDropBlockedReason.
+  const defaultDropBlocked = defaultDropBlockedReason(data);
 
   const changeDefaultAction = async (action: "accept" | "drop") => {
     try {
@@ -320,6 +330,25 @@ export default function FirewallRulesPage() {
         )}
         {status === "ready" && (
           <div className="flex flex-col gap-3">
+            {/* Zones add a second layer of filtering, and the two AND together —
+                say so, because a rule that allows traffic here can still be
+                denied by a zone (and vice versa). */}
+            {data.zones.length > 0 && (
+              <div
+                className="flex items-start gap-2 rounded-md px-3 py-[9px] text-[12px] text-[var(--qz-fg-3)]"
+                style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+              >
+                <Info size={14} className="flex-shrink-0 mt-[1px] text-[var(--qz-fg-4)]" />
+                <span>
+                  Zones are configured. Rules without a zone are checked first, for every packet — traffic has to pass
+                  both them and the rules of its zone pair. Deny by default is set per zone on the{" "}
+                  <Link href="/firewall/zones" className="text-[var(--qz-fg-1)] underline">
+                    Zones
+                  </Link>{" "}
+                  page.
+                </span>
+              </div>
+            )}
             {/* Controls */}
             <div className="flex items-center gap-3 flex-wrap">
               <div className="relative">
@@ -346,8 +375,14 @@ export default function FirewallRulesPage() {
                 <select
                   value={data.default_action === "drop" ? "drop" : "accept"}
                   onChange={(e) => changeDefaultAction(e.target.value as "accept" | "drop")}
+                  disabled={defaultDropBlocked !== null}
+                  title={defaultDropBlocked ?? undefined}
                   className="rounded-md px-2 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-                  style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+                  style={{
+                    background: "var(--qz-input-bg)",
+                    border: "1px solid var(--qz-border)",
+                    opacity: defaultDropBlocked !== null ? 0.5 : 1,
+                  }}
                 >
                   <option value="drop">Deny</option>
                   <option value="accept">Allow</option>

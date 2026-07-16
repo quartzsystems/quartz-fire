@@ -17,7 +17,7 @@
 // geolocation and appcontrol data layers, which themselves import firewall.ts —
 // keeping it here avoids an import cycle.
 
-import type { AutoGroup, FirewallRule } from "./firewall";
+import type { AutoGroup, FirewallConfig, FirewallRule } from "./firewall";
 import { applyRuleOrder, deleteRule, renumberMap } from "./firewall";
 import type { VyosCommand } from "./interfaces";
 import { fetchGeolocation, policyBase } from "./geolocation";
@@ -39,6 +39,7 @@ export interface RuleDeleteResult {
 export async function deleteRuleWithCascade(
   rule: FirewallRule,
   autoGroups: AutoGroup[],
+  cfg?: FirewallConfig,
 ): Promise<RuleDeleteResult> {
   // 1. Geolocation policies targeting this exact (chain, rule) — a rule number
   //    is only unique within a chain, so match on both. Deleted in the same
@@ -56,7 +57,8 @@ export async function deleteRuleWithCascade(
     /* geolocation feature absent/unreadable — nothing to clean up */
   }
 
-  await deleteRule(rule, autoGroups, geoDeletes);
+  // `cfg` lets the delete also retire a zone pair whose last rule this was.
+  await deleteRule(rule, autoGroups, geoDeletes, cfg);
 
   // 2. Application Control binding (separate JSON store). Only forward rules can
   //    be bound, so skip other chains. Best-effort: a failure here must not
