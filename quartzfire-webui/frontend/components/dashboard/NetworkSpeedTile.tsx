@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Gauge, Network } from "lucide-react";
 import { formatRate } from "@/lib/format";
+import { ChartTooltip, DOWN_COLOR, UP_COLOR } from "@/components/ui/ChartTooltip";
 import { useInterfaceStats } from "./useInterfaceStats";
 import { LiveButton } from "./LiveButton";
 
@@ -41,8 +42,10 @@ function formatAge(sec: number): string {
   return s ? `${m}m${s}s` : `${m}m`;
 }
 
-const RX_COLOR = "var(--qz-accent)"; // green-500
-const TX_COLOR = "var(--qz-green-300)"; // lighter green
+// Shared with Monitoring → Devices' usage chart, so download/upload are the
+// same color everywhere.
+const RX_COLOR = DOWN_COLOR;
+const TX_COLOR = UP_COLOR;
 
 function SpeedGraph({ rx, tx }: { rx: number[]; tx: number[] }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -167,37 +170,15 @@ function SpeedGraph({ rx, tx }: { rx: number[]; tx: number[] }) {
       </svg>
 
       {hover != null && hoverX != null && hasData && (
-        <div
-          className="absolute pointer-events-none rounded-md p-2 z-10 text-[11px]"
-          style={{
-            left: Math.min(w - 150, Math.max(0, hoverX + 8)),
-            top: 8,
-            minWidth: 140,
-            background: "var(--qz-surface-raised)",
-            border: "1px solid var(--qz-border)",
-            boxShadow: "var(--qz-shadow-2)",
-          }}
-        >
-          <div className="text-[var(--qz-fg-3)] mb-1" style={{ fontFamily: "var(--qz-font-mono)" }}>{formatAge(hoverAge)}</div>
-          <div className="flex items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-[5px] text-[var(--qz-fg-2)]">
-              <span style={{ width: 7, height: 7, borderRadius: 999, background: RX_COLOR }} />
-              Download
-            </span>
-            <span className="text-[var(--qz-fg-1)] font-semibold" style={{ fontFamily: "var(--qz-font-mono)" }}>
-              {formatRate(rx[hover] ?? null)}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-3 mt-[3px]">
-            <span className="inline-flex items-center gap-[5px] text-[var(--qz-fg-2)]">
-              <span style={{ width: 7, height: 7, borderRadius: 999, background: TX_COLOR }} />
-              Upload
-            </span>
-            <span className="text-[var(--qz-fg-1)] font-semibold" style={{ fontFamily: "var(--qz-font-mono)" }}>
-              {formatRate(tx[hover] ?? null)}
-            </span>
-          </div>
-        </div>
+        <ChartTooltip
+          x={hoverX}
+          width={w}
+          title={formatAge(hoverAge)}
+          rows={[
+            { label: "Download", value: formatRate(rx[hover] ?? null), color: RX_COLOR },
+            { label: "Upload", value: formatRate(tx[hover] ?? null), color: TX_COLOR },
+          ]}
+        />
       )}
     </div>
   );

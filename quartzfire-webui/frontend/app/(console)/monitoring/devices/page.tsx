@@ -30,6 +30,7 @@ import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/Columns
 import { Segmented } from "@/components/ui/Segmented";
 import { PingChart } from "@/components/ui/PingChart";
 import { UsageChart } from "@/components/ui/UsageChart";
+import { DOWN_COLOR, UP_COLOR } from "@/components/ui/ChartTooltip";
 import { AppSliceInput, TopAppsDonut } from "@/components/dashboard/TopAppsDonut";
 import { useDashboard } from "@/lib/DashboardContext";
 import { formatBytes, formatRelative, formatTimestamp } from "@/lib/format";
@@ -54,6 +55,11 @@ import {
 } from "@/lib/devices";
 
 const REFRESH_MS = 30_000;
+// The usage graphs poll far faster than the list: qfdevd folds byte deltas into
+// the open 5-minute bucket continuously, so the trailing edge of the chart moves
+// in near-real time. These are cheap single-row/aggregate queries against the
+// local SQLite, unlike the paginated list.
+const USAGE_REFRESH_MS = 5_000;
 const SEARCH_DEBOUNCE_MS = 300;
 const PAGE_SIZE = 50;
 
@@ -87,7 +93,9 @@ const ELLIPSIS: React.CSSProperties = { overflow: "hidden", textOverflow: "ellip
 const COLUMNS: ColumnDef[] = [
   { key: "status", header: "Status", sort: "status", width: "110px" },
   { key: "description", header: "Description", sort: "description", width: "260px" },
-  { key: "mac", header: "MAC", width: "160px" },
+  // Wide enough for a full 17-char MAC at 13px mono plus the cell's padding —
+  // any tighter and every address truncates.
+  { key: "mac", header: "MAC", width: "190px" },
   { key: "last_seen", header: "Last Seen", sort: "last_seen", width: "120px" },
   { key: "usage", header: "Usage", sort: "usage", width: "160px" },
   { key: "type", header: "Client Type / OS", sort: "client_type", width: "150px" },
@@ -163,16 +171,25 @@ export default function DevicesPage() {
     return () => clearInterval(id);
   }, [load]);
 
-  // The usage graph tracks the window; the apps pie is live (window-independent),
-  // fetched here alongside it so both refresh on the same 30 s cadence.
-  const loadSummary = useCallback(async () => {
-    const [series, ac] = await Promise.allSettled([
-      fetchUsageSeries(usageWindow),
-      fetchAcStatus(),
-    ]);
-    if (series.status === "fulfilled") setUsageSeries(series.value);
-    if (ac.status === "fulfilled") setAcStatus(ac.value);
+  // The usage graph tracks the window and refreshes on the fast cadence so the
+  // live edge of the chart keeps moving; the apps pie is window-independent and
+  // stays on the slower one.
+  const loadUsage = useCallback(async () => {
+    try {
+      setUsageSeries(await fetchUsageSeries(usageWindow));
+    } catch {
+      // Leave the last good series on screen — a dropped poll shouldn't blank
+      // the graph, and the list's own error surface covers a real outage.
+    }
   }, [usageWindow]);
+
+  const loadApps = useCallback(async () => {
+    try {
+      setAcStatus(await fetchAcStatus());
+    } catch {
+      /* same: keep the previous snapshot */
+    }
+  }, []);
 
   // Overall application mix from the live App Control snapshot.
   const { appSlices, appTotal } = useMemo(() => {
@@ -190,10 +207,16 @@ export default function DevicesPage() {
       : null;
 
   useEffect(() => {
-    loadSummary();
-    const id = setInterval(loadSummary, REFRESH_MS);
+    loadUsage();
+    const id = setInterval(loadUsage, USAGE_REFRESH_MS);
     return () => clearInterval(id);
-  }, [loadSummary]);
+  }, [loadUsage]);
+
+  useEffect(() => {
+    loadApps();
+    const id = setInterval(loadApps, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [loadApps]);
 
   const toggleSort = (key?: SortKey) => {
     if (!key) return;
@@ -260,6 +283,7 @@ export default function DevicesPage() {
               windowSecs={WINDOW_SECS[usageWindow]}
               height={190}
             />
+            <UsageLegend />
           </div>
           {/* Applications pie — live App Control mix (matches the dashboard) */}
           <div style={{ borderLeft: "1px solid var(--qz-border)" }} className="pl-6">
@@ -385,6 +409,22 @@ export default function DevicesPage() {
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/// Series key for the usage charts, matching the dashboard's Network Usage tile.
+function UsageLegend() {
+  return (
+    <div className="flex items-center justify-center gap-5 mt-1 text-[11px] text-[var(--qz-fg-3)]">
+      <span className="inline-flex items-center gap-[6px]">
+        <span style={{ width: 8, height: 8, borderRadius: 999, background: DOWN_COLOR }} />
+        Download (RX)
+      </span>
+      <span className="inline-flex items-center gap-[6px]">
+        <span style={{ width: 8, height: 8, borderRadius: 999, background: UP_COLOR }} />
+        Upload (TX)
+      </span>
     </div>
   );
 }
@@ -640,15 +680,32 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
   const [error, setError] = useState<string | null>(null);
   const [apps, setApps] = useState<AppUsage | null>(null);
 
+  // Load once, then keep polling on the fast cadence so this client's usage
+  // graph tracks live traffic. Only the initial load clears the panel — a poll
+  // swaps the data in place, so the chart doesn't flash back to "Loading…".
   useEffect(() => {
     let alive = true;
     setDetail(null);
     setError(null);
-    fetchDeviceDetail(mac, usageWindow)
-      .then((d) => alive && setDetail(d))
-      .catch((e) => alive && setError(e instanceof Error ? e.message : "Failed to load detail."));
+
+    const poll = (initial: boolean) =>
+      fetchDeviceDetail(mac, usageWindow)
+        .then((d) => {
+          if (!alive) return;
+          setDetail(d);
+          setError(null);
+        })
+        .catch((e) => {
+          // A failed refresh keeps the last good detail on screen; only the
+          // first load has nothing to fall back to.
+          if (alive && initial) setError(e instanceof Error ? e.message : "Failed to load detail.");
+        });
+
+    poll(true);
+    const id = setInterval(() => poll(false), USAGE_REFRESH_MS);
     return () => {
       alive = false;
+      clearInterval(id);
     };
   }, [mac, usageWindow]);
 
@@ -707,6 +764,7 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
           </span>
         </div>
         <UsageChart points={detail.usage} windowSecs={WINDOW_SECS[usageWindow]} height={170} />
+        <UsageLegend />
       </div>
 
       {/* Applications + Ping */}
@@ -871,12 +929,19 @@ function PingWidget({ mac, pingable }: { mac: string; pingable: boolean }) {
           <PingChart points={points} count={total || points.length} />
           <div className="grid gap-x-4 gap-y-1 mt-2" style={{ gridTemplateColumns: "max-content 1fr" }}>
             <span className="text-[12px] text-[var(--qz-fg-4)]">Loss rate</span>
-            <span
-              className="text-[12px] tabular-nums"
-              style={{ color: lossPct > 0 ? "var(--qz-warn)" : "var(--qz-fg-1)" }}
-            >
-              {lossPct.toFixed(0)}% ({received}/{total})
-            </span>
+            {/* Only meaningful once every packet is accounted for: mid-burst the
+                packets still in flight look identical to lost ones, so the rate
+                would read ~100% and count down. Hold it until the run ends. */}
+            {done ? (
+              <span
+                className="text-[12px] tabular-nums"
+                style={{ color: lossPct > 0 ? "var(--qz-warn)" : "var(--qz-fg-1)" }}
+              >
+                {lossPct.toFixed(0)}% ({received}/{total})
+              </span>
+            ) : (
+              <span className="text-[12px] text-[var(--qz-fg-4)] tabular-nums">—</span>
+            )}
             <span className="text-[12px] text-[var(--qz-fg-4)]">
               {running ? "Latency (avg)" : "Average latency"}
             </span>
