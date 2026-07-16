@@ -61,6 +61,13 @@ export interface UnifiedEvent {
   ifOut?: string;
   /// Secondary context: category, severity, group, SNI, chain, …
   detail?: string;
+  /// Firewall rows only: the `chain:rule` key used to resolve `summary` to a
+  /// friendly rule name. Retained so the page can re-resolve the label when the
+  /// rule-name map loads (or a renumber refreshes it) after this row was
+  /// inserted — the summary of a backfilled row is otherwise frozen at whatever
+  /// the map held when the SSE frame arrived (often empty → "Rule N"). Absent
+  /// for non-firewall sources and for the chain default action (rule === null).
+  fwRuleKey?: string;
 }
 
 export const SOURCE_META: Record<UnifiedSource, { label: string; badge: string }> = {
@@ -95,6 +102,7 @@ export function normalizeFirewall(e: FirewallLogEntry, ruleLabel: string): Raw {
     ifIn: e.in,
     ifOut: e.out,
     detail: detail || undefined,
+    fwRuleKey: e.rule !== null ? `${e.chain}:${e.rule}` : undefined,
   };
 }
 

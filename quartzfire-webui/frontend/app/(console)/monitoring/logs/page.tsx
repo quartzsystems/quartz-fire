@@ -100,6 +100,25 @@ export default function UnifiedLogsPage() {
       const fw = await fetchFirewall();
       setConfig(fw);
       ruleNamesRef.current = new Map(fw.rules.map((r) => [`${r.chain}:${r.rule}`, r.name]));
+      // Re-resolve firewall rule labels for rows already in the buffer. A row's
+      // summary is frozen when its SSE frame arrives (normalizeFirewall), so a
+      // line backfilled before this map loaded — or before a renumber — is
+      // captioned "Rule N" and would stay that way. Rebuild those summaries from
+      // the fresh map so the correct rule name (e.g. "Allow Any-Internal to WAN"
+      // rather than "Rule 20") appears once it's known and after every refresh.
+      let changed = false;
+      for (const r of rowsRef.current) {
+        if (!r.fwRuleKey) continue;
+        const rule = Number(r.fwRuleKey.slice(r.fwRuleKey.indexOf(":") + 1));
+        const next = ruleNamesRef.current.get(r.fwRuleKey) ?? `Rule ${rule}`;
+        if (next !== r.summary) {
+          r.summary = next;
+          changed = true;
+        }
+      }
+      // A new array reference re-renders the table; while paused, the eventual
+      // resume flush emits the corrected set, so skip the mid-pause churn.
+      if (changed && !pausedRef.current) setRows([...rowsRef.current]);
     } catch {
       /* rule names degrade to "Rule N"; the streams still work */
     }
