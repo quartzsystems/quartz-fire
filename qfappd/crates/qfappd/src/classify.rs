@@ -261,6 +261,9 @@ pub mod ndpi {
                 Catalog {
                     ndpi_version: cstr_lossy(sys::ndpi_revision()),
                     num_protocols: n,
+                    // Comes from the daemon's config, not libndpi; `run` stamps
+                    // it on the copy it publishes.
+                    mark_layout: None,
                     applications,
                 }
             }

@@ -5,6 +5,7 @@
 //! signature version); tests and the WebUI fixture use hand-built instances.
 //! `qfappd catalog --json` emits exactly this structure.
 
+use crate::ctmark::Layout;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -15,6 +16,20 @@ pub struct Catalog {
     /// Number of protocols compiled into the library; doubles as the
     /// "signature version" surfaced in the UI.
     pub num_protocols: u16,
+    /// The ct-mark bit layout in force, published for other daemons.
+    ///
+    /// qfdevd attributes per-application traffic by decoding APP_ID out of each
+    /// flow's conntrack mark, which it can only do if it knows where those bits
+    /// are — and the layout is configurable (`[mark]` in qfappd.toml), so
+    /// assuming the defaults would silently mis-decode a customized box. We are
+    /// the only writer of the mark, so we publish the layout beside the id→name
+    /// table the same consumer already needs: one file, one source of truth.
+    ///
+    /// `None` on a catalog that didn't come from a running daemon (the shipped
+    /// fixture, `qfappd catalog --json` offline); consumers fall back to the
+    /// documented defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mark_layout: Option<Layout>,
     pub applications: Vec<AppEntry>,
 }
 
@@ -74,6 +89,8 @@ impl Catalog {
         Catalog {
             ndpi_version: "fixture".into(),
             num_protocols: apps.len() as u16,
+            // Offline fixture: no daemon, so no layout in force to publish.
+            mark_layout: None,
             applications: apps
                 .into_iter()
                 .map(|(id, name, category_id, category)| AppEntry {

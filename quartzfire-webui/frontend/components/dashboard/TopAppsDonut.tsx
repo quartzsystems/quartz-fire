@@ -10,6 +10,7 @@
 // per-client usage aggregation (a device's detail panel).
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { arcPath } from "@/lib/donut";
 import { formatBytes } from "@/lib/format";
 
 export interface AppSliceInput {
@@ -58,23 +59,6 @@ function assignSlots(prev: Map<string, number>, apps: AppSliceInput[]): Map<stri
     used.add(free);
   }
   return next;
-}
-
-/// SVG path for a donut segment from `a0` to `a1` (radians, 0 = 12 o'clock).
-function arcPath(cx: number, cy: number, rOut: number, rIn: number, a0: number, a1: number): string {
-  // A full circle collapses to nothing as a single arc; nudge under 2π.
-  const sweep = Math.min(a1 - a0, Math.PI * 2 - 0.0001);
-  const x = (r: number, a: number) => cx + r * Math.sin(a);
-  const y = (r: number, a: number) => cy - r * Math.cos(a);
-  const large = sweep > Math.PI ? 1 : 0;
-  const end = a0 + sweep;
-  return [
-    `M ${x(rOut, a0).toFixed(2)} ${y(rOut, a0).toFixed(2)}`,
-    `A ${rOut} ${rOut} 0 ${large} 1 ${x(rOut, end).toFixed(2)} ${y(rOut, end).toFixed(2)}`,
-    `L ${x(rIn, end).toFixed(2)} ${y(rIn, end).toFixed(2)}`,
-    `A ${rIn} ${rIn} 0 ${large} 0 ${x(rIn, a0).toFixed(2)} ${y(rIn, a0).toFixed(2)}`,
-    "Z",
-  ].join(" ");
 }
 
 function Donut({
@@ -157,6 +141,7 @@ export function TopAppsDonut({
   totalBytes,
   centerSub = "classified",
   minDonut = 130,
+  maxDonut = 168,
 }: {
   apps: AppSliceInput[];
   /** Authoritative total (e.g. App Control's `total_app_bytes`); defaults to
@@ -166,6 +151,11 @@ export function TopAppsDonut({
   centerSub?: string;
   /** Minimum donut size in px (the legend takes the rest / wraps). */
   minDonut?: number;
+  /** Upper bound in px. Without one the donut is pure `flex-1` and swells to
+   *  fill whatever column it lands in — compact in the page header's narrow
+   *  sidebar, ballooned (with the legend stranded far right) in a device's
+   *  full-width detail panel. Capping it keeps every instance the same size. */
+  maxDonut?: number;
 }) {
   const [hover, setHover] = useState<string | null>(null);
   const slots = useRef(new Map<string, number>());
@@ -197,7 +187,7 @@ export function TopAppsDonut({
 
   return (
     <div className="flex flex-wrap items-stretch gap-4 min-h-0">
-      <div className="flex-1" style={{ minWidth: minDonut, minHeight: minDonut }}>
+      <div className="flex-1" style={{ minWidth: minDonut, minHeight: minDonut, maxWidth: maxDonut, maxHeight: maxDonut }}>
         <Donut slices={slices} totalBytes={total} centerSub={centerSub} hover={hover} onHover={setHover} />
       </div>
       <div className="flex-1 min-w-[150px] flex flex-col justify-center gap-[6px] overflow-y-auto">

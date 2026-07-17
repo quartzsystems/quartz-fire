@@ -65,6 +65,21 @@ const PAGE_SIZE = 50;
 
 const dash = <span className="text-[var(--qz-fg-4)]">—</span>;
 
+// The Applications mix is real traffic volume: qfdevd decodes App Control's
+// verdict off each flow's conntrack mark, so the bytes come from the same
+// accounting that feeds Network Usage.
+//
+// It still won't add up to the Network Usage total, and that's expected rather
+// than a rounding artefact: only flows App Control classified are attributable
+// to an application. Traffic that predates a verdict, or crosses a link with no
+// App Control policy bound, lands in the device total with no application to
+// name. So the mix is a subset — never larger, usually smaller. Said plainly
+// here so the gap doesn't read as the bug it used to be.
+const APP_MIX_HINT =
+  "Bytes moved by each classified application, over the selected window. " +
+  "Traffic Application Control did not classify isn't attributed to any application, " +
+  "so this can total less than Network Usage.";
+
 const WINDOWS: { value: UsageWindow; label: string }[] = [
   { value: "1h", label: "1h" },
   { value: "24h", label: "24h" },
@@ -126,8 +141,13 @@ export default function DevicesPage() {
 
   // ── header summary state (aggregate usage graph + apps pie) ────────────────
   const [usageSeries, setUsageSeries] = useState<UsageSeries | null>(null);
-  // Overall Applications mix uses App Control's live status snapshot — the same
-  // source as the dashboard's Top Applications tile, so the two render alike.
+  // Overall Applications mix, aggregated over the selected usage window — the
+  // same windowed endpoint each device's panel uses, just unscoped by IP. (It
+  // used to read App Control's live `top_apps` snapshot, which is cumulative
+  // since qfappd started and so ignored the window selector entirely.)
+  const [appUsage, setAppUsage] = useState<AppUsage | null>(null);
+  // Still polled, but only to tell "App Control is off" apart from "on, but
+  // nothing classified in this window".
   const [acStatus, setAcStatus] = useState<AcStatus | null>(null);
 
   // Debounce the search box, and reset to page 1 whenever a filter changes.
@@ -172,8 +192,8 @@ export default function DevicesPage() {
   }, [load]);
 
   // The usage graph tracks the window and refreshes on the fast cadence so the
-  // live edge of the chart keeps moving; the apps pie is window-independent and
-  // stays on the slower one.
+  // live edge of the chart keeps moving; the apps pie tracks the same window but
+  // stays on the slower cadence (it rescans the event log).
   const loadUsage = useCallback(async () => {
     try {
       setUsageSeries(await fetchUsageSeries(usageWindow));
@@ -185,25 +205,26 @@ export default function DevicesPage() {
 
   const loadApps = useCallback(async () => {
     try {
-      setAcStatus(await fetchAcStatus());
+      const [status, usage] = await Promise.all([fetchAcStatus(), fetchAppUsage(usageWindow)]);
+      setAcStatus(status);
+      setAppUsage(usage);
     } catch {
       /* same: keep the previous snapshot */
     }
-  }, []);
+  }, [usageWindow]);
 
-  // Overall application mix from the live App Control snapshot.
+  // Overall application mix over the selected window.
   const { appSlices, appTotal } = useMemo(() => {
-    const runtime = acStatus?.status ?? null;
-    const slices: AppSliceInput[] = (runtime?.top_apps ?? [])
+    const slices: AppSliceInput[] = (appUsage?.apps ?? [])
       .filter((a) => a.bytes > 0)
-      .map((a) => ({ id: a.app_id, name: a.app, bytes: a.bytes, flows: a.flows }));
-    const total = runtime?.total_app_bytes ?? slices.reduce((n, a) => n + a.bytes, 0);
+      .map((a) => ({ id: a.app, name: a.app, bytes: a.bytes }));
+    const total = appUsage?.total ?? slices.reduce((n, a) => n + a.bytes, 0);
     return { appSlices: slices, appTotal: total };
-  }, [acStatus]);
+  }, [appUsage]);
   const appsEmpty = !(acStatus?.running ?? false)
     ? "Application Control is not running."
     : appSlices.length === 0 || appTotal <= 0
-      ? "No classified traffic yet."
+      ? `No classified traffic in the last ${usageWindow}.`
       : null;
 
   useEffect(() => {
@@ -281,6 +302,7 @@ export default function DevicesPage() {
             <UsageChart
               points={usageSeries?.points ?? []}
               windowSecs={WINDOW_SECS[usageWindow]}
+              nowSecs={usageSeries?.now}
               height={190}
             />
             <UsageLegend />
@@ -289,14 +311,16 @@ export default function DevicesPage() {
           <div style={{ borderLeft: "1px solid var(--qz-border)" }} className="pl-6">
             <div className="flex items-baseline gap-2 mb-3">
               <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Applications</span>
-              <span className="text-[11px] text-[var(--qz-fg-4)]">by classified bytes</span>
+              <span className="text-[11px] text-[var(--qz-fg-4)]" title={APP_MIX_HINT}>
+                by traffic volume
+              </span>
             </div>
             {appsEmpty ? (
               <div className="grid place-items-center text-[12px] text-[var(--qz-fg-4)]" style={{ minHeight: 150 }}>
                 {appsEmpty}
               </div>
             ) : (
-              <TopAppsDonut apps={appSlices} totalBytes={appTotal} />
+              <TopAppsDonut apps={appSlices} totalBytes={appTotal} centerSub="classified" />
             )}
           </div>
         </div>
@@ -763,14 +787,19 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
             {formatBytes(detail.bytes_in)} ↓ / {formatBytes(detail.bytes_out)} ↑
           </span>
         </div>
-        <UsageChart points={detail.usage} windowSecs={WINDOW_SECS[usageWindow]} height={170} />
+        <UsageChart points={detail.usage} windowSecs={WINDOW_SECS[usageWindow]} nowSecs={detail.now} height={170} />
         <UsageLegend />
       </div>
 
       {/* Applications + Ping */}
       <div className="grid gap-6" style={{ gridTemplateColumns: "minmax(0, 1.5fr) minmax(220px, 1fr)" }}>
         <div>
-          <div className="text-[13px] font-semibold text-[var(--qz-fg-1)] mb-3">Applications</div>
+          <div className="flex items-baseline gap-2 mb-3">
+            <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Applications</span>
+            <span className="text-[11px] text-[var(--qz-fg-4)]" title={APP_MIX_HINT}>
+              by traffic volume
+            </span>
+          </div>
           {(() => {
             const slices: AppSliceInput[] = (apps?.apps ?? [])
               .filter((a) => a.bytes > 0)
@@ -782,7 +811,7 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
                 </div>
               );
             }
-            return <TopAppsDonut apps={slices} centerSub="in window" minDonut={110} />;
+            return <TopAppsDonut apps={slices} centerSub="classified" />;
           })()}
         </div>
         <div style={{ borderLeft: "1px solid var(--qz-border)" }} className="pl-6">

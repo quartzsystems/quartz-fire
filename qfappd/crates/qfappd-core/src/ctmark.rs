@@ -17,7 +17,7 @@
 //! bits 15–0     untouched    reserved for other QuartzFire subsystems
 //! ```
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum LayoutError {
@@ -32,7 +32,13 @@ pub enum LayoutError {
 }
 
 /// The single source of truth for the mark encoding. Immutable once built.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+///
+/// `Deserialize` exists so *other* daemons can read the layout we publish in
+/// the catalog (see `Catalog::mark_layout`) rather than assuming the defaults —
+/// qfdevd decodes APP_ID off each flow's mark to attribute bytes per
+/// application. Deserializing skips `new`'s validation, so a consumer that
+/// reads a layout from disk must call `validate` before trusting it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Layout {
     pub classified_bit: u8,
     pub block_bit: u8,
@@ -60,12 +66,23 @@ impl Layout {
         action_shift: u8,
         action_bits: u8,
     ) -> Result<Self, LayoutError> {
-        for bit in [classified_bit, block_bit] {
+        let layout = Self { classified_bit, block_bit, app_shift, app_bits, action_shift, action_bits };
+        layout.validate()?;
+        Ok(layout)
+    }
+
+    /// Check the invariants `new` enforces. Deserialization bypasses `new`, so
+    /// anything read off disk must be run through this before use.
+    pub fn validate(&self) -> Result<(), LayoutError> {
+        for bit in [self.classified_bit, self.block_bit] {
             if bit > 31 {
                 return Err(LayoutError::BitOutOfRange(bit));
             }
         }
-        for (name, shift, bits) in [("app_id", app_shift, app_bits), ("action_id", action_shift, action_bits)] {
+        for (name, shift, bits) in [
+            ("app_id", self.app_shift, self.app_bits),
+            ("action_id", self.action_shift, self.action_bits),
+        ] {
             if bits == 0 {
                 return Err(LayoutError::EmptyField(name));
             }
@@ -73,15 +90,14 @@ impl Layout {
                 return Err(LayoutError::FieldOverflow(name, shift, bits));
             }
         }
-        let layout = Self { classified_bit, block_bit, app_shift, app_bits, action_shift, action_bits };
         // Fields must not overlap: the union of the masks must have exactly
         // as many set bits as the fields claim.
-        let expected = 2 + u32::from(app_bits) + u32::from(action_bits);
-        let actual = layout.qf_mask().count_ones();
+        let expected = 2 + u32::from(self.app_bits) + u32::from(self.action_bits);
+        let actual = self.qf_mask().count_ones();
         if expected != actual {
             return Err(LayoutError::Overlap { expected, actual });
         }
-        Ok(layout)
+        Ok(())
     }
 
     pub fn classified_mask(&self) -> u32 {

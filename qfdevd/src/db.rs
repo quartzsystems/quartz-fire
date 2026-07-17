@@ -17,9 +17,23 @@ use std::path::Path;
 /// 5-minute usage buckets, so 1h/24h/7d windows are cheap sums.
 pub const BUCKET_SECS: i64 = 300;
 
+/// Per-application buckets are hourly, not 5-minute.
+///
+/// Per-app rows multiply by the number of applications each device talks to, so
+/// at 5-minute resolution a modest LAN runs to millions of rows on an appliance
+/// with a small disk. The application mix is only ever read as a total over a
+/// window (the pie chart), never as a timeline, so an hour is as fine as
+/// anything the UI can show — and ~12x fewer rows.
+pub const APP_BUCKET_SECS: i64 = 3_600;
+
 /// Align a unix timestamp down to its 5-minute bucket.
 pub fn bucket_of(ts: i64) -> i64 {
     ts - ts.rem_euclid(BUCKET_SECS)
+}
+
+/// Align a unix timestamp down to its hourly per-application bucket.
+pub fn app_bucket_of(ts: i64) -> i64 {
+    ts - ts.rem_euclid(APP_BUCKET_SECS)
 }
 
 /// One device sighting to merge in. All the identity fields are optional: a
@@ -104,6 +118,22 @@ fn init_schema(conn: &Connection) -> Result<()> {
             PRIMARY KEY (mac, bucket_ts)
         );
         CREATE INDEX IF NOT EXISTS idx_usage_bucket_ts ON usage_buckets(bucket_ts);
+
+        -- Per-application bytes, hourly (see APP_BUCKET_SECS). `app_id` is the
+        -- nDPI protocol id App Control encoded in the flow's ct mark; resolving
+        -- it to a name is the reader's job (qfappd publishes the id→name
+        -- catalog), so this table never goes stale against a signature update.
+        -- Only classified flows land here, so SUM(app_usage_buckets) is <=
+        -- SUM(usage_buckets) for the same device and window.
+        CREATE TABLE IF NOT EXISTS app_usage_buckets (
+            mac       TEXT NOT NULL,
+            bucket_ts INTEGER NOT NULL,     -- hour-aligned unix time
+            app_id    INTEGER NOT NULL,     -- nDPI protocol id (0 = unknown)
+            bytes_in  INTEGER NOT NULL DEFAULT 0,
+            bytes_out INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (mac, bucket_ts, app_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_app_usage_bucket_ts ON app_usage_buckets(bucket_ts);
 
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         "#,
@@ -215,11 +245,40 @@ pub fn add_usage(conn: &Connection, mac: &str, bucket_ts: i64, bytes_in: u64, by
     Ok(())
 }
 
+/// Add byte deltas to a device's current hourly per-application bucket.
+pub fn add_app_usage(
+    conn: &Connection,
+    mac: &str,
+    bucket_ts: i64,
+    app_id: u16,
+    bytes_in: u64,
+    bytes_out: u64,
+) -> Result<()> {
+    if bytes_in == 0 && bytes_out == 0 {
+        return Ok(());
+    }
+    conn.execute(
+        r#"
+        INSERT INTO app_usage_buckets (mac, bucket_ts, app_id, bytes_in, bytes_out)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+        ON CONFLICT(mac, bucket_ts, app_id) DO UPDATE SET
+            bytes_in  = app_usage_buckets.bytes_in  + excluded.bytes_in,
+            bytes_out = app_usage_buckets.bytes_out + excluded.bytes_out
+        "#,
+        params![mac, bucket_ts, app_id as i64, bytes_in as i64, bytes_out as i64],
+    )?;
+    Ok(())
+}
+
 /// Prune aged usage buckets and long-unseen devices. Returns (buckets, devices)
 /// deleted. `device_retention_days == 0` disables device pruning.
 pub fn prune(conn: &Connection, now: i64, usage_days: i64, device_days: i64) -> Result<(usize, usize)> {
     let usage_cutoff = now - usage_days * 86_400;
     let buckets = conn.execute("DELETE FROM usage_buckets WHERE bucket_ts < ?1", params![usage_cutoff])?;
+    // Per-app buckets age out on the same retention as the per-device ones —
+    // they're a breakdown of the same traffic, so outliving it would leave a mix
+    // with no total to belong to.
+    conn.execute("DELETE FROM app_usage_buckets WHERE bucket_ts < ?1", params![usage_cutoff])?;
 
     let devices = if device_days > 0 {
         let dev_cutoff = now - device_days * 86_400;
@@ -228,6 +287,10 @@ pub fn prune(conn: &Connection, now: i64, usage_days: i64, device_days: i64) -> 
         let n = conn.execute("DELETE FROM devices WHERE last_seen < ?1", params![dev_cutoff])?;
         conn.execute(
             "DELETE FROM usage_buckets WHERE mac NOT IN (SELECT mac FROM devices)",
+            [],
+        )?;
+        conn.execute(
+            "DELETE FROM app_usage_buckets WHERE mac NOT IN (SELECT mac FROM devices)",
             [],
         )?;
         n
@@ -384,6 +447,162 @@ mod tests {
         assert_eq!((b_in, b_out), (15, 21));
         let n: i64 = c.query_row("SELECT COUNT(*) FROM usage_buckets WHERE mac='m'", [], |r| r.get(0)).unwrap();
         assert_eq!(n, 2);
+    }
+
+    #[test]
+    fn app_usage_accumulates_per_app_and_bucket() {
+        let c = mem();
+        add_app_usage(&c, "m", 3600, 91, 10, 20).unwrap();
+        add_app_usage(&c, "m", 3600, 91, 5, 1).unwrap();
+        // Same bucket, different app → its own row.
+        add_app_usage(&c, "m", 3600, 244, 7, 3).unwrap();
+        // Same app, next hour → its own row.
+        add_app_usage(&c, "m", 7200, 91, 100, 0).unwrap();
+
+        let (b_in, b_out): (i64, i64) = c
+            .query_row(
+                "SELECT bytes_in,bytes_out FROM app_usage_buckets WHERE mac='m' AND bucket_ts=3600 AND app_id=91",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((b_in, b_out), (15, 21));
+        let n: i64 = c.query_row("SELECT COUNT(*) FROM app_usage_buckets", [], |r| r.get(0)).unwrap();
+        assert_eq!(n, 3);
+    }
+
+    /// End-to-end over the real per-application chain: a `conntrack -L` line as
+    /// the kernel prints it → parse → account → decode the mark → store → read
+    /// back with the exact query the WebUI backend runs.
+    ///
+    /// Each half is unit-tested already, but nothing else pins the seams: the
+    /// mark's bit layout is agreed with qfappd, and the table's shape with the
+    /// backend, which builds its own copy of this schema in its tests. Both
+    /// could drift and every existing test would stay green.
+    #[test]
+    fn conntrack_line_to_backend_query_end_to_end() {
+        use crate::conntrack::{parse_line, Accountant};
+        use crate::mark;
+
+        let c = mem();
+        upsert_sighting(&c, &Sighting { mac: "aa".into(), seen_at: 7_200, ..Default::default() }).unwrap();
+        c.execute("UPDATE devices SET current_ip='10.0.0.5' WHERE mac='aa'", []).unwrap();
+
+        // A classified TLS flow: CLASSIFIED (bit 31) + app_id 91 (bits 29-19),
+        // exactly as qfappd encodes it and conntrack prints it.
+        let want_mark = (1u32 << 31) | (91u32 << 19);
+        let line = format!(
+            "tcp 6 431999 ESTABLISHED src=10.0.0.5 dst=1.2.3.4 sport=51000 dport=443 \
+             packets=10 bytes=1000 src=1.2.3.4 dst=10.0.0.5 sport=443 dport=51000 \
+             packets=8 bytes=4000000 [ASSURED] mark={want_mark} use=1 id=42"
+        );
+
+        let flow = parse_line(&line).expect("kernel-shaped line parses");
+        assert_eq!(flow.mark, want_mark);
+
+        let mut acct = Accountant::new();
+        acct.mark_primed(); // steady state, not the startup baseline
+        let delta = acct
+            .observe(&flow, false, |ip| (ip == "10.0.0.5").then(|| "aa".to_string()))
+            .expect("a resolvable flow with bytes yields a delta");
+
+        let app_id = mark::DEFAULT.app_id(delta.mark).expect("a classified flow names an app");
+        assert_eq!(app_id, 91, "APP_ID must survive the round trip through conntrack");
+
+        let bucket = app_bucket_of(7_200);
+        add_usage(&c, &delta.mac, bucket_of(7_200), delta.bytes_in, delta.bytes_out).unwrap();
+        add_app_usage(&c, &delta.mac, bucket, app_id, delta.bytes_in, delta.bytes_out).unwrap();
+
+        // Verbatim from the backend's aggregate_app_usage (per-client branch).
+        // If this SQL stops matching the schema, the pie silently empties.
+        let (got_id, got_bytes): (i64, i64) = c
+            .query_row(
+                "SELECT app_id, SUM(bytes_in + bytes_out) FROM app_usage_buckets
+                 WHERE bucket_ts >= ?1 AND mac = ?2 GROUP BY app_id",
+                params![0_i64, "aa"],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(got_id, 91);
+        // Download lands in bytes_in (the device is the flow's originator, so
+        // the reply direction is its download).
+        assert_eq!(got_bytes, 4_000_000 + 1_000);
+
+        // And the backend resolves the client by IP the same way.
+        let mac: String = c
+            .query_row("SELECT mac FROM devices WHERE current_ip = ?1", ["10.0.0.5"], |r| r.get(0))
+            .unwrap();
+        assert_eq!(mac, "aa");
+
+        // The per-app mix must never exceed the device total it breaks down.
+        let total: i64 = c
+            .query_row("SELECT SUM(bytes_in + bytes_out) FROM usage_buckets WHERE mac='aa'", [], |r| r.get(0))
+            .unwrap();
+        assert!(got_bytes <= total, "per-app {got_bytes} > device total {total}");
+    }
+
+    #[test]
+    fn unclassified_flow_contributes_to_the_total_but_names_no_app() {
+        use crate::conntrack::{parse_line, Accountant};
+        use crate::mark;
+
+        // mark=0: App Control off, or no verdict yet.
+        let line = "tcp 6 431999 ESTABLISHED src=10.0.0.5 dst=1.2.3.4 sport=51000 dport=443 \
+                    packets=10 bytes=1000 src=1.2.3.4 dst=10.0.0.5 sport=443 dport=51000 \
+                    packets=8 bytes=8000 [ASSURED] mark=0 use=1 id=43";
+        let flow = parse_line(line).unwrap();
+        let mut acct = Accountant::new();
+        acct.mark_primed();
+        let delta = acct
+            .observe(&flow, false, |ip| (ip == "10.0.0.5").then(|| "aa".to_string()))
+            .unwrap();
+        assert!(delta.bytes_in > 0, "the bytes still count toward the device");
+        assert_eq!(mark::DEFAULT.app_id(delta.mark), None, "but name no application");
+    }
+
+    #[test]
+    fn app_bucket_alignment_is_hourly() {
+        assert_eq!(app_bucket_of(3600), 3600);
+        assert_eq!(app_bucket_of(3601), 3600);
+        assert_eq!(app_bucket_of(7199), 3600);
+        assert_eq!(app_bucket_of(7200), 7200);
+    }
+
+    #[test]
+    fn app_id_zero_is_storable() {
+        // "Classified, but unknown protocol" is a real answer, not a sentinel.
+        let c = mem();
+        add_app_usage(&c, "m", 3600, 0, 42, 0).unwrap();
+        let n: i64 = c
+            .query_row("SELECT bytes_in FROM app_usage_buckets WHERE app_id=0", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(n, 42);
+    }
+
+    #[test]
+    fn prune_drops_aged_app_buckets_and_orphans() {
+        let c = mem();
+        let now = 100 * 86_400;
+        upsert_sighting(&c, &Sighting { mac: "live".into(), seen_at: now, ..Default::default() }).unwrap();
+        upsert_sighting(&c, &Sighting { mac: "gone".into(), seen_at: now - 95 * 86_400, ..Default::default() }).unwrap();
+        // Fresh and aged buckets for a device that stays.
+        add_app_usage(&c, "live", app_bucket_of(now - 3600), 91, 10, 10).unwrap();
+        add_app_usage(&c, "live", app_bucket_of(now - 40 * 86_400), 91, 10, 10).unwrap();
+        // A bucket belonging to a device that ages out entirely.
+        add_app_usage(&c, "gone", app_bucket_of(now - 3600), 91, 10, 10).unwrap();
+
+        prune(&c, now, 30, 90).unwrap();
+
+        // The aged bucket is gone; the fresh one survives.
+        let live: i64 = c
+            .query_row("SELECT COUNT(*) FROM app_usage_buckets WHERE mac='live'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(live, 1);
+        // And the departed device took its per-app history with it.
+        let orphans: i64 = c
+            .query_row("SELECT COUNT(*) FROM app_usage_buckets WHERE mac='gone'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(orphans, 0);
     }
 
     #[test]

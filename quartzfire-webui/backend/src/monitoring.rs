@@ -145,6 +145,8 @@ pub struct DeviceDetail {
     pub device: DeviceRow,
     /// 5-minute usage buckets over the window, oldest first (sparkline input).
     pub usage: Vec<UsagePoint>,
+    /// Our clock when this ran. See `UsageSeries::now`.
+    pub now: i64,
 }
 
 /// Aggregate usage timeseries across every client (GET /api/monitoring/usage).
@@ -156,6 +158,13 @@ pub struct UsageSeries {
     pub bytes_in: i64,
     pub bytes_out: i64,
     pub window: String,
+    /// Our clock when this ran, so the chart can lay out its time axis against
+    /// the same clock that stamped `points[].ts` and picked the window cutoff.
+    /// A browser whose clock differs from ours would otherwise scale buckets
+    /// against the wrong "now" — inflating the live bucket's rate, and sliding
+    /// real buckets outside the rendered span so they vanish from the graph
+    /// while still counting toward the totals above it.
+    pub now: i64,
 }
 
 /// One-shot ping result (POST /api/monitoring/devices/{mac}/ping).
@@ -376,7 +385,7 @@ pub async fn usage(
         let now = now_secs();
         let since = now - win_secs;
         let Some(conn) = open_db(&db_path)? else {
-            return Ok(UsageSeries { points: Vec::new(), bytes_in: 0, bytes_out: 0, window });
+            return Ok(UsageSeries { points: Vec::new(), bytes_in: 0, bytes_out: 0, window, now });
         };
         let mut stmt = conn.prepare(
             "SELECT bucket_ts, SUM(bytes_in), SUM(bytes_out)
@@ -390,7 +399,7 @@ pub async fn usage(
             .collect::<std::result::Result<Vec<_>, _>>()?;
         let bytes_in = points.iter().map(|p| p.bytes_in).sum();
         let bytes_out = points.iter().map(|p| p.bytes_out).sum();
-        Ok(UsageSeries { points, bytes_in, bytes_out, window })
+        Ok(UsageSeries { points, bytes_in, bytes_out, window, now })
     })
     .await
     .map_err(|e| AppError::Internal(e.into()))?
@@ -449,7 +458,7 @@ pub async fn detail(
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
-        Ok(Some(DeviceDetail { device, usage }))
+        Ok(Some(DeviceDetail { device, usage, now }))
     })
     .await
     .map_err(|e| AppError::Internal(e.into()))?

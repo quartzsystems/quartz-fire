@@ -15,6 +15,7 @@ mod conntrack;
 mod db;
 mod fingerprint;
 mod leases;
+mod mark;
 mod neigh;
 
 mod config;

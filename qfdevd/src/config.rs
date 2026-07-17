@@ -56,6 +56,11 @@ pub struct Config {
     /// lookup. Empty or absent = vendors show as unknown.
     pub oui_file: PathBuf,
 
+    /// App Control's published catalog. We read the ct-mark bit layout from it
+    /// so per-application usage decodes APP_ID the way qfappd encoded it.
+    /// Absent (App Control not installed) = no per-app attribution.
+    pub appcontrol_catalog_file: PathBuf,
+
     /// LAN interface prefixes the collectors trust. A neighbor/flow on an
     /// interface whose name starts with one of these is treated as a client;
     /// empty = trust every non-loopback interface. Keeps WAN peers and the
@@ -78,6 +83,7 @@ impl Default for Config {
             kea_lease_file: PathBuf::from("/config/dhcp/dhcpv4-leases.csv"),
             kea_control_socket: PathBuf::from("/run/kea/kea4-ctrl-socket"),
             oui_file: PathBuf::from("/usr/share/ieee-data/oui.txt"),
+            appcontrol_catalog_file: PathBuf::from("/run/qfappd/catalog.json"),
             lan_interface_prefixes: Vec::new(),
         }
     }

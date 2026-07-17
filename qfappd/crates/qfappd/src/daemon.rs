@@ -131,11 +131,17 @@ pub fn run(config: Config) -> anyhow::Result<()> {
     // Publish the catalog once for the WebUI's app/category tree (unprivileged
     // read). Best-effort: a stale/missing file just falls back to the shipped
     // fixture in the UI.
+    //
+    // The published copy also carries the ct-mark layout in force, which qfdevd
+    // needs to decode APP_ID off a flow's mark for per-application accounting.
+    // It's stamped on the written file only — the in-memory `catalog` stays as
+    // libndpi produced it, since policy loading has no business seeing it.
     if !config.api.catalog_path.as_os_str().is_empty() {
         if let Some(parent) = config.api.catalog_path.parent() {
             std::fs::create_dir_all(parent).ok();
         }
-        match serde_json::to_string(&catalog) {
+        let published = Catalog { mark_layout: Some(layout), ..catalog.clone() };
+        match serde_json::to_string(&published) {
             Ok(json) => {
                 if let Err(e) = std::fs::write(&config.api.catalog_path, json) {
                     tracing::warn!("could not write catalog {}: {e}", config.api.catalog_path.display());

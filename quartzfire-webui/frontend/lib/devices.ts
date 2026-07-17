@@ -75,6 +75,8 @@ export interface UsagePoint {
 export interface DeviceDetail extends Device {
   /** 5-minute usage buckets over the window, oldest first (sparkline input). */
   usage: UsagePoint[];
+  /** The box's clock when the query ran. See `UsageSeries.now`. */
+  now: number;
 }
 
 export interface DeviceQuery {
@@ -120,6 +122,10 @@ export interface UsageSeries {
   bytes_in: number;
   bytes_out: number;
   window: UsageWindow;
+  /** The box's clock when the query ran (unix seconds). The charts lay their
+   *  time axis out against this rather than the browser's clock, which may
+   *  disagree with the box's — see UsageChart. */
+  now: number;
 }
 
 /// Combined usage timeseries over every client, for the top-of-page graph.

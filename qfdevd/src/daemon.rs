@@ -22,6 +22,7 @@ use tokio::process::Command;
 
 use crate::config::Config;
 use crate::conntrack::{self, Accountant};
+use crate::mark;
 use crate::db::{self, Sighting};
 use crate::fingerprint::{self, Signals};
 use crate::{leases, neigh};
@@ -37,6 +38,11 @@ struct Shared {
     ip_map: Mutex<HashMap<String, String>>,
     /// Byte-accounting state shared by the snapshot poll and destroy stream.
     accountant: Mutex<Accountant>,
+    /// How to read an application id out of a flow's ct mark. Read once from
+    /// App Control's published catalog at startup — qfappd rewrites that file
+    /// only on its own restart, and a layout change needs both daemons
+    /// restarted anyway (the old marks are already on live flows).
+    mark_layout: mark::MarkLayout,
     /// Liveness/health for status.json.
     health: Health,
 }
@@ -122,11 +128,14 @@ pub fn run(cfg: Config) -> anyhow::Result<()> {
     set_group_access(&cfg.db_path);
     tracing::info!("device inventory open at {}", cfg.db_path.display());
 
+    let mark_layout = mark::load_layout(&cfg.appcontrol_catalog_file);
+
     let shared = Arc::new(Shared {
         cfg,
         db: Mutex::new(conn),
         ip_map: Mutex::new(HashMap::new()),
         accountant: Mutex::new(Accountant::new()),
+        mark_layout,
         health: Health::default(),
     });
 
@@ -420,6 +429,18 @@ async fn conntrack_snapshot_loop(shared: Arc<Shared>) {
             // final bytes, if any, arrive via the destroy stream). Bounds the
             // map when the destroy stream is unavailable.
             acct.retain_keys(&live_keys);
+            // This pass has now baselined every flow that was already open when
+            // we started, so growth from here on is real and creditable. Must
+            // happen after the loop: priming first would credit those flows'
+            // entire history to this bucket.
+            if !acct.is_primed() {
+                acct.mark_primed();
+                tracing::info!(
+                    "conntrack accounting baselined against {} open flow(s); counting usage from now",
+                    live_keys.len()
+                );
+                continue;
+            }
         }
         commit_deltas(&shared, bucket, &deltas);
     }
@@ -476,14 +497,27 @@ async fn conntrack_destroy_loop(shared: Arc<Shared>) {
 }
 
 /// Fold a batch of device deltas into their usage buckets.
+///
+/// Every delta lands in the per-device total; a delta whose flow App Control has
+/// classified *also* lands in that device's per-application bucket. The two are
+/// written from one observation, so the per-app mix is always a subset of the
+/// device's total for the same window rather than a second, disagreeing count.
 fn commit_deltas(shared: &Shared, bucket: i64, deltas: &[conntrack::Delta]) {
     if deltas.is_empty() {
         return;
     }
+    let app_bucket = db::app_bucket_of(bucket);
     let conn = shared.db.lock().unwrap();
     for d in deltas {
         if let Err(e) = db::add_usage(&conn, &d.mac, bucket, d.bytes_in, d.bytes_out) {
             tracing::warn!("add_usage {}: {e}", d.mac);
+        }
+        // Unclassified flows (App Control off, or a verdict not reached yet)
+        // contribute to the device total but name no application.
+        if let Some(app_id) = shared.mark_layout.app_id(d.mark) {
+            if let Err(e) = db::add_app_usage(&conn, &d.mac, app_bucket, app_id, d.bytes_in, d.bytes_out) {
+                tracing::warn!("add_app_usage {} app {app_id}: {e}", d.mac);
+            }
         }
     }
     shared.health.last_usage.store(now_secs() as u64, Ordering::Relaxed);

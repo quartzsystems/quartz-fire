@@ -22,6 +22,22 @@ interface UsageChartProps {
   /** Full window in seconds, so the x-axis spans the whole period (like the
    *  reference), not just the range that happened to have traffic. */
   windowSecs: number;
+  /** The box's clock when it produced `points` (unix seconds).
+   *
+   *  The axis must be laid out against the same clock that stamped the buckets
+   *  and chose the window cutoff. Using the browser's clock instead breaks two
+   *  ways when the two disagree — which they do on any box whose time drifts,
+   *  and by an hour on a DST/timezone misconfiguration:
+   *
+   *    * buckets outside the browser's idea of the window are never drawn, yet
+   *      the backend still counts them in the totals shown beside the chart —
+   *      so the graph reads far lower than the figure above it, and
+   *    * the trailing bucket's divisor is `now - ts`, which goes negative or
+   *      tiny against a skewed clock and floors at MIN_DIVISOR_SECS, inflating
+   *      a full bucket's rate by up to 10x into a spike that never happened.
+   *
+   *  Falls back to the browser clock only if the backend didn't say. */
+  nowSecs?: number;
   bucketSecs?: number;
   height?: number;
 }
@@ -55,23 +71,20 @@ interface Bucket {
   up: number;
 }
 
-export function UsageChart({ points, windowSecs, bucketSecs = 300, height = 200 }: UsageChartProps) {
+export function UsageChart({ points, windowSecs, nowSecs, bucketSecs = 300, height = 200 }: UsageChartProps) {
   const { ref, width } = useChartSize(640);
   const [hover, setHover] = useState<number | null>(null);
 
   const W = width;
   const H = height;
-  const padL = 58;
   const padR = 12;
   const padT = 12;
   const padB = 26;
-  const innerW = Math.max(1, W - padL - padR);
-  const innerH = Math.max(1, H - padT - padB);
 
   const { series, maxRate, t0, t1 } = useMemo(() => {
     // Densify to a continuous timeline over the full window so gaps read as
     // zero (buckets with no traffic are simply absent from `points`).
-    const now = Math.floor(Date.now() / 1000);
+    const now = nowSecs ?? Math.floor(Date.now() / 1000);
     const end = now - (now % bucketSecs);
     const start = end - Math.ceil(windowSecs / bucketSecs) * bucketSecs;
     const byTs = new Map(points.map((p) => [p.ts - (p.ts % bucketSecs), p]));
@@ -81,16 +94,33 @@ export function UsageChart({ points, windowSecs, bucketSecs = 300, height = 200 
       const p = byTs.get(ts);
       // The newest bucket is still filling: divide by the seconds that have
       // actually elapsed in it, not the full width, or live traffic reads low
-      // and then ramps as the bucket closes.
+      // and then ramps as the bucket closes. `elapsed` is clamped into the
+      // bucket so a clock that slipped can't divide a full bucket by a sliver
+      // and manufacture a spike.
+      const elapsed = Math.min(bucketSecs, Math.max(0, now - ts));
       const complete = ts + bucketSecs <= now;
-      const divisor = complete ? bucketSecs : Math.max(MIN_DIVISOR_SECS, now - ts);
+      const divisor = complete ? bucketSecs : Math.max(MIN_DIVISOR_SECS, elapsed);
       const down = (p?.bytes_in ?? 0) / divisor;
       const up = (p?.bytes_out ?? 0) / divisor;
       out.push({ ts, down, up });
       max = Math.max(max, down, up);
     }
     return { series: out, maxRate: max || 1, t0: start, t1: end };
-  }, [points, windowSecs, bucketSecs]);
+  }, [points, windowSecs, nowSecs, bucketSecs]);
+
+  // 4 horizontal gridlines with rate labels.
+  const yTicks = [0, 1 / 3, 2 / 3, 1].map((f) => ({ f, label: f === 0 ? "0" : formatRate(maxRate * f) }));
+
+  // Size the left gutter to the widest tick label instead of a fixed width: the
+  // labels are right-anchored at `padL - LABEL_GAP`, so a long one ("85.49
+  // Mbps") ran off the left edge of the SVG and got clipped. 11px text averages
+  // ~6.2px/char here, and the ~2px slack keeps it honest for wide glyphs.
+  const LABEL_GAP = 8;
+  const labelPx = Math.max(...yTicks.map((t) => t.label.length)) * 6.2 + 2;
+  const padL = Math.ceil(labelPx) + LABEL_GAP;
+
+  const innerW = Math.max(1, W - padL - padR);
+  const innerH = Math.max(1, H - padT - padB);
 
   const n = series.length;
   const x = (ts: number) => padL + ((ts - t0) / (t1 - t0 || 1)) * innerW;
@@ -109,8 +139,6 @@ export function UsageChart({ points, windowSecs, bucketSecs = 300, height = 200 
   const area = (pts: readonly (readonly [number, number])[]) =>
     pts.length < 2 ? "" : `${line(pts)} L${x(t1).toFixed(1)},${baseY} L${x(t0).toFixed(1)},${baseY} Z`;
 
-  // 4 horizontal gridlines with rate labels.
-  const yTicks = [0, 1 / 3, 2 / 3, 1].map((f) => ({ f, rate: maxRate * f }));
   // ~5 evenly spaced time ticks (fewer when the chart is narrow).
   const xTickCount = Math.max(2, Math.min(5, Math.floor(innerW / 90)));
   const xTicks = Array.from({ length: xTickCount }, (_, i) => {
@@ -140,7 +168,7 @@ export function UsageChart({ points, windowSecs, bucketSecs = 300, height = 200 
     >
       <svg width={W} height={H} style={{ display: "block" }} role="img" aria-label="Network usage over time">
         {/* gridlines + y labels */}
-        {yTicks.map(({ f, rate }) => {
+        {yTicks.map(({ f, label }) => {
           const yy = padT + innerH - f * innerH;
           return (
             <g key={f}>
@@ -153,8 +181,8 @@ export function UsageChart({ points, windowSecs, bucketSecs = 300, height = 200 
                 strokeWidth={1}
                 strokeDasharray={f === 0 ? undefined : "3 3"}
               />
-              <text x={padL - 8} y={yy} textAnchor="end" dominantBaseline="middle" fontSize={11} fill="var(--qz-fg-4)">
-                {f === 0 ? "0" : formatRate(rate)}
+              <text x={padL - LABEL_GAP} y={yy} textAnchor="end" dominantBaseline="middle" fontSize={11} fill="var(--qz-fg-4)">
+                {label}
               </text>
             </g>
           );
