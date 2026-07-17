@@ -185,21 +185,40 @@ pub fn read_service(conf: &dyn ConfigRead) -> Model {
     model
 }
 
+/// Config path of a policy's target rule.
+///
+/// A base chain holds its rules under `firewall ipv4 <chain> filter`; a zone
+/// rule lives in the named ruleset bound to its zone pair, which has neither
+/// the `filter` level nor the chain name — `name:<ruleset>` is how the WebUI
+/// encodes that (see lib/firewall.ts `zoneRuleChain`).
+fn rule_path<'a>(ruleset: &'a str, rule_s: &'a str) -> Vec<&'a str> {
+    match zone_ruleset(ruleset) {
+        Some(name) => vec!["firewall", "ipv4", "name", name, "rule", rule_s],
+        None => vec!["firewall", "ipv4", ruleset, "filter", "rule", rule_s],
+    }
+}
+
+/// The named ruleset a `name:<ruleset>` scope refers to, or None for a base
+/// chain.
+pub fn zone_ruleset(ruleset: &str) -> Option<&str> {
+    ruleset.strip_prefix("name:")
+}
+
 /// The bits of one firewall rule that the geo match replication needs, or
 /// None when the rule does not exist (a dangling policy).
 pub fn read_rule_cfg(conf: &dyn ConfigRead, ruleset: &str, rule: u32) -> Option<RuleCfg> {
     let rule_s = rule.to_string();
-    let base: Vec<&str> = vec!["firewall", "ipv4", ruleset, "filter", "rule", &rule_s];
+    let base = rule_path(ruleset, &rule_s);
     if !conf.exists(&base) {
         return None;
     }
 
     let iface = |key: &str| -> Option<IfaceSpec> {
         if let Some(name) = conf.return_value(&join(&base, &[key, "name"])) {
-            return Some(IfaceSpec { name: Some(name), group: None });
+            return Some(IfaceSpec { name: Some(name), group: None, names: Vec::new() });
         }
         if let Some(group) = conf.return_value(&join(&base, &[key, "group"])) {
-            return Some(IfaceSpec { name: None, group: Some(group) });
+            return Some(IfaceSpec { name: None, group: Some(group), names: Vec::new() });
         }
         None
     };
@@ -229,6 +248,50 @@ pub fn read_rule_cfg(conf: &dyn ConfigRead, ruleset: &str, rule: u32) -> Option<
         destination,
         protocol: conf.return_value(&join(&base, &["protocol"])),
     })
+}
+
+/// The zone pair a named ruleset is bound to, with each zone expanded to the
+/// interfaces it holds.
+///
+/// A zone rule states no interface of its own: VyOS jumps into the pair's
+/// ruleset from a zone chain that has already matched on iifname/oifname, so
+/// the rule body only carries the extra criteria. Replicating such a rule's
+/// match without folding the zones back in would match traffic between every
+/// interface, not just the pair's — far broader than the rule it mirrors.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ZonePairCfg {
+    /// Interfaces of the source zone; empty when it's the local zone.
+    pub src_interfaces: Vec<String>,
+    /// Interfaces of the destination zone; empty when it's the local zone.
+    pub dst_interfaces: Vec<String>,
+    /// Whether the source zone is the firewall itself (traffic it originates).
+    pub src_local: bool,
+    /// Whether the destination zone is the firewall itself (traffic to it).
+    pub dst_local: bool,
+}
+
+/// Find the pair bound to `ruleset` by scanning the zones' `from` bindings.
+/// The binding is authoritative — the ruleset's name is only a label, and zone
+/// names may contain the separator, so the name can't be parsed back.
+pub fn read_zone_pair(conf: &dyn ConfigRead, ruleset: &str) -> Option<ZonePairCfg> {
+    let zone_ifaces = |zone: &str| conf.return_values(&["firewall", "zone", zone, "member", "interface"]);
+    let is_local = |zone: &str| conf.exists(&["firewall", "zone", zone, "local-zone"]);
+
+    for dst in conf.list_nodes(&["firewall", "zone"]) {
+        for src in conf.list_nodes(&["firewall", "zone", &dst, "from"]) {
+            let bound = conf.return_value(&["firewall", "zone", &dst, "from", &src, "firewall", "name"]);
+            if bound.as_deref() != Some(ruleset) {
+                continue;
+            }
+            return Some(ZonePairCfg {
+                src_interfaces: zone_ifaces(&src),
+                dst_interfaces: zone_ifaces(&dst),
+                src_local: is_local(&src),
+                dst_local: is_local(&dst),
+            });
+        }
+    }
+    None
 }
 
 /// Every firewall group's members, for group-reference resolution.

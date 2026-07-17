@@ -18,7 +18,7 @@
 // keeping it here avoids an import cycle.
 
 import type { AutoGroup, FirewallConfig, FirewallRule } from "./firewall";
-import { applyRuleOrder, deleteRule, renumberMap } from "./firewall";
+import { applyRuleOrder, deleteRule, isBaseChain, renumberByRule, renumberMap } from "./firewall";
 import type { VyosCommand } from "./interfaces";
 import { fetchGeolocation, policyBase } from "./geolocation";
 import { fetchAcStatus, saveAcConfig } from "./appcontrol";
@@ -41,15 +41,17 @@ export async function deleteRuleWithCascade(
   autoGroups: AutoGroup[],
   cfg?: FirewallConfig,
 ): Promise<RuleDeleteResult> {
-  // 1. Geolocation policies targeting this exact (chain, rule) — a rule number
-  //    is only unique within a chain, so match on both. Deleted in the same
-  //    commit as the rule.
+  // 1. Geolocation policies targeting this exact (scope, rule) — a rule number
+  //    is only unique within a scope, so match on both. A zone rule spans one
+  //    scope per pair and carries a policy on each, so every scope is checked;
+  //    matching only the representative would strand the rest. Deleted in the
+  //    same commit as the rule.
   let geoDeletes: VyosCommand[] = [];
   let removedGeoPolicies: number[] = [];
   try {
     const geo = await fetchGeolocation();
     const orphans = geo.policies.filter(
-      (p) => p.ruleset === rule.chain && p.rule === rule.rule,
+      (p) => p.rule === rule.rule && rule.scopes.some((s) => s.chain === p.ruleset),
     );
     removedGeoPolicies = orphans.map((p) => p.id);
     geoDeletes = orphans.map((p) => ({ op: "delete", path: policyBase(p.id) }));
@@ -60,11 +62,12 @@ export async function deleteRuleWithCascade(
   // `cfg` lets the delete also retire a zone pair whose last rule this was.
   await deleteRule(rule, autoGroups, geoDeletes, cfg);
 
-  // 2. Application Control binding (separate JSON store). Only forward rules can
-  //    be bound, so skip other chains. Best-effort: a failure here must not
-  //    surface as a failed delete — the rule is already gone.
+  // 2. Application Control binding (separate JSON store). Routed rules can
+  //    carry one — forward, and zone rules — so only traffic to/from the box
+  //    itself is skipped. Best-effort: a failure here must not surface as a
+  //    failed delete, since the rule is already gone.
   let removedAcBinding = false;
-  if (rule.chain === "forward") {
+  if (rule.chain === "forward" || !isBaseChain(rule.chain)) {
     try {
       const { settings } = await fetchAcStatus();
       const bindings = settings.bindings.filter((b) => b.id !== rule.rule);
@@ -125,13 +128,17 @@ export async function applyRuleOrderWithCascade(
 
   const renumbered = await applyRuleOrder(orderedRules, geoSets);
 
-  // 2. Application Control binding ids (forward rules only, hence `forward:`).
+  // 2. Application Control binding ids. A binding is keyed by rule NUMBER, not
+  //    by scope — so it's repointed from the by-number map. (The old lookup
+  //    hardcoded a `forward:` scope, which silently left a zone rule's binding
+  //    pointing at whatever rule later took its number.)
+  const byRule = renumberByRule(orderedRules);
   let repointedAcBindings = 0;
   try {
     const { settings } = await fetchAcStatus();
     let changed = false;
     const bindings = settings.bindings.map((b) => {
-      const to = moves.get(`forward:${b.id}`);
+      const to = byRule.get(b.id);
       if (to === undefined) return b;
       changed = true;
       repointedAcBindings++;

@@ -45,13 +45,23 @@ pub const HEADER: &str = "#!/usr/sbin/nft -f\n\
 # Managed by QuartzFire geolocation (geoip-apply) — do not edit;\n\
 # regenerated on every commit, database update, and firewall change.\n";
 
+/// The geo chain a base-chain policy's rules belong in.
+///
+/// Zone policies don't go through here: their ruleset names a zone pair, whose
+/// hook depends on whether either end is the local zone (see apply::policy_hook).
+/// Anything unrecognised lands in the forward hook — the common case, and the
+/// one a routed zone pair would want — rather than silently in output.
 pub fn hook_chain(ruleset: &str) -> &'static str {
     match ruleset {
-        "forward" => "geo_forward",
         "input" => "geo_input",
-        _ => "geo_output",
+        "output" => "geo_output",
+        _ => "geo_forward",
     }
 }
+
+/// geo chain → the nft hook it attaches to.
+pub const HOOKS: [(&str, &str); 3] =
+    [("geo_forward", "forward"), ("geo_input", "input"), ("geo_output", "output")];
 
 /// geo4_cn / geo6_cn (cc may also be the synthetic "known").
 pub fn set_name(cc: &str, family: u8) -> String {
@@ -284,16 +294,20 @@ fn action_chain_rules(action_name: &str, action: &Action, direction: &str) -> Ve
 /// `country_seed`: {UPPER-case CC → (packets, bytes)} — the same preservation
 /// for the per-country geoc_<cc> counters that feed the Top Blocked Countries
 /// dashboard tile.
+/// `hooks`: which geo chain each policy's rules go in, resolved against the
+/// config (a zone pair's hook depends on its zones — see apply::policy_hook).
+/// A policy missing from the map falls back to its ruleset's base-chain hook.
 pub fn render_full(
     model: &Model,
     matches: &BTreeMap<u32, Option<String>>,
+    hooks: &BTreeMap<u32, String>,
     sets: &BTreeMap<String, Vec<String>>,
     counter_seed: &BTreeMap<String, (u64, u64)>,
     country_seed: &BTreeMap<String, (u64, u64)>,
 ) -> String {
     // Enabled policies with a usable match, grouped by hook chain in policy
     // order. Direction "both" contributes a rule per direction.
-    let mut hook_rules: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    let mut hook_rules: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut used: BTreeSet<(String, String)> = BTreeSet::new();
     let mut policies: Vec<_> = model.policies.iter().collect();
     policies.sort_by_key(|p| p.id);
@@ -328,10 +342,11 @@ pub fn render_full(
                 chain_name(action_name, direction),
                 policy.id
             ));
-            hook_rules
-                .entry(hook_chain(ruleset))
-                .or_default()
-                .push(rule);
+            let hook = hooks
+                .get(&policy.id)
+                .map(String::as_str)
+                .unwrap_or_else(|| hook_chain(ruleset));
+            hook_rules.entry(hook.to_string()).or_default().push(rule);
         }
     }
 
@@ -392,11 +407,11 @@ pub fn render_full(
         lines.push("    }".into());
     }
 
-    for ruleset in ["forward", "input", "output"] {
-        let Some(rules) = hook_rules.get(hook_chain(ruleset)) else { continue };
-        lines.push(format!("    chain {} {{", hook_chain(ruleset)));
+    for (chain, nft_hook) in HOOKS {
+        let Some(rules) = hook_rules.get(chain) else { continue };
+        lines.push(format!("    chain {chain} {{"));
         lines.push(format!(
-            "        type filter hook {ruleset} priority {HOOK_PRIORITY}; policy accept;"
+            "        type filter hook {nft_hook} priority {HOOK_PRIORITY}; policy accept;"
         ));
         for rule in rules {
             lines.push(format!("        {rule}"));
@@ -491,7 +506,7 @@ mod tests {
         let sets = sets.unwrap_or_else(|| {
             required_sets(model).into_iter().map(|n| (n, Vec::new())).collect()
         });
-        render_full(model, &matches, &sets, &seed.unwrap_or_default(), &BTreeMap::new())
+        render_full(model, &matches, &BTreeMap::new(), &sets, &seed.unwrap_or_default(), &BTreeMap::new())
     }
 
     // ── collapse ──

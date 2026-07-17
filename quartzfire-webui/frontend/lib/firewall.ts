@@ -259,10 +259,27 @@ export interface RuleEndpoint {
   iface_group: string | null;
 }
 
+/// One config rule backing a UI rule: where it lives, and its raw subtree.
+export interface RuleScope {
+  chain: RuleChain;
+  /** Full raw config subtree — used to rebuild the rule when renumbering so
+   *  leaves this UI doesn't model (state, log-options, …) survive a reorder. */
+  raw: Cfg;
+}
+
 export interface FirewallRule {
   rule: number;
-  /** Base chain holding the rule — see RuleChain. */
+  /** Representative scope (`scopes[0].chain`). A base rule only ever has one;
+   *  a zone rule reports the first of its pairs. */
   chain: RuleChain;
+  /** Every config rule backing this one UI rule — one for a base-chain rule,
+   *  one per zone pair for a zone rule.
+   *
+   *  VyOS can't OR zone pairs: a rule From [LAN, DMZ] To [WAN] has to exist
+   *  once per pair, in each pair's own ruleset. All copies share this rule's
+   *  number (numbers are allocated globally, see nextRuleNumber), which is
+   *  what lets them be recognised as one rule on the way back in. */
+  scopes: RuleScope[];
   /** Rule name, stored as the VyOS `description` leaf. */
   name: string | null;
   action: RuleAction | null;
@@ -279,9 +296,18 @@ export interface FirewallRule {
   enabled: boolean;
   /** Whether matches are logged (feeds the Traffic Monitor). */
   log: boolean;
-  /** Full raw config subtree — used to rebuild the rule when renumbering so
-   *  leaves this UI doesn't model (state, log-options, …) survive a reorder. */
+  /** Raw config subtree of the representative scope (`scopes[0].raw`). */
   raw: Cfg;
+}
+
+/// Stable identity of a UI rule.
+///
+/// Rule numbers are only unique within a chain, so base rules key on both. A
+/// zone rule spans one scope per pair and its pair set changes as it's edited,
+/// so it keys on its number alone — which is safe because new rule numbers are
+/// allocated across every scope at once (nextRuleNumber).
+export function ruleKey(rule: Pick<FirewallRule, "chain" | "rule">): string {
+  return isBaseChain(rule.chain) ? `${rule.chain}:${rule.rule}` : `zone:${rule.rule}`;
 }
 
 /// What already exists in a base chain — used to seed the hidden safety
@@ -626,6 +652,7 @@ function parseChain(filter: Cfg, chain: RuleChain): { rules: FirewallRule[]; set
       enabled: !("disable" in cfg),
       log: "log" in cfg,
       raw: cfg,
+      scopes: [{ chain, raw: cfg }],
     });
   }
   return {
@@ -638,6 +665,29 @@ function parseChain(filter: Cfg, chain: RuleChain): { rules: FirewallRule[]; set
       default_log: "default-log" in filter,
     },
   };
+}
+
+/// Collapse the per-pair copies of a zone rule back into one UI rule.
+///
+/// A rule spanning several zone pairs is stored once per pair, all copies
+/// sharing the rule number (see FirewallRule.scopes). Grouping here — rather
+/// than in the page — is what keeps one rule showing as one row, with one
+/// position in the order and one set of controls.
+///
+/// Copies are ordered by ruleset name so the representative scope is stable
+/// across reads; the first copy supplies the body (they're written identical).
+function groupZoneRules(rules: FirewallRule[]): FirewallRule[] {
+  const byNumber = new Map<number, FirewallRule[]>();
+  for (const r of rules) {
+    const list = byNumber.get(r.rule);
+    if (list) list.push(r);
+    else byNumber.set(r.rule, [r]);
+  }
+  return [...byNumber.values()].map((copies) => {
+    copies.sort((a, b) => a.chain.localeCompare(b.chain));
+    const head = copies[0];
+    return { ...head, scopes: copies.map((c) => ({ chain: c.chain, raw: c.raw })) };
+  });
 }
 
 /// Configured aliases, policies, zones, and filter rules — the three base
@@ -656,8 +706,10 @@ export async function fetchFirewall(): Promise<FirewallConfig> {
   // the CLI isn't part of the zone model and stays invisible here.
   const named = childCfg(ipv4, "name") ?? {};
   const pairs = parseZonePairs(fw);
-  const zoneRules = [...new Set(pairs.map((p) => p.ruleset))].flatMap(
-    (ruleset) => parseChain(childCfg(named, ruleset) ?? {}, zoneRuleChain(ruleset)).rules,
+  const zoneRules = groupZoneRules(
+    [...new Set(pairs.map((p) => p.ruleset))].flatMap(
+      (ruleset) => parseChain(childCfg(named, ruleset) ?? {}, zoneRuleChain(ruleset)).rules,
+    ),
   );
 
   return {
@@ -1107,71 +1159,86 @@ export function endpointToSelection(e: RuleEndpoint, autoGroups: AutoGroup[]): E
 /// where the rule lives: the Firewall endpoint for the input/output chains, or
 /// the side's zone for a zone pair's ruleset. Neither is stored as a match node
 /// — the rule's location is what expresses them.
+/// `cfg` is required: a zone rule stores no zone match, so without it the
+/// side would come back missing the zone it belongs to.
 export function ruleSelection(
   rule: FirewallRule,
   side: "from" | "to",
   autoGroups: AutoGroup[],
-  cfg?: Pick<FirewallConfig, "zone_pairs" | "zones">,
+  cfg: Pick<FirewallConfig, "zone_pairs" | "zones">,
 ): EndpointSelection {
   const sel = endpointToSelection(side === "from" ? rule.from : rule.to, autoGroups);
   if ((side === "to" && rule.chain === "input") || (side === "from" && rule.chain === "output")) {
     sel.unshift({ kind: "firewall" });
     return sel;
   }
-  const pair = cfg ? pairForChain(cfg.zone_pairs, rule.chain) : null;
-  if (pair) {
-    const name = side === "from" ? pair.src : pair.dst;
-    // The local zone is the firewall itself — show it as the Firewall endpoint
-    // rather than as a zone, so both ways of reaching the box read the same.
-    const zone = cfg!.zones.find((z) => z.name === name);
-    sel.unshift(zone?.local ? { kind: "firewall" } : { kind: "zone", name });
+  // A zone rule spans one scope per pair, so this side's zones are the distinct
+  // src (or dst) across all of them — From [LAN, DMZ] To [WAN] is two scopes
+  // whose srcs are LAN and DMZ.
+  const names = new Set<string>();
+  for (const scope of rule.scopes) {
+    const pair = pairForChain(cfg.zone_pairs, scope.chain);
+    if (pair) names.add(side === "from" ? pair.src : pair.dst);
   }
+  // The local zone is the firewall itself — show it as the Firewall endpoint
+  // rather than as a zone, so both ways of reaching the box read the same.
+  const entries = [...names].map((name): EndpointEntry =>
+    cfg.zones.find((z) => z.name === name)?.local ? { kind: "firewall" } : { kind: "zone", name },
+  );
+  sel.unshift(...entries);
   return sel;
 }
 
-/// The zone a side resolves to, or null. The Firewall endpoint resolves to the
-/// local zone, because that's what VyOS calls the box itself.
-function sideZone(sel: EndpointSelection, zones: FirewallZone[]): string | null {
-  const zone = sel.find((e) => e.kind === "zone");
-  if (zone) return zone.name;
-  if (sel.some((e) => e.kind === "firewall")) return localZone(zones)?.name ?? null;
-  return null;
+/// The zones a side resolves to. The Firewall endpoint resolves to the local
+/// zone, because that's what VyOS calls the box itself.
+function sideZones(sel: EndpointSelection, zones: FirewallZone[]): string[] {
+  const named = sel.filter((e) => e.kind === "zone").map((e) => (e as { name: string }).name);
+  if (named.length > 0) return [...new Set(named)];
+  if (sel.some((e) => e.kind === "firewall")) {
+    const local = localZone(zones);
+    return local ? [local.name] : [];
+  }
+  return [];
 }
 
-/// The zone pair a rule with these sides belongs to, or null when neither side
-/// names a zone (an ordinary base-chain rule).
+/// The zone pairs a rule with these sides spans — the cross product of its From
+/// and To zones — or an empty list when neither side names a zone (an ordinary
+/// base-chain rule).
 ///
-/// Throws when the sides describe a pair VyOS can't express — a zone on one
-/// side only, or a zone to itself.
-export function zonePairFor(
+/// VyOS has no way to OR zone pairs, so a rule From [LAN, DMZ] To [WAN] is two
+/// pairs, and gets written once into each pair's ruleset (see
+/// FirewallRule.scopes).
+///
+/// Throws when the sides describe something VyOS can't express — a zone on one
+/// side only, or a zone appearing on both sides.
+export function zonePairsFor(
   from: EndpointSelection,
   to: EndpointSelection,
   zones: FirewallZone[] = [],
-): ZonePair | null {
-  if (from.filter((e) => e.kind === "zone").length > 1 || to.filter((e) => e.kind === "zone").length > 1) {
-    throw new Error("A rule side can only carry one zone — a rule belongs to a single zone pair.");
-  }
+): ZonePair[] {
   const namesZone = (sel: EndpointSelection) => sel.some((e) => e.kind === "zone");
-  if (!namesZone(from) && !namesZone(to)) return null;
+  if (!namesZone(from) && !namesZone(to)) return [];
 
-  // VyOS binds rules to an ordered pair of zones, so a zone on one side needs a
-  // zone (or the Firewall, which is the local zone) on the other. There's
-  // nowhere to put a zone-to-anywhere rule.
-  const src = sideZone(from, zones);
-  const dst = sideZone(to, zones);
-  if (src === null || dst === null) {
-    const emptySide = src === null ? from : to;
+  // A zone on one side needs a zone (or the Firewall, which is the local zone)
+  // on the other — there's nowhere to put a zone-to-anywhere rule.
+  const srcs = sideZones(from, zones);
+  const dsts = sideZones(to, zones);
+  if (srcs.length === 0 || dsts.length === 0) {
+    const emptySide = srcs.length === 0 ? from : to;
     if (emptySide.some((e) => e.kind === "firewall")) {
       throw new Error("Set a Firewall zone on the Zones page first — a zone rule to or from the firewall needs one.");
     }
     throw new Error(
-      `Pick a zone for ${src === null ? "From" : "To"} too. A zone rule always goes from one zone to another.`,
+      `Pick a zone for ${srcs.length === 0 ? "From" : "To"} too. A zone rule always goes from one zone to another.`,
     );
   }
-  if (src === dst) {
-    throw new Error("From and To are the same zone. Traffic inside a zone is controlled by its intra-zone filtering.");
+  const both = srcs.filter((s) => dsts.includes(s));
+  if (both.length > 0) {
+    throw new Error(
+      `${both.join(", ")} is on both sides of this rule. Traffic inside a zone is controlled by its intra-zone filtering, on the Zones page.`,
+    );
   }
-  return { src, dst, ruleset: pairRuleset(src, dst) };
+  return srcs.flatMap((src) => dsts.map((dst) => ({ src, dst, ruleset: pairRuleset(src, dst) })));
 }
 
 /// Where a rule with these sides lives — a base chain, or the ruleset bound to
@@ -1179,17 +1246,31 @@ export function zonePairFor(
 ///
 /// `zones` is optional so callers that predate zones keep working; without it a
 /// zone entry can't be resolved and is rejected.
+/// Every scope a rule with these sides occupies — one base chain, or one
+/// ruleset per zone pair. `ruleChainFor` is the representative (first) scope.
+export function ruleChainsFor(
+  from: EndpointSelection,
+  to: EndpointSelection,
+  zones: FirewallZone[] = [],
+): RuleChain[] {
+  const f = from.some((e) => e.kind === "firewall");
+  const t = to.some((e) => e.kind === "firewall");
+  if (f && t) throw new Error("Only one side of a rule can be the Firewall itself.");
+  const pairs = zonePairsFor(from, to, zones);
+  if (pairs.length > 0) {
+    // Sorted so the representative scope matches what groupZoneRules picks on
+    // the way back in.
+    return pairs.map((p) => zoneRuleChain(p.ruleset)).sort((a, b) => a.localeCompare(b));
+  }
+  return [t ? "input" : f ? "output" : "forward"];
+}
+
 export function ruleChainFor(
   from: EndpointSelection,
   to: EndpointSelection,
   zones: FirewallZone[] = [],
 ): RuleChain {
-  const f = from.some((e) => e.kind === "firewall");
-  const t = to.some((e) => e.kind === "firewall");
-  if (f && t) throw new Error("Only one side of a rule can be the Firewall itself.");
-  const pair = zonePairFor(from, to, zones);
-  if (pair) return zoneRuleChain(pair.ruleset);
-  return t ? "input" : f ? "output" : "forward";
+  return ruleChainsFor(from, to, zones)[0];
 }
 
 /// A rule's traffic match: a policy (port-group + protocol) or the built-in
@@ -1268,16 +1349,29 @@ function diffAliasAutoGroup(
   for (const v of live?.members ?? []) if (!members.includes(v)) out.push({ op: "delete", path: [...gp, leaf, v] });
 }
 
-function diffEndpoint(
+/// The match a rule side resolves to, as written on the rule itself.
+///
+/// Kept separate from the groups backing it: a rule spanning several zone pairs
+/// exists once per pair, so these refs are written into each pair's copy while
+/// the groups they point at are created once.
+interface EndpointDesired {
+  node: string | null;
+  name: string | null;
+  addr: string | null;
+  iface: string | null;
+  ifGroup: string | null;
+}
+
+/// Resolve a side's selection into the match it writes, emitting the
+/// auto-group commands that back it. Emit once per rule, not per scope.
+function planEndpoint(
   out: VyosCommand[],
-  chain: RuleChain,
   rule: number,
   side: "source" | "destination",
   live: RuleEndpoint | null,
   selIn: EndpointSelection,
   ctx: AutoCtx,
-): void {
-  const base = ruleBase(chain, rule);
+): EndpointDesired {
   // Neither the Firewall endpoint nor a zone writes a match node — both are
   // expressed by where the rule lives (its chain, or its pair's ruleset).
   const sel = selIn.filter((e) => e.kind !== "firewall" && e.kind !== "zone");
@@ -1326,22 +1420,9 @@ function diffEndpoint(
     out.push({ op: "delete", path: ["firewall", "group", liveAuto.node, liveAuto.name] });
   }
 
-  const liveType = live?.group_type ?? null;
-  const liveName = live?.group_name ?? null;
-  const refChanged = liveType !== desiredNode || liveName !== desiredName;
-  if (liveType && refChanged) out.push({ op: "delete", path: [...base, side, "group", liveType] });
-  if (desiredNode && desiredName && refChanged) {
-    out.push({ op: "set", path: [...base, side, "group", desiredNode, desiredName] });
-  }
-
   // ── literal address (legacy).
   const addrEntry = sel.find((e) => e.kind === "address");
   const desiredAddr = addrEntry?.address.trim() || null;
-  const liveAddr = live?.address ?? null;
-  if (desiredAddr !== liveAddr) {
-    if (desiredAddr !== null) out.push({ op: "set", path: [...base, side, "address", desiredAddr] });
-    else out.push({ op: "delete", path: [...base, side, "address"] });
-  }
 
   // ── interfaces: one → `name <if>`; several → auto interface-group; a legacy
   //    ifgroup entry keeps its `group <g>` form.
@@ -1363,14 +1444,42 @@ function diffEndpoint(
     out.push({ op: "delete", path: ["firewall", "group", "interface-group", liveIfAuto.name] });
   }
 
+  return { node: desiredNode, name: desiredName, addr: desiredAddr, iface: desiredIface, ifGroup: desiredIfGroup };
+}
+
+/// Write a side's resolved match into one scope's rule. `live` is that scope's
+/// current match, or null for a scope the rule is only now landing in (every
+/// copy of a rule is written identically, so the representative's match is a
+/// sound baseline to diff against).
+function endpointWrites(
+  out: VyosCommand[],
+  base: string[],
+  side: "source" | "destination",
+  live: RuleEndpoint | null,
+  d: EndpointDesired,
+): void {
+  const liveType = live?.group_type ?? null;
+  const liveName = live?.group_name ?? null;
+  const refChanged = liveType !== d.node || liveName !== d.name;
+  if (liveType && refChanged) out.push({ op: "delete", path: [...base, side, "group", liveType] });
+  if (d.node && d.name && refChanged) {
+    out.push({ op: "set", path: [...base, side, "group", d.node, d.name] });
+  }
+
+  const liveAddr = live?.address ?? null;
+  if (d.addr !== liveAddr) {
+    if (d.addr !== null) out.push({ op: "set", path: [...base, side, "address", d.addr] });
+    else out.push({ op: "delete", path: [...base, side, "address"] });
+  }
+
   // The interface match node holds either `name <if>` or `group <g>`.
   const liveIface = live?.iface ?? null;
   const liveIfGroup = live?.iface_group ?? null;
-  if (desiredIface !== liveIface || desiredIfGroup !== liveIfGroup) {
+  if (d.iface !== liveIface || d.ifGroup !== liveIfGroup) {
     const key = IFACE_NODE[side];
     if (liveIface !== null || liveIfGroup !== null) out.push({ op: "delete", path: [...base, key] });
-    if (desiredIface !== null) out.push({ op: "set", path: [...base, key, "name", desiredIface] });
-    else if (desiredIfGroup !== null) out.push({ op: "set", path: [...base, key, "group", desiredIfGroup] });
+    if (d.iface !== null) out.push({ op: "set", path: [...base, key, "name", d.iface] });
+    else if (d.ifGroup !== null) out.push({ op: "set", path: [...base, key, "group", d.ifGroup] });
   }
 }
 
@@ -1460,11 +1569,17 @@ function ensureIpsFlowBaseline(out: VyosCommand[], cfg: FirewallConfig): void {
 /// "configured" on the Zones page while behaving as if it weren't.
 ///
 /// `removing` are the rules being deleted in this same commit.
-function emptyPairCleanup(cfg: FirewallConfig, chain: RuleChain, removing: FirewallRule[]): VyosCommand[] {
+/// `vacating` are the rule numbers leaving this scope in the same commit.
+function emptyPairCleanup(cfg: FirewallConfig, chain: RuleChain, vacating: number[]): VyosCommand[] {
   const pair = pairForChain(cfg.zone_pairs, chain);
   if (!pair) return [];
-  const gone = new Set(removing.map((r) => `${r.chain}:${r.rule}`));
-  const left = cfg.rules.some((r) => r.chain === chain && !gone.has(`${r.chain}:${r.rule}`));
+  const gone = new Set(vacating);
+  // Any rule still occupying this scope keeps the pair alive. A rule occupies a
+  // scope when that scope is among its own — checking `r.chain` alone would
+  // miss the other pairs of a multi-zone rule.
+  const left = cfg.rules.some(
+    (r) => !gone.has(r.rule) && r.scopes.some((s) => s.chain === chain),
+  );
   if (left) return [];
   return [
     { op: "delete", path: ["firewall", "zone", pair.dst, "from", pair.src] },
@@ -1498,8 +1613,8 @@ function autoGroupDeletes(rule: FirewallRule, autoGroups: AutoGroup[]): VyosComm
 /// names can contain hyphens, so `QZ-Z-LAN-TO-X-TO-WAN` is genuinely ambiguous
 /// (LAN-TO-X → WAN, or LAN → X-TO-WAN?) and guessing would silently bind the
 /// wrong pair.
+/// State policy is seeded separately (once per commit, not once per pair).
 function ensureZonePair(out: VyosCommand[], cfg: FirewallConfig, pair: ZonePair): void {
-  ensureStatePolicy(out, cfg);
   if (cfg.zone_pairs.some((p) => p.ruleset === pair.ruleset)) return;
   const base = ["firewall", "ipv4", "name", pair.ruleset];
   out.push({ op: "set", path: [...base, "description", `${AUTO_MARK} ${pair.src} to ${pair.dst}`] });
@@ -1507,30 +1622,64 @@ function ensureZonePair(out: VyosCommand[], cfg: FirewallConfig, pair: ZonePair)
 }
 
 export function diffRule(liveIn: FirewallRule | null, u: RuleUpdate, cfg: FirewallConfig): VyosCommand[] {
-  const pair = zonePairFor(u.from, u.to, cfg.zones);
-  const chain = pair ? zoneRuleChain(pair.ruleset) : ruleChainFor(u.from, u.to, cfg.zones);
+  const pairs = zonePairsFor(u.from, u.to, cfg.zones);
+  const chains = ruleChainsFor(u.from, u.to, cfg.zones);
+  const chain = chains[0];
   const out: VyosCommand[] = [];
 
-  // A chain change can't be edited in place — the old rule is dropped (with
-  // its auto groups) and rebuilt at a fresh number in the target chain.
   let live = liveIn;
   let rule = u.rule;
-  if (live && live.chain !== chain) {
-    out.push({ op: "delete", path: ruleBase(live.chain, live.rule) });
+
+  // Switching a rule between a base chain and zone pairs (or between base
+  // chains) can't be edited in place: rule numbers are only unique per scope,
+  // so the target may already have this number. Drop every copy — with its auto
+  // groups — and rebuild at a fresh number. Changing only *which* pairs a zone
+  // rule spans keeps its number: zone rule numbers are allocated across all
+  // scopes at once, so they can't collide in a pair it moves into.
+  const liveIsZone = live !== null && !isBaseChain(live.chain);
+  const wantZone = pairs.length > 0;
+  const baseMoved = live !== null && !liveIsZone && !wantZone && live.chain !== chain;
+  if (live && (liveIsZone !== wantZone || baseMoved)) {
+    for (const s of live.scopes) {
+      out.push({ op: "delete", path: ruleBase(s.chain, live.rule) });
+      out.push(...emptyPairCleanup(cfg, s.chain, [live.rule]));
+    }
     out.push(...autoGroupDeletes(live, cfg.auto_groups));
-    out.push(...emptyPairCleanup(cfg, live.chain, [live]));
     live = null;
     rule = nextRuleNumber(cfg.rules);
   }
-  if (pair) ensureZonePair(out, cfg, pair);
-  else if (isBaseChain(chain) && chain !== "forward") ensureChainSetup(out, chain, cfg);
+
+  // ── scope set: keep, add, drop.
+  const liveChains = live?.scopes.map((s) => s.chain) ?? [];
+  for (const c of liveChains) {
+    if (chains.includes(c)) continue;
+    out.push({ op: "delete", path: ruleBase(c, rule) });
+    out.push(...emptyPairCleanup(cfg, c, [rule]));
+  }
+  if (wantZone) {
+    // Zones only filter reply traffic correctly with the global state match.
+    ensureStatePolicy(out, cfg);
+    for (const p of pairs) ensureZonePair(out, cfg, p);
+  } else if (isBaseChain(chain) && chain !== "forward") {
+    ensureChainSetup(out, chain, cfg);
+  }
+
+  // A scope the rule already occupies diffs against its live body; one it's
+  // landing in is written in full. Every copy is written identically, so the
+  // representative's body is the baseline for all of them.
+  const added = chains.filter((c) => !liveChains.includes(c));
+  const bodyLive = (c: RuleChain): FirewallRule | null => (added.includes(c) ? null : live);
 
   const base = ruleBase(chain, rule);
-  const leaf = (sub: string[], liveV: string | null, desiredRaw: string | null) => {
+  const leaf = (sub: string[], liveOf: (r: FirewallRule | null) => string | null, desiredRaw: string | null) => {
     const desired = desiredRaw?.trim() || null;
-    if (desired === liveV) return;
-    if (desired !== null) out.push({ op: "set", path: [...base, ...sub, desired] });
-    else if (liveV !== null) out.push({ op: "delete", path: [...base, ...sub] });
+    for (const c of chains) {
+      const liveV = liveOf(bodyLive(c));
+      if (desired === liveV) continue;
+      const b = ruleBase(c, rule);
+      if (desired !== null) out.push({ op: "set", path: [...b, ...sub, desired] });
+      else if (liveV !== null) out.push({ op: "delete", path: [...b, ...sub] });
+    }
   };
 
   // IPS-inspected Allow rules are stored as `action queue`: matches are queued
@@ -1540,60 +1689,84 @@ export function diffRule(liveIn: FirewallRule | null, u: RuleUpdate, cfg: Firewa
   // flow so the hidden flow rule keeps queueing its later packets (both
   // directions) — content signatures need more than the first packet.
   const wantIps = u.ips && u.action === "accept";
-  const liveIps = live?.ips ?? false;
-  const liveWireAction = live?.action === null ? null : liveIps ? "queue" : live?.action ?? null;
-  leaf(["action"], liveWireAction, wantIps ? "queue" : u.action);
-  if (wantIps && !liveIps) {
-    out.push({ op: "set", path: [...base, "queue", "0"] });
-    out.push({ op: "set", path: [...base, "queue-options", "bypass"] });
-    out.push({ op: "set", path: [...base, "set", "connection-mark", String(IPS_CONNMARK)] });
-    if (chain === "forward") ensureIpsFlowBaseline(out, cfg);
-  } else if (!wantIps && liveIps) {
-    out.push({ op: "delete", path: [...base, "queue"] });
-    out.push({ op: "delete", path: [...base, "queue-options"] });
-    out.push({ op: "delete", path: [...base, "set", "connection-mark"] });
+  const wireAction = (r: FirewallRule | null) =>
+    r == null || r.action === null ? null : r.ips ? "queue" : r.action;
+  leaf(["action"], wireAction, wantIps ? "queue" : u.action);
+  for (const c of chains) {
+    const l = bodyLive(c);
+    const liveIps = l?.ips ?? false;
+    const b = ruleBase(c, rule);
+    if (wantIps && !liveIps) {
+      out.push({ op: "set", path: [...b, "queue", "0"] });
+      out.push({ op: "set", path: [...b, "queue-options", "bypass"] });
+      out.push({ op: "set", path: [...b, "set", "connection-mark", String(IPS_CONNMARK)] });
+    } else if (!wantIps && liveIps) {
+      out.push({ op: "delete", path: [...b, "queue"] });
+      out.push({ op: "delete", path: [...b, "queue-options"] });
+      out.push({ op: "delete", path: [...b, "set", "connection-mark"] });
+    }
   }
-  leaf(["description"], live?.name ?? null, u.name);
+  // The connmark flow rule lives in the forward chain regardless of where the
+  // IPS rule itself sits: a zone rule queues its first packet at priority 1 and
+  // marks the flow, and the forward baseline at priority 0 then queues the rest.
+  if (wantIps && !(live?.ips ?? false)) ensureIpsFlowBaseline(out, cfg);
+  leaf(["description"], (r) => r?.name ?? null, u.name);
 
   const ctx: AutoCtx = { autoGroups: cfg.auto_groups, taken: new Set(cfg.group_names) };
-  diffEndpoint(out, chain, rule, "source", live?.from ?? null, u.from, ctx);
-  diffEndpoint(out, chain, rule, "destination", live?.to ?? null, u.to, ctx);
+  // Groups are shared by every copy of the rule, so they're planned once; only
+  // the refs pointing at them are written per scope.
+  const fromDesired = planEndpoint(out, rule, "source", live?.from ?? null, u.from, ctx);
+  const toDesired = planEndpoint(out, rule, "destination", live?.to ?? null, u.to, ctx);
+  for (const c of chains) {
+    const l = bodyLive(c);
+    const b = ruleBase(c, rule);
+    endpointWrites(out, b, "source", l?.from ?? null, fromDesired);
+    endpointWrites(out, b, "destination", l?.to ?? null, toDesired);
+  }
 
   // Policy = destination port-group + matching protocol leaf; built-in Ping
   // is just the protocol leaf.
-  const livePolicy = live?.policy ?? null;
   const newPolicy = u.policy?.kind === "policy" ? u.policy.name : null;
-  if (newPolicy !== livePolicy) {
+  if (newPolicy !== null && !cfg.policies.some((p) => p.name === newPolicy)) {
+    // First use of a built-in policy seeds its port-group (once, not per scope).
+    const builtin = BUILTIN_POLICIES[newPolicy];
+    if (builtin) {
+      const gp = policyBase(newPolicy);
+      out.push({ op: "set", path: [...gp, "description", encodePolicyDescription(builtin.protocol, "Built-in")] });
+      for (const port of builtin.ports) out.push({ op: "set", path: [...gp, "port", port] });
+    }
+  }
+  for (const c of chains) {
+    const livePolicy = bodyLive(c)?.policy ?? null;
+    if (newPolicy === livePolicy) continue;
+    const b = ruleBase(c, rule);
     if (livePolicy !== null && newPolicy === null) {
-      out.push({ op: "delete", path: [...base, "destination", "group", "port-group"] });
+      out.push({ op: "delete", path: [...b, "destination", "group", "port-group"] });
     }
     if (newPolicy !== null) {
-      // First use of a built-in policy seeds its port-group.
-      const builtin = BUILTIN_POLICIES[newPolicy];
-      if (builtin && !cfg.policies.some((p) => p.name === newPolicy)) {
-        const gp = policyBase(newPolicy);
-        out.push({ op: "set", path: [...gp, "description", encodePolicyDescription(builtin.protocol, "Built-in")] });
-        for (const port of builtin.ports) out.push({ op: "set", path: [...gp, "port", port] });
-      }
-      out.push({ op: "set", path: [...base, "destination", "group", "port-group", newPolicy] });
+      out.push({ op: "set", path: [...b, "destination", "group", "port-group", newPolicy] });
     }
   }
   const desiredProtocol = u.policy === null ? null : u.policy.kind === "policy" ? u.policy.protocol : "icmp";
-  leaf(["protocol"], live?.protocol ?? null, desiredProtocol);
+  leaf(["protocol"], (r) => r?.protocol ?? null, desiredProtocol);
 
   // Enabled state — VyOS models "off" as a valueless `disable` leaf.
-  const liveEnabled = live?.enabled ?? true;
-  if (u.enabled !== liveEnabled) {
-    if (u.enabled) out.push({ op: "delete", path: [...base, "disable"] });
-    else out.push({ op: "set", path: [...base, "disable"] });
+  for (const c of chains) {
+    const liveEnabled = bodyLive(c)?.enabled ?? true;
+    if (u.enabled === liveEnabled) continue;
+    const b = ruleBase(c, rule);
+    if (u.enabled) out.push({ op: "delete", path: [...b, "disable"] });
+    else out.push({ op: "set", path: [...b, "disable"] });
   }
 
   // Traffic logging — a valueless `log` leaf; matches then reach the Traffic
   // Monitor through the kernel log.
-  const liveLog = live?.log ?? false;
-  if (u.log !== liveLog) {
-    if (u.log) out.push({ op: "set", path: [...base, "log"] });
-    else out.push({ op: "delete", path: [...base, "log"] });
+  for (const c of chains) {
+    const liveLog = bodyLive(c)?.log ?? false;
+    if (u.log === liveLog) continue;
+    const b = ruleBase(c, rule);
+    if (u.log) out.push({ op: "set", path: [...b, "log"] });
+    else out.push({ op: "delete", path: [...b, "log"] });
   }
   if (u.log && chain === "forward") ensureForwardBaseline(out, cfg);
 
@@ -1610,23 +1783,27 @@ export function applyRule(live: FirewallRule | null, update: RuleUpdate, cfg: Fi
 /// Allow rule.
 export function ipsRuleCommands(rule: FirewallRule, enabled: boolean, cfg: FirewallConfig): VyosCommand[] {
   if (rule.action !== "accept" || rule.ips === enabled) return [];
-  const base = ruleBase(rule.chain, rule.rule);
-  if (enabled) {
-    const out: VyosCommand[] = [
-      { op: "set", path: [...base, "action", "queue"] },
-      { op: "set", path: [...base, "queue", "0"] },
-      { op: "set", path: [...base, "queue-options", "bypass"] },
-      { op: "set", path: [...base, "set", "connection-mark", String(IPS_CONNMARK)] },
-    ];
-    if (rule.chain === "forward") ensureIpsFlowBaseline(out, cfg);
-    return out;
+  const out: VyosCommand[] = [];
+  // Every copy of the rule has to be toggled, or the pairs would disagree.
+  for (const s of rule.scopes) {
+    const base = ruleBase(s.chain, rule.rule);
+    if (enabled) {
+      out.push({ op: "set", path: [...base, "action", "queue"] });
+      out.push({ op: "set", path: [...base, "queue", "0"] });
+      out.push({ op: "set", path: [...base, "queue-options", "bypass"] });
+      out.push({ op: "set", path: [...base, "set", "connection-mark", String(IPS_CONNMARK)] });
+    } else {
+      out.push({ op: "set", path: [...base, "action", "accept"] });
+      out.push({ op: "delete", path: [...base, "queue"] });
+      out.push({ op: "delete", path: [...base, "queue-options"] });
+      out.push({ op: "delete", path: [...base, "set", "connection-mark"] });
+    }
   }
-  return [
-    { op: "set", path: [...base, "action", "accept"] },
-    { op: "delete", path: [...base, "queue"] },
-    { op: "delete", path: [...base, "queue-options"] },
-    { op: "delete", path: [...base, "set", "connection-mark"] },
-  ];
+  // The connmark flow rule lives in the forward chain wherever the IPS rule
+  // sits — a zone rule marks the flow at priority 1, the forward baseline at
+  // priority 0 queues the rest of it.
+  if (enabled) ensureIpsFlowBaseline(out, cfg);
+  return out;
 }
 
 /// Toggle IPS inspection on one or more rules. Returns the number of changes.
@@ -1649,12 +1826,16 @@ export function deleteRule(
   extraCommands: VyosCommand[] = [],
   cfg?: FirewallConfig,
 ): Promise<number> {
-  return commitAndSave([
-    { op: "delete", path: ruleBase(rule.chain, rule.rule) },
-    ...autoGroupDeletes(rule, autoGroups),
-    ...(cfg ? emptyPairCleanup(cfg, rule.chain, [rule]) : []),
-    ...extraCommands,
-  ]);
+  // A zone rule exists once per pair — deleting only the representative would
+  // leave the other copies enforcing.
+  const out: VyosCommand[] = [];
+  for (const s of rule.scopes) {
+    out.push({ op: "delete", path: ruleBase(s.chain, rule.rule) });
+    if (cfg) out.push(...emptyPairCleanup(cfg, s.chain, [rule.rule]));
+  }
+  out.push(...autoGroupDeletes(rule, autoGroups));
+  out.push(...extraCommands);
+  return commitAndSave(out);
 }
 
 /// Rule number for a newly created rule: appended after the last one. The max
@@ -1691,33 +1872,54 @@ function cfgToCommands(base: string[], cfg: Cfg, out: VyosCommand[]): void {
   }
 }
 
-/// Renumber rules to match the given display order (position × 10). Rules
-/// whose number already matches are untouched; moved rules are deleted first
-/// (so a target number freed by another move is safe to reuse), then rebuilt
-/// from their raw config subtree.
-/// The rules whose number changes to match the given display order
-/// (position × 10), keyed `${chain}:${from}` → new number. Single source of
-/// truth for both the renumber commands and the cascade that repoints
-/// security-feature references at the new numbers (see lib/rule-cascade).
+/// The rules whose number changes to match the given display order (position ×
+/// 10), and the number each moves to. One target per UI rule — a rule spanning
+/// several zone pairs keeps one number across all of them, so its position is
+/// what decides, not the position of any individual copy.
+function renumberTargets(orderedRules: FirewallRule[]): { rule: FirewallRule; target: number }[] {
+  return orderedRules
+    .map((rule, i) => ({ rule, target: (i + 1) * 10 }))
+    .filter(({ rule, target }) => rule.rule !== target);
+}
+
+/// How many rules a reorder would renumber.
+export const renumberedCount = (orderedRules: FirewallRule[]) => renumberTargets(orderedRules).length;
+
+/// Old rule number → new number, for features that key on the number alone
+/// (App Control bindings). Rule numbers are handed out across every scope at
+/// once (nextRuleNumber), so the number identifies a rule on its own.
+export function renumberByRule(orderedRules: FirewallRule[]): Map<number, number> {
+  return new Map(renumberTargets(orderedRules).map(({ rule, target }) => [rule.rule, target]));
+}
+
+/// Where each moved rule's config rules end up, keyed `${chain}:${from}` → new
+/// number — one entry per scope, so a multi-zone rule contributes one per pair.
+/// Single source of truth for both the renumber commands and the cascade that
+/// repoints security-feature references at the new numbers (see
+/// lib/rule-cascade), which looks rules up by that same scope key.
 export function renumberMap(orderedRules: FirewallRule[]): Map<string, number> {
   const m = new Map<string, number>();
-  orderedRules.forEach((r, i) => {
-    const target = (i + 1) * 10;
-    if (r.rule !== target) m.set(`${r.chain}:${r.rule}`, target);
-  });
+  for (const { rule, target } of renumberTargets(orderedRules)) {
+    for (const s of rule.scopes) m.set(`${s.chain}:${rule.rule}`, target);
+  }
   return m;
 }
 
+/// Renumber rules to match the given display order. Rules whose number already
+/// matches are untouched; moved rules are deleted first (so a target number
+/// freed by another move is safe to reuse), then rebuilt from their raw config
+/// subtree. Deletes and sets stay globally phased across every scope, which is
+/// what makes two rules swapping numbers safe.
 export function reorderCommands(orderedRules: FirewallRule[]): VyosCommand[] {
-  const moves = renumberMap(orderedRules);
   const deletes: VyosCommand[] = [];
   const sets: VyosCommand[] = [];
-  orderedRules.forEach((r) => {
-    const target = moves.get(`${r.chain}:${r.rule}`);
-    if (target === undefined) return;
-    deletes.push({ op: "delete", path: ruleBase(r.chain, r.rule) });
-    cfgToCommands(ruleBase(r.chain, target), r.raw, sets);
-  });
+  for (const { rule, target } of renumberTargets(orderedRules)) {
+    // Each copy is rebuilt from its own raw subtree, at the shared new number.
+    for (const s of rule.scopes) {
+      deletes.push({ op: "delete", path: ruleBase(s.chain, rule.rule) });
+      cfgToCommands(ruleBase(s.chain, target), s.raw, sets);
+    }
+  }
   return [...deletes, ...sets];
 }
 
@@ -1728,7 +1930,9 @@ export async function applyRuleOrder(
   orderedRules: FirewallRule[],
   extraCommands: VyosCommand[] = [],
 ): Promise<number> {
-  const renumbered = renumberMap(orderedRules).size;
+  // Rules, not config rules — a multi-zone rule moving is one renumber to the
+  // user, however many pairs it spans.
+  const renumbered = renumberedCount(orderedRules);
   const commands = [...reorderCommands(orderedRules), ...extraCommands];
   if (commands.length > 0) await commitAndSave(commands);
   return renumbered;

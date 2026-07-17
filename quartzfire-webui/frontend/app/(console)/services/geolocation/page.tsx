@@ -16,10 +16,11 @@ import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { Tabs } from "@/components/ui/Tabs";
 import { useDashboard } from "@/lib/DashboardContext";
-import { emptyFirewallConfig, fetchFirewall, FirewallConfig, FirewallRule, isBaseChain } from "@/lib/firewall";
+import { emptyFirewallConfig, fetchFirewall, FirewallConfig, FirewallRule, isBaseChain, ruleKey } from "@/lib/firewall";
 import {
   actionUsage,
   applyGeoAction,
+  applyGeoPoliciesForRule,
   applyGeoPolicy,
   blockedIp,
   countryName,
@@ -44,6 +45,7 @@ import {
   GeoPolicy,
   GeoStatus,
   nextPolicyId,
+  policiesForRule,
   requestGeoUpdate,
 } from "@/lib/geolocation";
 import { ActionFormModal } from "./ActionFormModal";
@@ -417,8 +419,9 @@ function PoliciesTab({
     loadFw();
   }, [loadFw]);
 
-  // At most one policy per firewall rule in this view; prefer an enabled one if
-  // the raw config somehow points several policies at the same rule.
+  // One policy per (scope, rule). A zone rule spanning several pairs has one
+  // per pair; the row shows their shared attachment, so preferring an enabled
+  // one keeps the row truthful if the raw config disagrees across copies.
   const policyByRule = useMemo(() => {
     const m = new Map<string, GeoPolicy>();
     for (const p of config.policies) {
@@ -428,6 +431,14 @@ function PoliciesTab({
     }
     return m;
   }, [config.policies]);
+
+  /// The policy a rule's row reflects — the one on its representative scope.
+  const rulePolicy = useCallback(
+    (rule: FirewallRule) => policiesForRule(config.policies, rule).find((p) => p.enabled)
+      ?? policiesForRule(config.policies, rule)[0]
+      ?? null,
+    [config.policies],
+  );
 
   const policyErrors = useMemo(() => {
     const m = new Map<number, string>();
@@ -441,30 +452,23 @@ function PoliciesTab({
   // Attach/detach an action on a rule. Empty action removes the policy; any
   // action (re)creates it, re-enabling a previously disabled one.
   const setRuleAction = async (rule: FirewallRule, action: string) => {
-    // Only base-chain rules are listed (see `eligible`) — qzgeo can't target a
-    // zone pair's ruleset.
-    if (!isBaseChain(rule.chain)) return;
-    const key = `${rule.chain}:${rule.rule}`;
-    const existing = policyByRule.get(key) ?? null;
+    const key = ruleKey(rule);
+    const existing = rulePolicy(rule);
     setBusyRule(key);
     try {
-      if (!action) {
-        if (existing) {
-          await deleteGeoPolicy(existing.id);
-          setToast("Policy removed — confirm the change in the banner.");
-        }
-      } else {
-        await applyGeoPolicy(config.policies, {
-          id: existing?.id ?? nextPolicyId(config.policies),
-          action,
-          ruleset: rule.chain,
-          rule: rule.rule,
-          direction: existing?.direction ?? "both",
-          enabled: true,
-          original_id: existing?.id ?? null,
-        });
-        setToast("Geolocation policy saved — confirm the change in the banner.");
-      }
+      // A zone rule spans one copy per pair — each needs its own policy, and
+      // they all have to ride one commit.
+      await applyGeoPoliciesForRule(
+        config.policies,
+        rule,
+        action || null,
+        existing?.direction ?? "both",
+      );
+      setToast(
+        action
+          ? "Geolocation policy saved — confirm the change in the banner."
+          : "Policy removed — confirm the change in the banner.",
+      );
       onChanged();
     } catch (e) {
       setToast(e instanceof Error ? e.message : "Failed to update the policy.");
@@ -474,20 +478,11 @@ function PoliciesTab({
   };
 
   const setRuleDirection = async (rule: FirewallRule, direction: GeoDirection) => {
-    const key = `${rule.chain}:${rule.rule}`;
-    const existing = policyByRule.get(key);
+    const existing = rulePolicy(rule);
     if (!existing) return;
-    setBusyRule(key);
+    setBusyRule(ruleKey(rule));
     try {
-      await applyGeoPolicy(config.policies, {
-        id: existing.id,
-        action: existing.action,
-        ruleset: existing.ruleset,
-        rule: existing.rule,
-        direction,
-        enabled: true,
-        original_id: existing.id,
-      });
+      await applyGeoPoliciesForRule(config.policies, rule, existing.action, direction);
       setToast("Direction updated — confirm the change in the banner.");
       onChanged();
     } catch (e) {
@@ -532,22 +527,23 @@ function PoliciesTab({
       </div>
     );
 
-  // Every Allow rule in the forward/input/output chains is eligible to carry a
-  // geolocation policy. Ordered forward → input → output, then by rule number,
-  // so the table reads like the firewall.
-  //
-  // Zone rules can't: qzgeo resolves its target as `firewall ipv4 <ruleset>
-  // filter rule <n>` and rejects anything but a base chain, so a policy on a
-  // zone rule would never enforce (see lib/geolocation asRuleset).
-  const rank: Record<string, number> = { forward: 0, input: 1, output: 2 };
+  // Every Allow rule is eligible to carry a geolocation policy, zone rules
+  // included — qzgeo resolves a zone pair's ruleset and folds the pair's
+  // interfaces into the replicated match. Ordered forward → input → output →
+  // zone rules, then by rule number, so the table reads like the firewall.
+  const rank = (r: FirewallRule) =>
+    isBaseChain(r.chain) ? { forward: 0, input: 1, output: 2 }[r.chain] : 3;
   const eligible = fw.rules
-    .filter((r) => r.action === "accept" && isBaseChain(r.chain))
-    .sort((a, b) => (rank[a.chain] - rank[b.chain]) || a.rule - b.rule);
+    .filter((r) => r.action === "accept")
+    .sort((a, b) => rank(a) - rank(b) || a.rule - b.rule);
 
   // Policies whose target rule isn't an eligible Allow rule anymore. These
   // never appear in the rule-driven table above, which is why the tab count
   // (total policies) can exceed the visible rows.
-  const eligibleKeys = new Set(eligible.map((r) => `${r.chain}:${r.rule}`));
+  // Every scope of every eligible rule — a zone rule has a policy per pair, and
+  // keying on its representative alone would flag the rest as orphans and offer
+  // to delete perfectly live policies.
+  const eligibleKeys = new Set(eligible.flatMap((r) => r.scopes.map((s) => `${s.chain}:${r.rule}`)));
   const orphans = config.policies.filter((p) => !eligibleKeys.has(`${p.ruleset}:${p.rule}`));
 
   // "Enforced" = enabled policies actually attached to a live Allow rule.
@@ -606,8 +602,10 @@ function PoliciesTab({
               </tr>
             ) : (
               eligible.map((r) => {
-                const key = `${r.chain}:${r.rule}`;
-                const policy = policyByRule.get(key) ?? null;
+                // One row per UI rule — a zone rule's per-pair policies are
+                // written together, so the row reflects any one of them.
+                const key = ruleKey(r);
+                const policy = rulePolicy(r);
                 const bound = policy?.action ?? "";
                 const busy = busyRule === key;
                 const error = policy ? policyErrors.get(policy.id) ?? null : null;

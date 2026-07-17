@@ -12,6 +12,20 @@ pub const UNKNOWN_HANDLING: [&str; 2] = ["allow", "block"];
 pub const DIRECTIONS: [&str; 3] = ["source", "destination", "both"];
 pub const RULESETS: [&str; 3] = ["forward", "input", "output"];
 
+/// Whether a ruleset value names a zone pair's ruleset (`name:<ruleset>`).
+/// The suffix must be a legal VyOS firewall-ruleset name, so a junk value
+/// still fails validation rather than sailing through on the prefix alone.
+pub fn is_zone_ruleset(ruleset: &str) -> bool {
+    match ruleset.strip_prefix("name:") {
+        Some(name) => {
+            !name.is_empty()
+                && name.starts_with(|c: char| c.is_ascii_alphanumeric())
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+        }
+        None => false,
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Action {
     #[serde(default)]
@@ -158,7 +172,12 @@ pub fn validate(model: &Model, known_codes: Option<&BTreeSet<String>>) -> Vec<St
         }
         match policy.ruleset.as_deref() {
             Some(rs) if RULESETS.contains(&rs) => {}
-            _ => problems.push(format!("{where_}: ruleset must be forward, input, or output")),
+            // `name:<ruleset>` targets a zone rule, which lives in the named
+            // ruleset bound to its zone pair rather than in a base chain.
+            Some(rs) if is_zone_ruleset(rs) => {}
+            _ => problems.push(format!(
+                "{where_}: ruleset must be forward, input, output, or name:<ruleset>"
+            )),
         }
         if policy.rule < 1 {
             problems.push(format!("{where_}: no target firewall rule number is set"));
@@ -334,6 +353,24 @@ mod tests {
         let problems = validate(&model, None);
         assert!(problems.iter().any(|p| p.contains("direction must be")));
         assert!(problems.iter().any(|p| p.contains("ruleset must be")));
+    }
+
+    #[test]
+    fn zone_ruleset_accepted_but_junk_still_rejected() {
+        let ok = |rs: &str| {
+            let mut policy = make_policy();
+            policy.ruleset = Some(rs.into());
+            let model = model_of(&[("Block_bad", make_action())], vec![policy]);
+            !validate(&model, None).iter().any(|p| p.contains("ruleset must be"))
+        };
+        assert!(ok("name:QZ-Z-LAN-TO-WAN"));
+        assert!(ok("forward"));
+        // The prefix alone isn't a free pass — the suffix has to be a legal
+        // ruleset name, or a typo would sail through to a dangling target.
+        assert!(!ok("name:"));
+        assert!(!ok("name:-bad"));
+        assert!(!ok("name:has space"));
+        assert!(!ok("postrouting"));
     }
 
     #[test]

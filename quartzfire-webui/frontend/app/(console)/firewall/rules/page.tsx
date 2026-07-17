@@ -15,6 +15,7 @@ import {
   FirewallRule,
   PROTOCOL_LABEL,
   RuleCounter,
+  ruleKey,
   ruleSelection,
   setDefaultAction,
 } from "@/lib/firewall";
@@ -33,8 +34,6 @@ function ActionPill({ action }: { action: FirewallRule["action"] }) {
   return <span className="badge badge-muted">—</span>;
 }
 
-/// Stable row identity — rule numbers are only unique within a chain.
-const ruleKey = (r: FirewallRule) => `${r.chain}:${r.rule}`;
 
 function EndpointCell({
   rule,
@@ -266,8 +265,11 @@ export default function FirewallRulesPage() {
     [],
   );
   const hitsCell = (r: FirewallRule) => {
-    const c = counters.get(counterKey(r.chain, r.rule));
-    if (!c) return <span className="text-[var(--qz-fg-4)]">—</span>;
+    // A rule spanning several zone pairs is counted once per pair — its real
+    // hit count is the total across them.
+    const parts = r.scopes.map((s) => counters.get(counterKey(s.chain, r.rule))).filter((x) => x !== undefined);
+    if (parts.length === 0) return <span className="text-[var(--qz-fg-4)]">—</span>;
+    const c = parts.reduce((a, b) => ({ packets: a.packets + b.packets, bytes: a.bytes + b.bytes }));
     return (
       <span
         style={{ fontFamily: "var(--qz-font-mono)", color: c.packets > 0 ? "var(--qz-fg-1)" : "var(--qz-fg-4)" }}

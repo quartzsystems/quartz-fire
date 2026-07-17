@@ -16,7 +16,7 @@
 // here (no engine yet).
 
 import { apiFetch, API, vyosApi } from "./api";
-import { VyosCommand, VyosResponse } from "./interfaces";
+import type { VyosCommand, VyosResponse } from "./interfaces";
 import { guardedCommitAndSave } from "./guard";
 
 // SSL inspection can break the operator's own HTTPS (a bad CA / wrong scope),

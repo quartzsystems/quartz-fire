@@ -48,7 +48,7 @@ fn open_db() -> Option<Box<dyn Database>> {
 pub fn commit() -> i32 {
     let conf = CliShellApi::session();
     let model = config::read_service(&conf);
-    let (matches, problems) = apply::resolve_matches(&model, Some(&conf), None);
+    let (matches, hooks, problems) = apply::resolve_matches(&model, Some(&conf), None);
 
     // verify ─ empty model (feature deleted) is always a valid teardown.
     if !model.actions.is_empty() || !model.policies.is_empty() {
@@ -101,7 +101,7 @@ pub fn commit() -> i32 {
         );
     }
     let database = open_db();
-    match apply::apply_model(&model, &matches, database.as_deref(), &problems, false) {
+    match apply::apply_model(&model, &matches, &hooks, database.as_deref(), &problems, false) {
         Ok(report) => {
             if !report.ok {
                 // Missing database: accept the commit (config is valid and
@@ -146,11 +146,11 @@ pub fn standalone_apply() -> i32 {
         log("active config unavailable; using the commit snapshot");
         None
     };
-    let (matches, problems) =
+    let (matches, hooks, problems) =
         apply::resolve_matches(&desired.model, conf, Some(&desired.matches));
 
     let database = open_db();
-    match apply::apply_model(&desired.model, &matches, database.as_deref(), &problems, false) {
+    match apply::apply_model(&desired.model, &matches, &hooks, database.as_deref(), &problems, false) {
         Ok(report) => {
             for p in &problems {
                 log(&format!("policy {}: {}", p.policy, p.error));

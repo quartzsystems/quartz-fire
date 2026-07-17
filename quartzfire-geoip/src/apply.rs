@@ -31,7 +31,7 @@ use serde_json::{json, Value};
 
 use crate::config::{self, ConfigRead};
 use crate::db::Database;
-use crate::matchrepl::rule_match_expr;
+use crate::matchrepl::{rule_match_expr, IfaceSpec, RuleCfg};
 use crate::model::Model;
 use crate::render;
 
@@ -160,38 +160,95 @@ pub struct Problem {
 ///
 /// A None match means the policy is skipped by the renderer (enforcement for
 /// the OTHER policies is unaffected) and the problem is surfaced.
+/// Which geo chain a policy's rules hook into.
+///
+/// A zone pair carries the answer: traffic INTO the local zone is input,
+/// traffic OUT of it is output, anything else is routed. Base chains map
+/// straight from their name.
+fn policy_hook(ruleset: &str, pair: Option<&config::ZonePairCfg>) -> String {
+    match pair {
+        Some(p) if p.dst_local => "geo_input".into(),
+        Some(p) if p.src_local => "geo_output".into(),
+        Some(_) => "geo_forward".into(),
+        None => render::hook_chain(ruleset).into(),
+    }
+}
+
+/// Fold a zone pair's interfaces into the rule's match.
+///
+/// A zone rule states no interface: the zone chain has already matched on
+/// iifname/oifname before jumping into the pair's ruleset. Replicating the
+/// rule without them would match traffic between any interfaces — much broader
+/// than the rule it mirrors. The local zone contributes none (it isn't an
+/// interface set), and its direction is expressed by the hook instead.
+fn apply_zone_pair(rule: &mut RuleCfg, pair: &config::ZonePairCfg) {
+    if !pair.src_interfaces.is_empty() && rule.inbound_interface.is_none() {
+        rule.inbound_interface =
+            Some(IfaceSpec { name: None, group: None, names: pair.src_interfaces.clone() });
+    }
+    if !pair.dst_interfaces.is_empty() && rule.outbound_interface.is_none() {
+        rule.outbound_interface =
+            Some(IfaceSpec { name: None, group: None, names: pair.dst_interfaces.clone() });
+    }
+}
+
 pub fn resolve_matches(
     model: &Model,
     conf: Option<&dyn ConfigRead>,
     snapshot: Option<&BTreeMap<String, Option<String>>>,
-) -> (BTreeMap<u32, Option<String>>, Vec<Problem>) {
+) -> (BTreeMap<u32, Option<String>>, BTreeMap<u32, String>, Vec<Problem>) {
     let mut matches = BTreeMap::new();
+    let mut hooks = BTreeMap::new();
     let mut problems = Vec::new();
     let groups = conf.map(config::read_groups);
     for policy in &model.policies {
         let pid = policy.id;
         if let (Some(conf), Some(groups)) = (conf, groups.as_ref()) {
             let ruleset = policy.ruleset.as_deref().unwrap_or("forward");
+            // A zone policy's pair supplies both its hook and the interfaces
+            // its rule leaves implicit.
+            // The binding stores the bare ruleset name, not the `name:` scope.
+            let pair = config::zone_ruleset(ruleset).and_then(|name| config::read_zone_pair(conf, name));
+            if config::zone_ruleset(ruleset).is_some() && pair.is_none() {
+                matches.insert(pid, None);
+                problems.push(Problem {
+                    policy: pid,
+                    error: format!("no zone pair is bound to firewall ipv4 name {}", &ruleset[5..]),
+                });
+                continue;
+            }
+            hooks.insert(pid, policy_hook(ruleset, pair.as_ref()));
             match config::read_rule_cfg(conf, ruleset, policy.rule) {
                 None => {
                     matches.insert(pid, None);
                     problems.push(Problem {
                         policy: pid,
-                        error: format!(
-                            "target firewall ipv4 {ruleset} filter rule {} does not exist",
-                            policy.rule
-                        ),
+                        error: match config::zone_ruleset(ruleset) {
+                            Some(name) => format!(
+                                "target firewall ipv4 name {name} rule {} does not exist",
+                                policy.rule
+                            ),
+                            None => format!(
+                                "target firewall ipv4 {ruleset} filter rule {} does not exist",
+                                policy.rule
+                            ),
+                        },
                     });
                 }
-                Some(rule_cfg) => match rule_match_expr(&rule_cfg, groups) {
-                    Ok(expr) => {
-                        matches.insert(pid, Some(expr));
+                Some(mut rule_cfg) => {
+                    if let Some(p) = pair.as_ref() {
+                        apply_zone_pair(&mut rule_cfg, p);
                     }
-                    Err(e) => {
-                        matches.insert(pid, None);
-                        problems.push(Problem { policy: pid, error: e.0 });
+                    match rule_match_expr(&rule_cfg, groups) {
+                        Ok(expr) => {
+                            matches.insert(pid, Some(expr));
+                        }
+                        Err(e) => {
+                            matches.insert(pid, None);
+                            problems.push(Problem { policy: pid, error: e.0 });
+                        }
                     }
-                },
+                }
             }
         } else if let Some(snapshot) = snapshot {
             let expr = snapshot.get(&pid.to_string()).cloned().flatten();
@@ -207,7 +264,7 @@ pub fn resolve_matches(
             problems.push(Problem { policy: pid, error: "no configuration view available".into() });
         }
     }
-    (matches, problems)
+    (matches, hooks, problems)
 }
 
 // ── set building (with per-DB-version cache) ──────────────────────────────────
@@ -397,6 +454,7 @@ pub struct Report {
 pub fn apply_model(
     model: &Model,
     matches: &BTreeMap<u32, Option<String>>,
+    hooks: &BTreeMap<u32, String>,
     db: Option<&dyn Database>,
     problems: &[Problem],
     force: bool,
@@ -441,7 +499,7 @@ pub fn apply_model(
         Some(db) if !set_names.is_empty() => build_sets(db, &set_names, Path::new(CACHE_DIR))?,
         _ => BTreeMap::new(),
     };
-    let text = render::render_full(model, matches, &sets, &read_counters(), &read_country_counters());
+    let text = render::render_full(model, matches, hooks, &sets, &read_counters(), &read_country_counters());
 
     let previous = fs::read_to_string(last_applied()).unwrap_or_default();
     if force || text != previous {

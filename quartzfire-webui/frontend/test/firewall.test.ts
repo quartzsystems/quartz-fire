@@ -18,7 +18,11 @@ import {
   emptyFirewallConfig,
   defaultDropBlockedReason,
   pairRuleset,
-  ruleChainFor,
+  renumberedCount,
+  renumberMap,
+  reorderCommands,
+  ruleChainsFor,
+  ruleSelection,
   rulesetName,
   zoneRuleChain,
   zoneUsage,
@@ -30,6 +34,8 @@ import {
   type ZoneUpdate,
 } from "../lib/firewall.ts";
 import type { VyosCommand } from "../lib/interfaces.ts";
+import { acMatchFromSelections } from "../lib/rule-services.ts";
+import { diffGeoPoliciesForRule } from "../lib/geolocation.ts";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 
@@ -81,6 +87,36 @@ const zonedConfig = (over: Partial<FirewallConfig> = {}): FirewallConfig => ({
   zones: [baseZone({ name: "LAN" }), baseZone({ name: "WAN", display: "WAN", interfaces: ["eth0"] })],
   ...over,
 });
+
+const noEndpoint = () => ({ group_type: null, group_name: null, address: null, iface: null, iface_group: null });
+
+/// A stored rule. `scopes` defaults to the single representative chain, which
+/// is what a base-chain rule always has.
+const baseRule = (over: Partial<FirewallRule> = {}): FirewallRule => {
+  const chain = over.chain ?? "forward";
+  return {
+    rule: 10,
+    chain,
+    scopes: [{ chain, raw: {} }],
+    name: null,
+    action: "accept",
+    ips: false,
+    from: noEndpoint(),
+    to: noEndpoint(),
+    policy: null,
+    protocol: null,
+    enabled: true,
+    log: false,
+    raw: {},
+    ...over,
+  };
+};
+
+/// A stored zone rule spanning `pairs`, all copies at one number.
+const zoneRule = (pairs: [string, string][], over: Partial<FirewallRule> = {}): FirewallRule => {
+  const chains = pairs.map(([s, d]) => zoneRuleChain(pairRuleset(s, d))).sort((a, b) => a.localeCompare(b));
+  return baseRule({ chain: chains[0], scopes: chains.map((chain) => ({ chain, raw: {} })), ...over });
+};
 
 // ── zone config ─────────────────────────────────────────────────────────────
 
@@ -258,17 +294,189 @@ test("a rule from a zone to itself is rejected", () => {
   );
 });
 
-test("one zone per side", () => {
-  assert.throws(
-    () => ruleChainFor([{ kind: "zone", name: "LAN" }, { kind: "zone", name: "WAN" }], ZONE_WAN, zonedConfig().zones),
-    /only carry one zone/,
+// ── multi-zone rules ────────────────────────────────────────────────────────
+
+/// LAN + DMZ + WAN, so a rule can span more than one pair.
+const threeZones = (over: Partial<FirewallConfig> = {}): FirewallConfig => ({
+  ...emptyFirewallConfig(),
+  zones: [
+    baseZone({ name: "LAN", interfaces: ["eth1"] }),
+    baseZone({ name: "DMZ", display: "DMZ", interfaces: ["eth2"] }),
+    baseZone({ name: "WAN", display: "WAN", interfaces: ["eth0"] }),
+  ],
+  ...over,
+});
+
+test("a rule From two zones writes one copy per pair, at one number", () => {
+  // VyOS can't OR zone pairs, so From [LAN, DMZ] To [WAN] is two rules — one in
+  // each pair's ruleset. They share a number so they read back as one rule.
+  const cmds = diffRule(
+    null,
+    baseRuleUpdate({
+      rule: 20,
+      from: [{ kind: "zone", name: "LAN" }, { kind: "zone", name: "DMZ" }],
+      to: ZONE_WAN,
+    }),
+    threeZones(),
   );
+  assert.ok(has(cmds, "set firewall ipv4 name QZ-Z-LAN-TO-WAN rule 20 action accept"));
+  assert.ok(has(cmds, "set firewall ipv4 name QZ-Z-DMZ-TO-WAN rule 20 action accept"));
+  assert.ok(has(cmds, "set firewall zone WAN from LAN firewall name QZ-Z-LAN-TO-WAN"));
+  assert.ok(has(cmds, "set firewall zone WAN from DMZ firewall name QZ-Z-DMZ-TO-WAN"));
+});
+
+test("a 2x2 rule spans four pairs", () => {
+  const cfg: FirewallConfig = {
+    ...emptyFirewallConfig(),
+    zones: [
+      baseZone({ name: "LAN", interfaces: ["eth1"] }),
+      baseZone({ name: "DMZ", display: "DMZ", interfaces: ["eth2"] }),
+      baseZone({ name: "WAN", display: "WAN", interfaces: ["eth0"] }),
+      baseZone({ name: "GUEST", display: "Guest", interfaces: ["eth3"] }),
+    ],
+  };
+  const chains = ruleChainsFor(
+    [{ kind: "zone", name: "LAN" }, { kind: "zone", name: "DMZ" }],
+    [{ kind: "zone", name: "WAN" }, { kind: "zone", name: "GUEST" }],
+    cfg.zones,
+  );
+  assert.deepEqual(chains.slice().sort(), [
+    "name:QZ-Z-DMZ-TO-GUEST",
+    "name:QZ-Z-DMZ-TO-WAN",
+    "name:QZ-Z-LAN-TO-GUEST",
+    "name:QZ-Z-LAN-TO-WAN",
+  ]);
+});
+
+test("the state match is seeded once, not once per pair", () => {
+  const cmds = diffRule(
+    null,
+    baseRuleUpdate({ from: [{ kind: "zone", name: "LAN" }, { kind: "zone", name: "DMZ" }], to: ZONE_WAN }),
+    threeZones(),
+  );
+  const seeds = lines(cmds).filter((l) => l.includes("state-policy established"));
+  assert.equal(seeds.length, 1);
+});
+
+test("the auto group behind a multi-entry side is created once, and referenced per pair", () => {
+  const cfg = threeZones({ aliases: [] });
+  const cmds = diffRule(
+    null,
+    baseRuleUpdate({
+      rule: 20,
+      from: [{ kind: "zone", name: "LAN" }, { kind: "zone", name: "DMZ" }],
+      to: [
+        { kind: "zone", name: "WAN" },
+        { kind: "inline", type: "host", value: "192.0.2.1" },
+        { kind: "inline", type: "host", value: "192.0.2.2" },
+      ],
+    }),
+    cfg,
+  );
+  // One group, however many pairs point at it.
+  const created = lines(cmds).filter((l) => l.endsWith("description [qz-rule]"));
+  assert.equal(created.length, 1);
+  assert.ok(has(cmds, "set firewall ipv4 name QZ-Z-LAN-TO-WAN rule 20 destination group address-group QZ-R20-TO"));
+  assert.ok(has(cmds, "set firewall ipv4 name QZ-Z-DMZ-TO-WAN rule 20 destination group address-group QZ-R20-TO"));
+});
+
+test("a zone on both sides is rejected", () => {
+  assert.throws(
+    () =>
+      ruleChainsFor(
+        [{ kind: "zone", name: "LAN" }, { kind: "zone", name: "WAN" }],
+        ZONE_WAN,
+        zonedConfig().zones,
+      ),
+    /WAN is on both sides/,
+  );
+});
+
+test("dropping one zone from a rule removes only that pair's copy", () => {
+  const cfg = threeZones({
+    zone_pairs: [
+      { src: "LAN", dst: "WAN", ruleset: pairRuleset("LAN", "WAN") },
+      { src: "DMZ", dst: "WAN", ruleset: pairRuleset("DMZ", "WAN") },
+    ],
+    state_policy: true,
+  });
+  const live = zoneRule([["LAN", "WAN"], ["DMZ", "WAN"]], { rule: 20 });
+  cfg.rules = [live];
+  // From [LAN, DMZ] → From [LAN]: the DMZ copy goes, and the number is kept.
+  const cmds = diffRule(live, baseRuleUpdate({ rule: 20, from: ZONE_LAN, to: ZONE_WAN }), cfg);
+  assert.ok(has(cmds, "delete firewall ipv4 name QZ-Z-DMZ-TO-WAN rule 20"));
+  assert.ok(!lines(cmds).some((l) => l.startsWith("delete firewall ipv4 name QZ-Z-LAN-TO-WAN rule 20")));
+  // Its pair had no other rules, so the binding and ruleset retire with it.
+  assert.ok(has(cmds, "delete firewall zone WAN from DMZ"));
+  assert.ok(has(cmds, "delete firewall ipv4 name QZ-Z-DMZ-TO-WAN"));
+});
+
+// ── reorder ─────────────────────────────────────────────────────────────────
+
+test("a multi-zone rule gets ONE target number across all its pairs", () => {
+  // The copies sit at consecutive positions in no list — the rule has one
+  // position, so one target. Numbering off per-copy positions would split the
+  // shared number and silently break the rule.
+  const a = baseRule({ rule: 50, chain: "forward" });
+  const b = zoneRule([["LAN", "WAN"], ["DMZ", "WAN"]], { rule: 90 });
+  const moves = renumberMap([a, b]);
+  assert.equal(moves.get("forward:50"), 10);
+  assert.equal(moves.get("name:QZ-Z-DMZ-TO-WAN:90"), 20);
+  assert.equal(moves.get("name:QZ-Z-LAN-TO-WAN:90"), 20);
+  assert.equal(renumberedCount([a, b]), 2);
+});
+
+test("reorder rebuilds every copy of a multi-zone rule at the new number", () => {
+  const b = zoneRule([["LAN", "WAN"], ["DMZ", "WAN"]], { rule: 90 });
+  b.scopes = b.scopes.map((s) => ({ ...s, raw: { action: "accept" } }));
+  const cmds = reorderCommands([b]);
+  assert.ok(has(cmds, "delete firewall ipv4 name QZ-Z-LAN-TO-WAN rule 90"));
+  assert.ok(has(cmds, "delete firewall ipv4 name QZ-Z-DMZ-TO-WAN rule 90"));
+  assert.ok(has(cmds, "set firewall ipv4 name QZ-Z-LAN-TO-WAN rule 10 action accept"));
+  assert.ok(has(cmds, "set firewall ipv4 name QZ-Z-DMZ-TO-WAN rule 10 action accept"));
+  // Every delete precedes every set, so a number another rule vacates is safe.
+  const l = lines(cmds);
+  assert.ok(l.findLastIndex((x) => x.startsWith("delete ")) < l.findIndex((x) => x.startsWith("set ")));
 });
 
 test("rules without zones are untouched by the zone model", () => {
   const cmds = diffRule(null, baseRuleUpdate({ from: [{ kind: "interface", name: "eth1" }] }), zonedConfig());
   assert.ok(has(cmds, "set firewall ipv4 forward filter rule 10 action accept"));
   assert.ok(has(cmds, "set firewall ipv4 forward filter rule 10 inbound-interface name eth1"));
+});
+
+test("a saved zone rule reopens with its zones on both sides", () => {
+  // A zone rule stores no zone match — the ruleset it lives in is the only
+  // record of its pair. If the sides didn't resolve it back, editing a saved
+  // zone rule would silently drop it to a plain forward rule on save.
+  const cfg = zonedConfig({ zone_pairs: [{ src: "LAN", dst: "WAN", ruleset: pairRuleset("LAN", "WAN") }] });
+  const rule = zoneRule([["LAN", "WAN"]]);
+  assert.deepEqual(ruleSelection(rule, "from", cfg.auto_groups, cfg), [{ kind: "zone", name: "LAN" }]);
+  assert.deepEqual(ruleSelection(rule, "to", cfg.auto_groups, cfg), [{ kind: "zone", name: "WAN" }]);
+});
+
+test("a multi-zone rule reopens with every zone on each side", () => {
+  const cfg = threeZones({
+    zone_pairs: [
+      { src: "LAN", dst: "WAN", ruleset: pairRuleset("LAN", "WAN") },
+      { src: "DMZ", dst: "WAN", ruleset: pairRuleset("DMZ", "WAN") },
+    ],
+  });
+  const rule = zoneRule([["LAN", "WAN"], ["DMZ", "WAN"]], { rule: 20 });
+  const from = ruleSelection(rule, "from", cfg.auto_groups, cfg);
+  assert.deepEqual(
+    from.map((e) => (e.kind === "zone" ? e.name : e.kind)).sort(),
+    ["DMZ", "LAN"],
+  );
+  assert.deepEqual(ruleSelection(rule, "to", cfg.auto_groups, cfg), [{ kind: "zone", name: "WAN" }]);
+});
+
+test("the local zone side reopens as the Firewall endpoint, not a zone", () => {
+  const cfg = zonedConfig({
+    zones: [baseZone({ name: "LAN" }), baseZone({ name: "LOCAL", display: "Firewall", local: true, interfaces: [] })],
+    zone_pairs: [{ src: "LAN", dst: "LOCAL", ruleset: pairRuleset("LAN", "LOCAL") }],
+  });
+  assert.deepEqual(ruleSelection(zoneRule([["LAN", "LOCAL"]]), "to", cfg.auto_groups, cfg), [{ kind: "firewall" }]);
 });
 
 // ── the priority-0 / priority-1 guardrail ───────────────────────────────────
@@ -313,4 +521,107 @@ test("a zone's usage counts the rules of every pair it takes part in", () => {
     rules: [rule({}), rule({ rule: 20, chain: "forward" })],
   });
   assert.equal(zoneUsage(cfg, cfg.zones[0]).length, 1);
+});
+
+// ── App Control match derivation (fails closed) ──────────────────────────────
+
+test("a zone side expands into that zone's interfaces", () => {
+  // The binding is an independent nft match in qfappd's own table — it does
+  // NOT inherit the rule's criteria — so the zones have to be spelled out.
+  const cfg = threeZones();
+  const m = acMatchFromSelections(
+    [{ kind: "zone", name: "LAN" }, { kind: "zone", name: "DMZ" }],
+    [{ kind: "zone", name: "WAN" }],
+    cfg,
+  );
+  assert.deepEqual(m.iifname, ["eth1", "eth2"]);
+  assert.deepEqual(m.oifname, ["eth0"]);
+});
+
+test("an alias side expands into its members", () => {
+  const cfg = zonedConfig({
+    aliases: [
+      { name: "Admins", display: "Admins", type: "host", description: null, members: ["10.0.0.5", "10.0.0.6"] },
+    ],
+  });
+  const m = acMatchFromSelections([{ kind: "alias", type: "host", name: "Admins" }], [], cfg);
+  assert.deepEqual(m.saddr, ["10.0.0.5", "10.0.0.6"]);
+});
+
+test("a side qfappd can't match is refused, not silently widened", () => {
+  // An empty AcMatch means "every forwarded connection", so dropping what can't
+  // be expressed would enforce the action far beyond the rule.
+  const cfg = zonedConfig({
+    aliases: [
+      { name: "Sites", display: "Sites", type: "fqdn", description: null, members: ["example.com"] },
+      { name: "Range", display: "Range", type: "host", description: null, members: ["10.0.0.1-10.0.0.9"] },
+    ],
+  });
+  assert.throws(
+    () => acMatchFromSelections([{ kind: "alias", type: "fqdn", name: "Sites" }], [], cfg),
+    /addresses, not names/,
+  );
+  assert.throws(
+    () => acMatchFromSelections([{ kind: "inline", type: "fqdn", value: "example.com" }], [], cfg),
+    /addresses, not names/,
+  );
+  // qfappd parses addresses as CIDRs, so a group range can't be expressed —
+  // and a refused binding fails the WHOLE policy, not just this one.
+  assert.throws(
+    () => acMatchFromSelections([{ kind: "alias", type: "host", name: "Range" }], [], cfg),
+    /isn't an IPv4 address or network/,
+  );
+  assert.throws(
+    () => acMatchFromSelections([{ kind: "firewall" }], [], cfg),
+    /firewall itself/,
+  );
+});
+
+test("the local zone can't carry an App Control binding", () => {
+  // Traffic to or from the box never reaches qfappd's forward hook.
+  const cfg = zonedConfig({
+    zones: [baseZone({ name: "LAN" }), baseZone({ name: "LOCAL", display: "Firewall", local: true, interfaces: [] })],
+  });
+  assert.throws(
+    () => acMatchFromSelections([{ kind: "zone", name: "LOCAL" }], [], cfg),
+    /firewall itself/,
+  );
+});
+
+// ── Geolocation policies follow a rule's scopes ──────────────────────────────
+
+test("a multi-zone rule gets one geolocation policy per pair", () => {
+  // qzgeo binds a policy to (ruleset, rule), so a rule in two rulesets needs
+  // two policies — and they must ride one commit (commit-confirm allows one
+  // pending change).
+  const rule = { rule: 20, scopes: [{ chain: zoneRuleChain(pairRuleset("LAN", "WAN")) }, { chain: zoneRuleChain(pairRuleset("DMZ", "WAN")) }] };
+  const cmds = diffGeoPoliciesForRule([], rule, "Block_CN", "source");
+  assert.ok(has(cmds, "set service geolocation policy 10 ruleset name:QZ-Z-LAN-TO-WAN"));
+  assert.ok(has(cmds, "set service geolocation policy 20 ruleset name:QZ-Z-DMZ-TO-WAN"));
+  assert.ok(has(cmds, "set service geolocation policy 10 rule 20"));
+  assert.ok(has(cmds, "set service geolocation policy 20 rule 20"));
+});
+
+test("detaching removes every one of a rule's geolocation policies", () => {
+  const live = [
+    { id: 10, action: "Block_CN", ruleset: zoneRuleChain(pairRuleset("LAN", "WAN")), rule: 20, direction: "source" as const, enabled: true },
+    { id: 20, action: "Block_CN", ruleset: zoneRuleChain(pairRuleset("DMZ", "WAN")), rule: 20, direction: "source" as const, enabled: true },
+  ];
+  const rule = { rule: 20, scopes: live.map((p) => ({ chain: p.ruleset })) };
+  const cmds = diffGeoPoliciesForRule(live, rule, null, "source");
+  assert.deepEqual(lines(cmds).sort(), [
+    "delete service geolocation policy 10",
+    "delete service geolocation policy 20",
+  ]);
+});
+
+test("a pair a rule no longer spans loses its geolocation policy", () => {
+  const live = [
+    { id: 10, action: "Block_CN", ruleset: zoneRuleChain(pairRuleset("LAN", "WAN")), rule: 20, direction: "source" as const, enabled: true },
+    { id: 20, action: "Block_CN", ruleset: zoneRuleChain(pairRuleset("DMZ", "WAN")), rule: 20, direction: "source" as const, enabled: true },
+  ];
+  // The rule drops DMZ — its policy would otherwise target a rule that's gone.
+  const rule = { rule: 20, scopes: [{ chain: zoneRuleChain(pairRuleset("LAN", "WAN")) }] };
+  const cmds = diffGeoPoliciesForRule(live, rule, "Block_CN", "source");
+  assert.ok(has(cmds, "delete service geolocation policy 20"));
 });

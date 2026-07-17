@@ -9,18 +9,22 @@ import {
   ALIAS_GROUP,
   applyRule,
   AliasType,
+  BaseChain,
   BUILTIN_POLICIES,
   EndpointEntry,
   EndpointSelection,
   FirewallConfig,
   FirewallRule,
+  isBaseChain,
   nextRuleNumber,
+  pairForChain,
   PROTOCOL_LABEL,
   RuleAction,
   RuleChain,
   RulePolicyChoice,
   ruleChainFor,
   ruleSelection,
+  rulesetName,
   RuleUpdate,
   validateInline,
 } from "@/lib/firewall";
@@ -74,11 +78,21 @@ const INLINE_PLACEHOLDER: Record<AliasType, string> = {
 const PING_KEY = "[ping]";
 const builtinKey = (name: string) => `[builtin:${name}]`;
 
-const CHAIN_LABEL: Record<RuleChain, string> = {
+const CHAIN_LABEL: Record<BaseChain, string> = {
   forward: "Forward filter",
   input: "Input filter",
   output: "Output filter",
 };
+
+/// Where a rule lives, in words — the base chain, or the zone pair whose
+/// ruleset holds it ("IBM → WAN").
+function chainLabel(chain: RuleChain, cfg: FirewallConfig): string {
+  if (isBaseChain(chain)) return CHAIN_LABEL[chain];
+  const pair = pairForChain(cfg.zone_pairs, chain);
+  if (!pair) return rulesetName(chain) ?? "Zone";
+  const name = (n: string) => cfg.zones.find((z) => z.name === n)?.display ?? n;
+  return `${name(pair.src)} → ${name(pair.dst)}`;
+}
 
 /// List-entry label: friendly name first (interface description or alias
 /// display name), with the technical name in the sub line.
@@ -127,6 +141,7 @@ function EndpointField({
   aliases,
   zones,
   allowFirewall,
+  otherSideZones,
   value,
   onChange,
 }: {
@@ -137,6 +152,8 @@ function EndpointField({
   zones: FirewallConfig["zones"];
   /** False when the other side already carries the Firewall entry. */
   allowFirewall: boolean;
+  /** Zones on the other side — a rule can't go from a zone to itself. */
+  otherSideZones: string[];
   value: EndpointSelection;
   onChange: (sel: EndpointSelection) => void;
 }) {
@@ -154,6 +171,7 @@ function EndpointField({
   // A zone is an interface set, so the two can't be OR'd — the zone already
   // decides which interfaces match. Aliases can join a zone though: the zone
   // picks the ruleset, the alias narrows the match inside it.
+  const zoneNames = value.filter((e) => e.kind === "zone").map((e) => (e as { name: string }).name);
   const addableIfaces =
     familyType || hasLegacy || hasFirewall || hasZone
       ? []
@@ -167,9 +185,15 @@ function EndpointField({
         return true;
       });
   const firewallAddable = allowFirewall && value.length === 0;
-  // One zone per side: a rule belongs to exactly one zone pair. The local zone
-  // isn't offered — it's the box itself, which the Firewall entry already says.
-  const addableZones = hasIface || hasLegacy || hasFirewall || hasZone ? [] : zones.filter((z) => !z.local);
+  // A side can carry several zones — the rule then spans one pair per
+  // combination. A zone already on the other side isn't offered: that pair
+  // would be zone-to-itself, which is intra-zone filtering, not a rule. The
+  // local zone isn't offered either — it's the box itself, which the built-in
+  // Firewall entry already says.
+  const addableZones =
+    hasIface || hasLegacy || hasFirewall
+      ? []
+      : zones.filter((z) => !z.local && !zoneNames.includes(z.name) && !otherSideZones.includes(z.name));
 
   // Inline values can join anything in the same family; an FQDN *alias*
   // blocks further FQDN entries (its domain group can't be included).
@@ -380,11 +404,14 @@ export function RuleFormModal({
 
   const [name, setName] = useState(initial?.name ?? "");
   const [action, setAction] = useState<RuleAction>(initial?.action ?? "accept");
+  // `config` resolves the synthetic entries a rule's location implies — the
+  // Firewall endpoint, and the zones of a pair rule. Without it a saved zone
+  // rule would reopen with its zones missing from From/To.
   const [from, setFrom] = useState<EndpointSelection>(
-    initial ? ruleSelection(initial, "from", config.auto_groups) : [],
+    initial ? ruleSelection(initial, "from", config.auto_groups, config) : [],
   );
   const [to, setTo] = useState<EndpointSelection>(
-    initial ? ruleSelection(initial, "to", config.auto_groups) : [],
+    initial ? ruleSelection(initial, "to", config.auto_groups, config) : [],
   );
   const [policyName, setPolicyName] = useState(
     initial?.policy ?? (initial?.protocol === "icmp" ? PING_KEY : ""),
@@ -418,7 +445,11 @@ export function RuleFormModal({
       if (cancelled) return;
       const cfgs: RuleServiceConfigs = { ssl, geo, ac };
       setSvcConfigs(cfgs);
-      if (initial) setSvc(serviceStateForRule(initial.rule, "forward", cfgs));
+      // The rule's own scopes — a zone rule's geo policy hangs off its pairs'
+      // rulesets, not off "forward".
+      if (initial) {
+        setSvc(serviceStateForRule(initial.rule, initial.scopes.map((s) => s.chain), cfgs));
+      }
       setSvcLoaded(true);
     })();
     return () => {
@@ -426,9 +457,6 @@ export function RuleFormModal({
     };
   }, [initial]);
 
-  // Services attach only to forward Allow rules (matching the SSL / App Control
-  // Policies tabs). A Firewall-endpoint side steers the rule out of the forward
-  // chain, and a zone puts it in that pair's ruleset, so both are ineligible.
   const chain = useMemo<RuleChain>(() => {
     try {
       return ruleChainFor(from, to, config.zones);
@@ -436,7 +464,20 @@ export function RuleFormModal({
       return "forward";
     }
   }, [from, to, config.zones]);
-  const servicesEligible = action === "accept" && chain === "forward";
+
+  // Every service needs an Allow rule; where they diverge is scope.
+  //   * Geolocation follows the rule anywhere — qzgeo resolves a zone pair's
+  //     ruleset and folds the pair's interfaces into its replicated match.
+  //   * App Control classifies in its own forward-hook table, so it covers
+  //     routed rules: forward, and zone rules between two network zones.
+  //   * SSL Inspection is forward-only, and structurally so — it steers in the
+  //     NAT prerouting hook, before the routing decision, so it can't tell one
+  //     destination zone from another (quartzfire-ssl-inspection matchrepl.rs).
+  const isAllow = action === "accept";
+  const geoEligible = isAllow;
+  const acEligible = isAllow && (chain === "forward" || !isBaseChain(chain));
+  const sslEligible = isAllow && chain === "forward";
+  const servicesEligible = geoEligible || acEligible || sslEligible;
 
   const geoActions = svcConfigs?.geo.actions ?? [];
   const acActions = svcConfigs ? Object.keys(svcConfigs.ac.actions) : [];
@@ -486,7 +527,13 @@ export function RuleFormModal({
             ruleUpdate,
             config,
             svcConfigs,
-            servicesEligible ? svc : emptyRuleServiceState(),
+            // Each service is filtered to what this rule's scope can carry, so
+            // moving a rule into a zone detaches the ones that can't follow.
+            {
+              ssl: sslEligible ? svc.ssl : "off",
+              geo: geoEligible ? svc.geo : null,
+              appcontrol: acEligible ? svc.appcontrol : null,
+            },
           )
         : await applyRule(initial ?? null, ruleUpdate, config);
       onSaved(
@@ -505,7 +552,7 @@ export function RuleFormModal({
     <ModalShell onClose={onClose} maxWidth={640}>
       <ModalHeader
         title={`${isEdit ? "Edit" : "Create"} Rule`}
-        subtitle={isEdit ? `${CHAIN_LABEL[initial!.chain]} rule ${initial!.rule}` : "New rules are added at the bottom — drag to reorder"}
+        subtitle={isEdit ? `${chainLabel(initial!.chain, config)} rule ${initial!.rule}` : "New rules are added at the bottom — drag to reorder"}
         onClose={onClose}
       />
 
@@ -542,6 +589,7 @@ export function RuleFormModal({
             aliases={aliases}
             zones={config.zones}
             allowFirewall={!to.some((e) => e.kind === "firewall")}
+            otherSideZones={to.filter((e) => e.kind === "zone").map((e) => (e as { name: string }).name)}
             value={from}
             onChange={setFrom}
           />
@@ -552,6 +600,7 @@ export function RuleFormModal({
             aliases={aliases}
             zones={config.zones}
             allowFirewall={!from.some((e) => e.kind === "firewall")}
+            otherSideZones={from.filter((e) => e.kind === "zone").map((e) => (e as { name: string }).name)}
             value={to}
             onChange={setTo}
           />
@@ -625,6 +674,7 @@ export function RuleFormModal({
               ) : (
                 <div className="flex flex-col gap-[10px]">
                   {/* SSL Inspection — inspect / splice / off (no named policies). */}
+                {sslEligible && (
                 <div className="flex items-center gap-3">
                   <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">SSL Inspection</span>
                   <select
@@ -640,6 +690,7 @@ export function RuleFormModal({
                     <option value="splice">Splice</option>
                   </select>
                 </div>
+                )}
 
                 {/* Geolocation — a named action plus a match direction. */}
                 <div className="flex items-center gap-3">
@@ -682,6 +733,7 @@ export function RuleFormModal({
                 </div>
 
                 {/* Application Control — a named action. */}
+                {acEligible && (
                 <div className="flex items-center gap-3">
                   <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">Application Control</span>
                   <select
@@ -700,8 +752,18 @@ export function RuleFormModal({
                     ))}
                   </select>
                 </div>
+                )}
 
-                {(geoActions.length === 0 || acActions.length === 0) && (
+                {/* Say why the forward-only services aren't here, rather than
+                    leaving a rule that silently can't carry them. */}
+                {!sslEligible && (
+                  <p className="text-[11px] text-[var(--qz-fg-4)] m-0">
+                    SSL Inspection isn&apos;t offered here: it decides what to decrypt before the route is chosen, so
+                    it can&apos;t tell one destination apart from another. It applies to rules between interfaces.
+                  </p>
+                )}
+
+                {(geoActions.length === 0 || (acEligible && acActions.length === 0)) && (
                   <p className="text-[11px] text-[var(--qz-fg-4)] m-0">
                     Define actions on the Geolocation and Application Control pages to attach them here.
                   </p>

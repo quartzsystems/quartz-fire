@@ -17,8 +17,12 @@ import {
   enableTrafficLogging,
   fetchFirewall,
   FirewallConfig,
+  isBaseChain,
   loggingStatus,
+  pairForChain,
   RuleChain,
+  ruleKey,
+  rulesetName,
 } from "@/lib/firewall";
 import { useDashboard } from "@/lib/DashboardContext";
 
@@ -85,7 +89,12 @@ const MONITOR_COLUMNS: MonCol[] = [
   { key: "iface", header: "Interface", width: 140, className: "mono text-[var(--qz-fg-3)]" },
 ];
 
-function monitorCell(key: string, r: Row, ruleLabel: (r: Row) => string): React.ReactNode {
+function monitorCell(
+  key: string,
+  r: Row,
+  ruleLabel: (r: Row) => string,
+  scopeLabel: (chain: RuleChain) => string,
+): React.ReactNode {
   switch (key) {
     case "time":
       return time(r.ts);
@@ -106,11 +115,17 @@ function monitorCell(key: string, r: Row, ruleLabel: (r: Row) => string): React.
           <Link
             href="/firewall/rules"
             className="no-underline text-[var(--qz-fg-1)] hover:text-[var(--qz-accent)]"
-            title={r.rule === null ? `${r.chain} default action` : `${r.chain} rule ${r.rule}`}
+            title={
+              r.rule === null
+                ? `${scopeLabel(r.chain)} default action`
+                : `${scopeLabel(r.chain)} rule ${r.rule}`
+            }
           >
             {ruleLabel(r)}
           </Link>
-          {r.chain !== "forward" && <span className="text-[11px] text-[var(--qz-fg-4)]"> · {r.chain}</span>}
+          {r.chain !== "forward" && (
+            <span className="text-[11px] text-[var(--qz-fg-4)]"> · {scopeLabel(r.chain)}</span>
+          )}
         </>
       );
     case "src":
@@ -178,8 +193,11 @@ export default function TrafficMonitorPage() {
   }, [loadConfig]);
 
   const logging = useMemo(() => loggingStatus(config), [config]);
+  // Keyed by UI rule: every copy of a zone rule shares its number, and ruleKey
+  // maps them all to the same key — so a log line from any of a rule's pairs
+  // resolves to the one rule that produced it.
   const ruleNames = useMemo(
-    () => new Map(config.rules.map((r) => [`${r.chain}:${r.rule}`, r.name])),
+    () => new Map(config.rules.map((r) => [ruleKey(r), r.name])),
     [config.rules],
   );
 
@@ -286,9 +304,22 @@ export default function TrafficMonitorPage() {
   const ruleLabel = useCallback(
     (r: Row): string => {
       if (r.rule === null) return "Default action";
-      return ruleNames.get(`${r.chain}:${r.rule}`) ?? `Rule ${r.rule}`;
+      return ruleNames.get(ruleKey({ chain: r.chain, rule: r.rule })) ?? `Rule ${r.rule}`;
     },
     [ruleNames],
+  );
+
+  // Where a log line came from, in words — a zone rule's scope is a pair's
+  // ruleset, whose raw name (QZ-Z-LAN-TO-WAN) isn't for reading.
+  const scopeLabel = useCallback(
+    (chain: RuleChain): string => {
+      if (isBaseChain(chain)) return chain;
+      const pair = pairForChain(config.zone_pairs, chain);
+      if (!pair) return rulesetName(chain) ?? chain;
+      const name = (n: string) => config.zones.find((z) => z.name === n)?.display ?? n;
+      return `${name(pair.src)} → ${name(pair.dst)}`;
+    },
+    [config.zone_pairs, config.zones],
   );
 
   // Interfaces offered in the filter: whatever the entries have actually seen
@@ -306,7 +337,7 @@ export default function TrafficMonitorPage() {
   const ruleOptions = useMemo(
     () =>
       config.rules.map((r) => ({
-        value: `${r.chain}:${r.rule}`,
+        value: ruleKey(r),
         label: r.name ?? `Rule ${r.rule}`,
       })),
     [config.rules],
@@ -323,7 +354,15 @@ export default function TrafficMonitorPage() {
       }
       if (ifaceFilter !== "all" && r.in !== ifaceFilter && r.out !== ifaceFilter) return false;
       if (ruleFilter !== "all") {
-        if (ruleFilter === "default" ? r.rule !== null : `${r.chain}:${r.rule}` !== ruleFilter) return false;
+        // Filtering by a zone rule matches traffic from every pair it spans,
+        // because ruleKey is the same for all of them.
+        if (
+          ruleFilter === "default"
+            ? r.rule !== null
+            : r.rule === null || ruleKey({ chain: r.chain, rule: r.rule }) !== ruleFilter
+        ) {
+          return false;
+        }
       }
       if (!q) return true;
       const hay = [ruleLabel(r), r.src, r.dst, r.spt, r.dpt, r.proto, r.in, r.out, r.chain, r.action]
@@ -505,7 +544,7 @@ export default function TrafficMonitorPage() {
                           className={c.className}
                           style={c.ellipsis ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : undefined}
                         >
-                          {monitorCell(c.key, r, ruleLabel)}
+                          {monitorCell(c.key, r, ruleLabel, scopeLabel)}
                         </td>
                       ))}
                     </tr>

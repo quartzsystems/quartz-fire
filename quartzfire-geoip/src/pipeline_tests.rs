@@ -210,7 +210,7 @@ fn full_pipeline() {
     assert_eq!(model.policies[0].rule, 20);
     assert!(validate(&model, Some(&db.country_codes())).is_empty());
 
-    let (matches, problems) = resolve_matches(&model, Some(&conf), None);
+    let (matches, hooks, problems) = resolve_matches(&model, Some(&conf), None);
     assert!(problems.is_empty());
     assert_eq!(
         matches.get(&10),
@@ -222,7 +222,7 @@ fn full_pipeline() {
     assert_eq!(sets["geo4_cn"], vec!["1.0.0.0/23", "203.0.113.0/24"]);
     assert_eq!(sets["geo6_cn"], vec!["2001:db8:c::/48"]);
 
-    let text = render_full(&model, &matches, &sets, &BTreeMap::new(), &BTreeMap::new());
+    let text = render_full(&model, &matches, &hooks, &sets, &BTreeMap::new(), &BTreeMap::new());
     assert!(text.contains("add table inet qz_geo\ndelete table inet qz_geo"));
     assert!(text.contains("1.0.0.0/23, 203.0.113.0/24"));
     assert!(text.contains("2001:db8:c::/48"));
@@ -255,10 +255,97 @@ fn dangling_rule_is_surfaced_not_dropped() {
     tree["firewall"] = json!({ "group": {}, "ipv4": { "forward": { "filter": { "rule": {} } } } });
     let conf = FakeConfig::new(tree);
     let model = read_service(&conf);
-    let (matches, problems) = resolve_matches(&model, Some(&conf), None);
+    let (matches, _hooks, problems) = resolve_matches(&model, Some(&conf), None);
     assert_eq!(matches.get(&10), Some(&None));
     assert_eq!(problems.len(), 1);
     assert!(problems[0].error.contains("rule 20 does not exist"));
+}
+
+/// A config whose geo policy targets a zone rule: LAN → WAN, bound to the
+/// pair's ruleset. `local` makes WAN the local zone (traffic to the firewall).
+fn zone_config_tree(local_dst: bool) -> Value {
+    let mut tree = config_tree();
+    tree["service"]["geolocation"]["policy"]["10"]["ruleset"] = json!("name:QZ-Z-LAN-TO-WAN");
+    let mut wan = json!({ "from": { "LAN": { "firewall": { "name": "QZ-Z-LAN-TO-WAN" } } } });
+    if local_dst {
+        wan["local-zone"] = json!({});
+    } else {
+        wan["member"] = json!({ "interface": ["eth0"] });
+    }
+    tree["firewall"]["zone"] = json!({
+        "LAN": { "member": { "interface": ["eth1", "eth2"] } },
+        "WAN": wan,
+    });
+    // The zone rule itself — note it states no interface of its own.
+    tree["firewall"]["ipv4"]["name"] = json!({
+        "QZ-Z-LAN-TO-WAN": {
+            "rule": { "20": { "action": "accept", "destination": { "address": "192.0.2.0/24" } } }
+        }
+    });
+    tree
+}
+
+#[test]
+fn zone_rule_expands_its_pair_into_the_match() {
+    // The rule carries no interface — the zone chain matched on them before
+    // jumping in. Replicating it without folding the pair's zones back in
+    // would match traffic between ANY interfaces, far wider than the rule.
+    let conf = FakeConfig::new(zone_config_tree(false));
+    let model = read_service(&conf);
+    let (matches, hooks, problems) = resolve_matches(&model, Some(&conf), None);
+    assert!(problems.is_empty(), "{problems:?}");
+    assert_eq!(
+        matches.get(&10),
+        Some(&Some(
+            "iifname { \"eth1\", \"eth2\" } oifname { \"eth0\" } ip daddr 192.0.2.0/24".to_string()
+        ))
+    );
+    // A routed pair hooks forward. The old code string-matched the ruleset and
+    // fell through to geo_output for anything it didn't recognise.
+    assert_eq!(hooks.get(&10).map(String::as_str), Some("geo_forward"));
+}
+
+#[test]
+fn zone_rule_into_the_local_zone_hooks_input() {
+    // LAN → the firewall itself is input traffic; the local zone has no
+    // interfaces, so only the source zone's land in the match.
+    let conf = FakeConfig::new(zone_config_tree(true));
+    let model = read_service(&conf);
+    let (matches, hooks, problems) = resolve_matches(&model, Some(&conf), None);
+    assert!(problems.is_empty(), "{problems:?}");
+    assert_eq!(hooks.get(&10).map(String::as_str), Some("geo_input"));
+    assert_eq!(
+        matches.get(&10),
+        Some(&Some("iifname { \"eth1\", \"eth2\" } ip daddr 192.0.2.0/24".to_string()))
+    );
+}
+
+#[test]
+fn zone_rule_renders_into_the_hook_its_pair_implies() {
+    let conf = FakeConfig::new(zone_config_tree(false));
+    let model = read_service(&conf);
+    let (matches, hooks, _) = resolve_matches(&model, Some(&conf), None);
+    let sets: BTreeMap<String, Vec<String>> =
+        required_sets(&model).into_iter().map(|n| (n, Vec::new())).collect();
+    let text = render_full(&model, &matches, &hooks, &sets, &BTreeMap::new(), &BTreeMap::new());
+    assert!(text.contains("chain geo_forward {"), "{text}");
+    assert!(!text.contains("chain geo_output {"), "{text}");
+    assert!(text.contains("iifname { \"eth1\", \"eth2\" } oifname { \"eth0\" }"), "{text}");
+}
+
+#[test]
+fn zone_policy_without_a_bound_pair_is_reported() {
+    let mut tree = zone_config_tree(false);
+    // The pair binding goes away (e.g. the zone was deleted) — the ruleset name
+    // alone can't be trusted to name a pair, so the policy must be reported
+    // rather than resolved against a guess.
+    tree["firewall"]["zone"]["WAN"]["from"] = json!({});
+    let conf = FakeConfig::new(tree);
+    let model = read_service(&conf);
+    let (matches, _hooks, problems) = resolve_matches(&model, Some(&conf), None);
+    assert_eq!(matches.get(&10), Some(&None));
+    assert_eq!(problems.len(), 1);
+    assert!(problems[0].error.contains("no zone pair is bound"), "{problems:?}");
 }
 
 #[test]
@@ -266,7 +353,7 @@ fn snapshot_fallback() {
     let model = read_service(&FakeConfig::new(config_tree()));
     let snapshot: BTreeMap<String, Option<String>> =
         [("10".to_string(), Some("iifname \"eth0\"".to_string()))].into_iter().collect();
-    let (matches, problems) = resolve_matches(&model, None, Some(&snapshot));
+    let (matches, _hooks, problems) = resolve_matches(&model, None, Some(&snapshot));
     assert_eq!(matches.get(&10), Some(&Some("iifname \"eth0\"".to_string())));
     assert!(problems.is_empty());
 }

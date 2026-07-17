@@ -36,7 +36,8 @@ import {
   saveAcConfig,
   Verdict,
 } from "@/lib/appcontrol";
-import { emptyFirewallConfig, fetchFirewall, FirewallConfig, FirewallRule } from "@/lib/firewall";
+import { emptyFirewallConfig, fetchFirewall, FirewallConfig, FirewallRule, isBaseChain, ruleSelection } from "@/lib/firewall";
+import { acMatchFromSelections } from "@/lib/rule-services";
 
 type Tab = "actions" | "policies" | "alerts";
 
@@ -470,16 +471,12 @@ function ActionEditor({
 
 // ── Policies tab ────────────────────────────────────────────────────────────────
 
-/// Derive an app-control binding match from a firewall rule's own criteria.
-function bindingMatchFromRule(rule: FirewallRule) {
-  const match: Record<string, unknown> = {};
-  const iif = rule.from.iface;
-  const oif = rule.to.iface;
-  if (iif) match.iifname = [iif];
-  if (oif) match.oifname = [oif];
-  if (rule.from.address) match.saddr = [rule.from.address];
-  if (rule.to.address) match.daddr = [rule.to.address];
-  return match;
+/// Rules that can carry an App Control binding: Allow rules on routed traffic.
+/// qfappd classifies in its own table on the forward hook, so it sees forwarded
+/// traffic — including zone rules between two network zones — but never traffic
+/// to or from the box itself.
+function bindable(rules: FirewallRule[]): FirewallRule[] {
+  return rules.filter((r) => r.action === "accept" && (r.chain === "forward" || !isBaseChain(r.chain)));
 }
 
 function PoliciesTab({
@@ -518,18 +515,17 @@ function PoliciesTab({
 
   const boundActionCount = new Set(config.bindings.map((b) => b.action)).size;
 
-  // Self-heal: drop bindings whose forward rule no longer exists (e.g. a rule
-  // deleted before the delete-cascade shipped, or removed outside the WebUI).
-  // Only bindings on forward rules are ever created, so a binding id absent from
-  // the current forward chain is an orphan. Runs once, after the live firewall
-  // config loads, so a stale "Policies N" count settles on its own.
+  // Self-heal: drop bindings whose rule no longer exists (e.g. a rule deleted
+  // before the delete-cascade shipped, or removed outside the WebUI). A binding
+  // id is a rule number, so an id absent from every bindable rule is an orphan.
+  // Zone rules count — keying this on the forward chain alone would delete every
+  // zone rule's binding on the first visit to this page. Runs once, after the
+  // live firewall config loads, so a stale "Policies N" count settles on its own.
   const healedRef = useRef(false);
   useEffect(() => {
     if (state !== "ready" || healedRef.current) return;
-    const forwardNums = new Set(
-      fw.rules.filter((r) => r.chain === "forward").map((r) => r.rule),
-    );
-    const kept = config.bindings.filter((b) => forwardNums.has(b.id));
+    const bindableNums = new Set(bindable(fw.rules).map((r) => r.rule));
+    const kept = config.bindings.filter((b) => bindableNums.has(b.id));
     if (kept.length !== config.bindings.length) {
       healedRef.current = true;
       onSave({ ...config, bindings: kept });
@@ -545,11 +541,24 @@ function PoliciesTab({
         setToast(`At most ${MAX_BOUND_ACTIONS} actions can be active at once. Reuse an action already in use.`);
         return;
       }
+      // The derivation fails closed — an unexpressible rule is refused rather
+      // than bound with a match that would classify more traffic than the rule.
+      let match;
+      try {
+        match = acMatchFromSelections(
+          ruleSelection(rule, "from", fw.auto_groups, fw),
+          ruleSelection(rule, "to", fw.auto_groups, fw),
+          fw,
+        );
+      } catch (e) {
+        setToast(e instanceof Error ? e.message : "This rule can't carry an Application Control action.");
+        return;
+      }
       bindings.push({
         id: rule.rule,
         action,
-        description: rule.name ?? `forward rule ${rule.rule}`,
-        match: bindingMatchFromRule(rule),
+        description: rule.name ?? `rule ${rule.rule}`,
+        match,
       });
     }
     onSave({ ...config, bindings });
@@ -571,14 +580,15 @@ function PoliciesTab({
       </div>
     );
 
-  const eligible = fw.rules.filter((r) => r.chain === "forward" && r.action === "accept");
+  const eligible = bindable(fw.rules);
 
   return (
     <div className="flex flex-col gap-3 max-w-[900px]">
       <p className="text-[13px] text-[var(--qz-fg-4)] m-0">
-        Attach an Application Control action to a forward Allow rule to classify and enforce its
-        traffic. Only forward Allow rules are eligible. At most {MAX_BOUND_ACTIONS} actions can be
-        active at once ({boundActionCount} in use{saving ? " · Saving…" : ""}).
+        Attach an Application Control action to an Allow rule to classify and enforce its traffic.
+        Rules for routed traffic are eligible — not traffic to or from the firewall itself. At most{" "}
+        {MAX_BOUND_ACTIONS} actions can be active at once ({boundActionCount} in use
+        {saving ? " · Saving…" : ""}).
       </p>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
@@ -603,7 +613,7 @@ function PoliciesTab({
             {eligible.length === 0 ? (
               <tr>
                 <td colSpan={5} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
-                  No eligible forward Allow rules — create them under{" "}
+                  No eligible Allow rules — create them under{" "}
                   <Link href="/firewall/rules" className="text-[var(--qz-fg-3)]">
                     Firewall → Rules
                   </Link>

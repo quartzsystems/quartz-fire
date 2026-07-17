@@ -21,6 +21,10 @@ pub type Groups = BTreeMap<String, BTreeMap<String, BTreeMap<String, Vec<String>
 pub struct IfaceSpec {
     pub name: Option<String>,
     pub group: Option<String>,
+    /// Literal interfaces, already resolved — how a zone pair's member
+    /// interfaces reach the match (a zone isn't a firewall group, so there's
+    /// nothing for `group` to point at). Takes precedence over the others.
+    pub names: Vec<String>,
 }
 
 /// `source` / `destination` node of a rule.
@@ -92,6 +96,12 @@ fn set_literal<I: IntoIterator<Item = String>>(members: I) -> String {
 }
 
 fn iface_expr(kind: &str, spec: &IfaceSpec, groups: &Groups) -> Result<String, MatchError> {
+    if !spec.names.is_empty() {
+        return Ok(format!(
+            "{kind} {}",
+            set_literal(spec.names.iter().map(|n| format!("\"{n}\"")))
+        ));
+    }
     if let Some(name) = &spec.name {
         return Ok(format!("{kind} \"{name}\""));
     }
@@ -223,8 +233,8 @@ mod tests {
     #[test]
     fn interfaces_and_literal_addresses() {
         let rule = RuleCfg {
-            inbound_interface: Some(IfaceSpec { name: Some("eth1".into()), group: None }),
-            outbound_interface: Some(IfaceSpec { name: Some("eth0".into()), group: None }),
+            inbound_interface: Some(IfaceSpec { name: Some("eth1".into()), group: None, names: Vec::new() }),
+            outbound_interface: Some(IfaceSpec { name: Some("eth0".into()), group: None, names: Vec::new() }),
             source: Side { address: Some("10.0.0.0/8".into()), ..Default::default() },
             destination: Side { address: Some("192.0.2.7".into()), ..Default::default() },
             protocol: None,
@@ -276,7 +286,7 @@ mod tests {
     fn interface_group_expands_members() {
         let groups = groups(&[("interface-group", "LANs", &[("interface", &["eth1", "eth2"][..])])]);
         let rule = RuleCfg {
-            inbound_interface: Some(IfaceSpec { name: None, group: Some("LANs".into()) }),
+            inbound_interface: Some(IfaceSpec { name: None, group: Some("LANs".into()), names: Vec::new() }),
             ..Default::default()
         };
         assert_eq!(

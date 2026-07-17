@@ -16,9 +16,9 @@
 // nftables sets (geo4_cn / geo6_cn), one set lookup per new connection.
 
 import { apiFetch, vyosApi } from "./api";
-import { VyosCommand, VyosResponse } from "./interfaces";
+import type { VyosCommand, VyosResponse } from "./interfaces";
 import { guardedCommitAndSave } from "./guard";
-import type { BaseChain } from "./firewall";
+import type { RuleChain } from "./firewall";
 
 /// Geolocation can drop the operator's own traffic (e.g. blocking the country
 /// the admin sits in on an input-chain rule), so writes commit under
@@ -55,7 +55,7 @@ export interface GeoAction {
 export interface GeoPolicy {
   id: number;
   action: string;
-  ruleset: BaseChain;
+  ruleset: RuleChain;
   rule: number;
   direction: GeoDirection;
   enabled: boolean;
@@ -100,13 +100,12 @@ const asMode = (v: string | null): GeoMode | null =>
 const asDirection = (v: string | null): GeoDirection =>
   v === "source" || v === "destination" || v === "both" ? v : "both";
 
-/// Geolocation policies can only target a base chain — never a zone rule. The
-/// qzgeo binary reads its target as `firewall ipv4 <ruleset> filter rule <n>`
-/// and rejects anything but forward/input/output (see quartzfire-geoip
-/// src/model.rs), so a zone pair's ruleset has nowhere to go here. The rule
-/// picker filters zone rules out; this collapses anything unexpected.
-const asRuleset = (v: string | null): BaseChain =>
-  v === "input" || v === "output" ? v : "forward";
+/// A policy's target scope. `name:<ruleset>` targets a zone rule — qzgeo
+/// resolves the pair bound to that ruleset and folds its zones' interfaces into
+/// the replicated match (see quartzfire-geoip src/apply.rs). Anything
+/// unrecognised collapses to forward.
+const asRuleset = (v: string | null): RuleChain =>
+  v === "input" || v === "output" || v?.startsWith("name:") ? (v as RuleChain) : "forward";
 
 export async function fetchGeolocation(): Promise<GeolocationConfig> {
   const resp = await vyosApi<VyosResponse<Cfg | null>>("retrieve", {
@@ -257,7 +256,7 @@ export const policyBase = (id: number) => ["service", "geolocation", "policy", S
 export interface GeoPolicyUpdate {
   id: number;
   action: string;
-  ruleset: BaseChain;
+  ruleset: RuleChain;
   rule: number;
   direction: GeoDirection;
   enabled: boolean;
@@ -298,6 +297,92 @@ export function applyGeoPolicy(existing: GeoPolicy[], update: GeoPolicyUpdate): 
 
 export function deleteGeoPolicy(id: number): Promise<number> {
   return commitAndSave([{ op: "delete", path: policyBase(id) }]);
+}
+
+/// A rule's scopes, as much of FirewallRule as this module needs.
+interface RuleScopes {
+  rule: number;
+  scopes: { chain: RuleChain }[];
+}
+
+/// The policies attached to a rule — one per scope it occupies. A rule spanning
+/// several zone pairs exists once per pair, and each copy needs its own policy.
+///
+/// For a zone rule this also picks up policies on pairs it no longer spans, so
+/// they can be retired: they were written for this rule, and a policy left on a
+/// dropped pair points at a rule that isn't there any more. Base-chain rules
+/// match their exact scope — a rule number is only unique within a chain, so a
+/// forward rule must not sweep up an input rule's policy.
+export function policiesForRule(policies: GeoPolicy[], rule: RuleScopes): GeoPolicy[] {
+  const isZoneRule = rule.scopes.some((s) => s.chain.startsWith("name:"));
+  return policies.filter(
+    (p) =>
+      p.rule === rule.rule &&
+      (rule.scopes.some((s) => s.chain === p.ruleset) || (isZoneRule && p.ruleset.startsWith("name:"))),
+  );
+}
+
+/// Attach `action` to every scope a rule occupies (null = detach entirely), in
+/// ONE command list.
+///
+/// Commit-confirm allows a single pending guarded change, so a multi-zone rule's
+/// policies can't be applied one call at a time — they have to ride the same
+/// commit.
+export function diffGeoPoliciesForRule(
+  live: GeoPolicy[],
+  rule: RuleScopes,
+  action: string | null,
+  direction: GeoDirection,
+): VyosCommand[] {
+  const out: VyosCommand[] = [];
+  const existing = policiesForRule(live, rule);
+
+  if (action === null) {
+    for (const p of existing) out.push({ op: "delete", path: policyBase(p.id) });
+    return out;
+  }
+
+  // Ids are allocated as we go so several new policies in one commit don't
+  // collide (nextPolicyId only ever sees the live set).
+  const taken = live.map((p) => p.id);
+  const allocate = () => {
+    const id = Math.max(0, ...taken) + 10;
+    taken.push(id);
+    return id;
+  };
+
+  for (const scope of rule.scopes) {
+    const prev = existing.find((p) => p.ruleset === scope.chain) ?? null;
+    out.push(
+      ...diffGeoPolicy(live, {
+        id: prev?.id ?? allocate(),
+        action,
+        ruleset: scope.chain,
+        rule: rule.rule,
+        direction,
+        enabled: true,
+        original_id: prev?.id ?? null,
+      }),
+    );
+  }
+  // A policy left over from a scope the rule no longer occupies (its pair set
+  // changed) would target a rule that isn't there any more.
+  for (const p of existing) {
+    if (!rule.scopes.some((s) => s.chain === p.ruleset)) {
+      out.push({ op: "delete", path: policyBase(p.id) });
+    }
+  }
+  return out;
+}
+
+/// Apply a rule's geolocation attachment across all its scopes.
+export function applyGeoPoliciesForRule(
+  live: GeoPolicy[],
+  rule: RuleScopes,
+  action: string | null,
+  direction: GeoDirection,
+): Promise<number> {
+  return commitAndSave(diffGeoPoliciesForRule(live, rule, action, direction));
 }
 
 /// Inline enable/disable toggle (applies via the normal commit flow).
