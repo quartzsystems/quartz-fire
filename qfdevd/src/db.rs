@@ -180,8 +180,25 @@ pub fn upsert_sighting(conn: &Connection, s: &Sighting) -> Result<()> {
             os_guess     = COALESCE(excluded.os_guess,     devices.os_guess),
             current_ip   = COALESCE(excluded.current_ip,   devices.current_ip),
             current_ipv6 = COALESCE(excluded.current_ipv6, devices.current_ipv6),
-            interface    = COALESCE(excluded.interface,    devices.interface),
-            vlan         = COALESCE(excluded.vlan,         devices.vlan),
+            -- interface/vlan answer "which LAN is this device on", which is the
+            -- IPv4 neighbor's L2 location. A device's IPv6 link-local is derived
+            -- from its MAC and appears on every VLAN it speaks on, so an IPv6-only
+            -- sighting must never clobber the interface an IPv4 sighting set — else
+            -- a link-local seen on a trunked VLAN mislabels the LAN. excluded.current_ip
+            -- is non-null only on an IPv4 neighbor sighting; excluded.interface is
+            -- null on lease/conntrack sightings (which must not erase a known
+            -- interface). vlan moves together with interface so an untagged IPv4
+            -- sighting correctly clears a stale VLAN.
+            interface    = CASE
+                WHEN excluded.interface IS NULL      THEN devices.interface
+                WHEN excluded.current_ip IS NOT NULL THEN excluded.interface
+                WHEN devices.interface IS NULL       THEN excluded.interface
+                ELSE devices.interface END,
+            vlan         = CASE
+                WHEN excluded.interface IS NULL      THEN devices.vlan
+                WHEN excluded.current_ip IS NOT NULL THEN excluded.vlan
+                WHEN devices.interface IS NULL       THEN excluded.vlan
+                ELSE devices.vlan END,
             dhcp_static  = COALESCE(excluded.dhcp_static,  devices.dhcp_static),
             lease_expiry = COALESCE(excluded.lease_expiry, devices.lease_expiry),
             neigh_state  = COALESCE(excluded.neigh_state,  devices.neigh_state),
@@ -422,6 +439,109 @@ mod tests {
             [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
         assert_eq!(v4.as_deref(), Some("10.0.0.5"));
         assert_eq!(v6.as_deref(), Some("fe80::1"));
+    }
+
+    #[test]
+    fn ipv6_link_local_does_not_clobber_ipv4_interface() {
+        let c = mem();
+        // IPv4 neighbor puts the device on LAN 10 (eth9.10, VLAN 10).
+        upsert_sighting(&c, &Sighting {
+            mac: "m".into(),
+            seen_at: 1,
+            current_ip: Some("172.16.10.10".into()),
+            interface: Some("eth9.10".into()),
+            vlan: Some("10".into()),
+            ..Default::default()
+        }).unwrap();
+        // Same device's MAC-derived link-local shows up on a trunked VLAN (eth9.70).
+        // It must NOT relabel the device as VLAN 70.
+        upsert_sighting(&c, &Sighting {
+            mac: "m".into(),
+            seen_at: 2,
+            current_ipv6: Some("fe80::e48:c6ff:fec4:cc3".into()),
+            interface: Some("eth9.70".into()),
+            vlan: Some("70".into()),
+            ..Default::default()
+        }).unwrap();
+        let (iface, vlan): (Option<String>, Option<String>) = c.query_row(
+            "SELECT interface, vlan FROM devices WHERE mac='m'",
+            [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(iface.as_deref(), Some("eth9.10")); // IPv4's LAN, not the LL's VLAN
+        assert_eq!(vlan.as_deref(), Some("10"));
+    }
+
+    #[test]
+    fn ipv6_interface_fills_when_no_ipv4_seen() {
+        let c = mem();
+        // An IPv6-only device: the link-local sighting is the only L2 signal.
+        upsert_sighting(&c, &Sighting {
+            mac: "m".into(),
+            seen_at: 1,
+            current_ipv6: Some("fe80::1".into()),
+            interface: Some("eth9.70".into()),
+            vlan: Some("70".into()),
+            ..Default::default()
+        }).unwrap();
+        let (iface, vlan): (Option<String>, Option<String>) = c.query_row(
+            "SELECT interface, vlan FROM devices WHERE mac='m'",
+            [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(iface.as_deref(), Some("eth9.70"));
+        assert_eq!(vlan.as_deref(), Some("70"));
+    }
+
+    #[test]
+    fn ipv4_neighbor_overrides_stale_ipv6_interface() {
+        let c = mem();
+        // Link-local arrives first (device seen only via IPv6 on a trunk VLAN).
+        upsert_sighting(&c, &Sighting {
+            mac: "m".into(),
+            seen_at: 1,
+            current_ipv6: Some("fe80::1".into()),
+            interface: Some("eth9.70".into()),
+            vlan: Some("70".into()),
+            ..Default::default()
+        }).unwrap();
+        // Then the IPv4 neighbor is learned on the real LAN — it must take over.
+        upsert_sighting(&c, &Sighting {
+            mac: "m".into(),
+            seen_at: 2,
+            current_ip: Some("172.16.10.10".into()),
+            interface: Some("eth9.10".into()),
+            vlan: Some("10".into()),
+            ..Default::default()
+        }).unwrap();
+        let (iface, vlan): (Option<String>, Option<String>) = c.query_row(
+            "SELECT interface, vlan FROM devices WHERE mac='m'",
+            [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(iface.as_deref(), Some("eth9.10"));
+        assert_eq!(vlan.as_deref(), Some("10"));
+    }
+
+    #[test]
+    fn lease_sighting_does_not_erase_interface() {
+        let c = mem();
+        upsert_sighting(&c, &Sighting {
+            mac: "m".into(),
+            seen_at: 1,
+            current_ip: Some("172.16.10.10".into()),
+            interface: Some("eth9.10".into()),
+            vlan: Some("10".into()),
+            ..Default::default()
+        }).unwrap();
+        // A lease carries an IPv4 but no interface (..Default). It must not blank
+        // the interface just because it too has a non-null current_ip.
+        upsert_sighting(&c, &Sighting {
+            mac: "m".into(),
+            seen_at: 2,
+            current_ip: Some("172.16.10.10".into()),
+            hostname: Some("switch".into()),
+            ..Default::default()
+        }).unwrap();
+        let (iface, vlan): (Option<String>, Option<String>) = c.query_row(
+            "SELECT interface, vlan FROM devices WHERE mac='m'",
+            [], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+        assert_eq!(iface.as_deref(), Some("eth9.10"));
+        assert_eq!(vlan.as_deref(), Some("10"));
     }
 
     #[test]
