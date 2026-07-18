@@ -141,12 +141,15 @@ export function SystemInfoPod() {
           {info.hostname && (
             <div className="text-[13px] mb-1 flex items-center gap-[7px]">
               <span className="text-[var(--qz-fg-4)]">Hostname</span>
-              <span className="text-[var(--qz-fg-1)] font-semibold" style={{ fontFamily: "var(--qz-font-mono)" }}>
-                {info.hostname}
-              </span>
+              <span className="text-[var(--qz-fg-2)]">{info.hostname}</span>
             </div>
           )}
-          {hardware && <div className="text-[13px] text-[var(--qz-fg-2)] mb-2">{hardware}</div>}
+          {hardware && (
+            <div className="text-[13px] mb-2 flex items-center gap-[7px]">
+              <span className="text-[var(--qz-fg-4)]">Model</span>
+              <span className="text-[var(--qz-fg-2)]">{hardware}</span>
+            </div>
+          )}
           {info.built_on && (
             <div className="text-[11px] text-[var(--qz-fg-4)] mt-2">Built: {info.built_on}</div>
           )}

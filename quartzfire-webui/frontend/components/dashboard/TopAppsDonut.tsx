@@ -190,7 +190,7 @@ export function TopAppsDonut({
       <div className="flex-1" style={{ minWidth: minDonut, minHeight: minDonut, maxWidth: maxDonut, maxHeight: maxDonut }}>
         <Donut slices={slices} totalBytes={total} centerSub={centerSub} hover={hover} onHover={setHover} />
       </div>
-      <div className="flex-1 min-w-[150px] flex flex-col justify-center gap-[6px] overflow-y-auto">
+      <div className="flex-1 min-w-[160px] max-w-[300px] flex flex-col justify-center gap-[6px] overflow-y-auto">
         {slices.map((s) => (
           <div
             key={s.key}
@@ -206,7 +206,7 @@ export function TopAppsDonut({
             <span className="text-[var(--qz-fg-1)] font-semibold flex-shrink-0" style={{ fontFamily: "var(--qz-font-mono)" }}>
               {s.pct.toFixed(1)}%
             </span>
-            <span className="text-[var(--qz-fg-4)] flex-shrink-0 w-[62px] text-right" style={{ fontFamily: "var(--qz-font-mono)" }}>
+            <span className="text-[var(--qz-fg-4)] flex-shrink-0 w-[70px] text-right whitespace-nowrap" style={{ fontFamily: "var(--qz-font-mono)" }}>
               {formatBytes(s.bytes)}
             </span>
           </div>
