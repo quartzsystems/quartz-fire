@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
@@ -290,6 +291,14 @@ interface CfLogCol {
   cell: (l: CfLogEntry) => React.ReactNode;
 }
 
+/** Resizable columns of the Actions (groups) table — the trailing edit cell is fixed. */
+const CF_GROUP_COLS = [
+  { key: "action", header: "Action", width: 220 },
+  { key: "sources", header: "Sources" },
+  { key: "categories", header: "Categories", width: 120 },
+  { key: "custom", header: "Custom", width: 170 },
+];
+
 const CF_LOG_COLUMNS: CfLogCol[] = [
   { key: "time", header: "Time", className: "mono text-[12px] text-[var(--qz-fg-3)] whitespace-nowrap", cell: (l) => l.ts.replace("T", " ") },
   { key: "client", header: "Client", className: "mono text-[12px] text-[var(--qz-fg-3)]", cell: (l) => l.client_ip },
@@ -314,6 +323,8 @@ export default function ContentFilteringPage() {
   const [logs, setLogs] = useState<CfLogEntry[]>([]);
   const logVis = useColumnVisibility("cf-logs", CF_LOG_COLUMNS);
   const logCols = CF_LOG_COLUMNS.filter((c) => logVis.isVisible(c.key));
+  const logResize = useColumnResize("cf-logs", logCols.map((c) => ({ key: c.key })));
+  const groupResize = useColumnResize("cf-groups", CF_GROUP_COLS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<FilterGroup | null>(null);
@@ -520,17 +531,22 @@ export default function ContentFilteringPage() {
                 <Button kind="primary" size="sm" icon={Plus} onClick={() => setAddingGroup(true)}>Add action</Button>
               </div>
               <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-                <table className="qz-table" style={{ width: "100%" }}>
+                <table ref={groupResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: groupResize.tableLayout }}>
                   <colgroup>
-                    <col style={{ width: 220 }} />
-                    <col />
-                    <col style={{ width: 120 }} />
-                    <col style={{ width: 170 }} />
+                    {CF_GROUP_COLS.map((c) => (
+                      <col key={c.key} style={{ width: groupResize.colWidth(c.key) }} />
+                    ))}
                     <col style={{ width: 90 }} />
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>Action</th><th>Sources</th><th>Categories</th><th>Custom</th><th />
+                      {CF_GROUP_COLS.map((c, i) => (
+                        <th key={c.key} {...groupResize.thProps(i)}>
+                          {c.header}
+                          {groupResize.handle(i)}
+                        </th>
+                      ))}
+                      <th />
                     </tr>
                   </thead>
                   <tbody>
@@ -654,11 +670,19 @@ export default function ContentFilteringPage() {
                 </div>
               </div>
               <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-                <table className="qz-table" style={{ width: "100%" }}>
+                <table ref={logResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: logResize.tableLayout }}>
+                  <colgroup>
+                    {logCols.map((c) => (
+                      <col key={c.key} style={{ width: logResize.colWidth(c.key) }} />
+                    ))}
+                  </colgroup>
                   <thead>
                     <tr>
-                      {logCols.map((c) => (
-                        <th key={c.key}>{c.header}</th>
+                      {logCols.map((c, i) => (
+                        <th key={c.key} {...logResize.thProps(i)}>
+                          {c.header}
+                          {logResize.handle(i)}
+                        </th>
                       ))}
                     </tr>
                   </thead>

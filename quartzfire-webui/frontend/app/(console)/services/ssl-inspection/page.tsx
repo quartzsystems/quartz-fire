@@ -29,6 +29,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
@@ -302,6 +303,15 @@ function NoInspectEditor({
 /// picker — mirrors the Application Control Policies tab so attaching inspection
 /// to a rule is discoverable (and so enabling has something to intercept). Each
 /// change commits immediately, like the App Control page.
+/** Resizable columns of the Policies tab's rules table. */
+const SSL_RULE_COLS = [
+  { key: "rule", header: "#", width: 60, minWidth: 40 },
+  { key: "name", header: "Name" },
+  { key: "fromto", header: "From → To", width: 150 },
+  { key: "action", header: "Action", width: 90 },
+  { key: "ssl", header: "SSL Inspection", width: 200 },
+];
+
 function PoliciesTab({
   config,
   status,
@@ -313,6 +323,7 @@ function PoliciesTab({
   onApplied: () => Promise<void>;
   setToast: (msg: string) => void;
 }) {
+  const resize = useColumnResize("ssl-rules", SSL_RULE_COLS);
   const [fw, setFw] = useState<FirewallConfig>(emptyFirewallConfig);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
@@ -388,21 +399,20 @@ function PoliciesTab({
       </p>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ width: "100%" }}>
+        <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
-            <col style={{ width: 60 }} />
-            <col />
-            <col style={{ width: 150 }} />
-            <col style={{ width: 90 }} />
-            <col style={{ width: 200 }} />
+            {SSL_RULE_COLS.map((c) => (
+              <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+            ))}
           </colgroup>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Name</th>
-              <th>From → To</th>
-              <th>Action</th>
-              <th>SSL Inspection</th>
+              {SSL_RULE_COLS.map((c, i) => (
+                <th key={c.key} {...resize.thProps(i)}>
+                  {c.header}
+                  {resize.handle(i)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>

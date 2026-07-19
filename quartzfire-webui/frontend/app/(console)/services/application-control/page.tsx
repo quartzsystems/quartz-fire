@@ -14,6 +14,24 @@ import Link from "next/link";
 import { AlertTriangle, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
+
+/** Resizable columns of the Actions tab table (the trailing edit/delete cell is fixed). */
+const AC_ACTION_COLS = [
+  { key: "action", header: "Action", width: 200 },
+  { key: "apps", header: "Applications & categories" },
+  { key: "default", header: "Default", width: 110 },
+  { key: "policies", header: "Policies", width: 90 },
+];
+
+/** Resizable columns of the Policies tab's rules table. */
+const AC_RULE_COLS = [
+  { key: "rule", header: "#", width: 60, minWidth: 40 },
+  { key: "name", header: "Name" },
+  { key: "fromto", header: "From → To", width: 140 },
+  { key: "action", header: "Action", width: 90 },
+  { key: "ac", header: "Application Control", width: 220 },
+];
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
@@ -70,6 +88,7 @@ function ActionsTab({
 }) {
   const [editing, setEditing] = useState<{ name: string; action: AcAction } | null>(null);
   const [creating, setCreating] = useState(false);
+  const resize = useColumnResize("ac-actions", AC_ACTION_COLS);
 
   const actionNames = Object.keys(config.actions);
   const bindingsByAction = useMemo(() => {
@@ -133,20 +152,21 @@ function ActionsTab({
       </div>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ width: "100%" }}>
+        <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
-            <col style={{ width: 200 }} />
-            <col />
-            <col style={{ width: 110 }} />
-            <col style={{ width: 90 }} />
+            {AC_ACTION_COLS.map((c) => (
+              <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+            ))}
             <col style={{ width: 130 }} />
           </colgroup>
           <thead>
             <tr>
-              <th>Action</th>
-              <th>Applications &amp; categories</th>
-              <th>Default</th>
-              <th>Policies</th>
+              {AC_ACTION_COLS.map((c, i) => (
+                <th key={c.key} {...resize.thProps(i)}>
+                  {c.header}
+                  {resize.handle(i)}
+                </th>
+              ))}
               <th />
             </tr>
           </thead>
@@ -489,6 +509,7 @@ function PoliciesTab({
   saving: boolean;
 }) {
   const { setToast } = useDashboard();
+  const resize = useColumnResize("ac-rules", AC_RULE_COLS);
   const [fw, setFw] = useState<FirewallConfig>(emptyFirewallConfig);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
@@ -592,21 +613,20 @@ function PoliciesTab({
       </p>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ width: "100%" }}>
+        <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
-            <col style={{ width: 60 }} />
-            <col />
-            <col style={{ width: 140 }} />
-            <col style={{ width: 90 }} />
-            <col style={{ width: 220 }} />
+            {AC_RULE_COLS.map((c) => (
+              <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+            ))}
           </colgroup>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Name</th>
-              <th>From → To</th>
-              <th>Action</th>
-              <th>Application Control</th>
+              {AC_RULE_COLS.map((c, i) => (
+                <th key={c.key} {...resize.thProps(i)}>
+                  {c.header}
+                  {resize.handle(i)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -796,6 +816,7 @@ function AlertsTab() {
   };
   const vis = useColumnVisibility("ac-alerts", AC_ALERT_COLUMNS);
   const cols = AC_ALERT_COLUMNS.filter((c) => vis.isVisible(c.key));
+  const alertResize = useColumnResize("ac-alerts", cols.map((c) => ({ key: c.key, width: c.width })));
 
   return (
     <div className="flex flex-col gap-3">
@@ -852,16 +873,19 @@ function AlertsTab() {
       </div>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ width: "100%" }}>
+        <table ref={alertResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: alertResize.tableLayout }}>
           <colgroup>
             {cols.map((c) => (
-              <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+              <col key={c.key} style={{ width: alertResize.colWidth(c.key) }} />
             ))}
           </colgroup>
           <thead>
             <tr>
-              {cols.map((c) => (
-                <th key={c.key}>{c.header}</th>
+              {cols.map((c, i) => (
+                <th key={c.key} {...alertResize.thProps(i)}>
+                  {c.header}
+                  {alertResize.handle(i)}
+                </th>
               ))}
             </tr>
           </thead>

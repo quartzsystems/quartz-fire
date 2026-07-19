@@ -29,6 +29,7 @@ import { emptyFirewallConfig, fetchFirewall, FirewallConfig } from "@/lib/firewa
 import { fetchFlows, FlowRecord, FlowsResponse, FlowWindow } from "@/lib/flows";
 import type { FlowMetric } from "@/lib/flows";
 import { formatBytes } from "@/lib/format";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
 
 const POLL_MS = 5000;
 /** Nodes kept per column before folding the tail into "Other". */
@@ -76,6 +77,20 @@ const FACET_BY_ID = new Map(FACETS.map((f) => [f.id, f]));
 /** The user's original ask: interfaces on the left, rules in the middle,
  * destinations on the right. Everything else is one click away. */
 const DEFAULT_ORDER: FacetId[] = ["in_if", "rule", "dst"];
+/** localStorage key for the saved facet-column view. */
+const FACET_ORDER_KEY = "qz-sankey:traffic-flow";
+
+/** Columns of the "top flows" table under the Sankey. */
+const TOP_FLOW_COLS: { key: string; header: string; right?: boolean }[] = [
+  { key: "src", header: "Source" },
+  { key: "in_if", header: "In If" },
+  { key: "rule", header: "Rule" },
+  { key: "out_if", header: "Out If" },
+  { key: "dst", header: "Destination" },
+  { key: "service", header: "Service" },
+  { key: "hits", header: "Hits", right: true },
+  { key: "bytes", header: "Bytes", right: true },
+];
 
 // ── sankey geometry ─────────────────────────────────────────────────────────
 
@@ -307,8 +322,28 @@ export default function TrafficFlowPage() {
     [ruleNames, names],
   );
 
+  const resize = useColumnResize("traffic-flow-top", TOP_FLOW_COLS);
+
   // ── facet order + filters ──
-  const [order, setOrder] = useState<FacetId[]>(DEFAULT_ORDER);
+  // The chosen columns (and their order) persist across visits.
+  const [order, setOrder] = useState<FacetId[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_ORDER;
+    try {
+      const raw = window.localStorage.getItem(FACET_ORDER_KEY);
+      if (!raw) return DEFAULT_ORDER;
+      const parsed = (JSON.parse(raw) as FacetId[]).filter((id) => FACET_BY_ID.has(id));
+      return parsed.length >= 2 ? parsed : DEFAULT_ORDER;
+    } catch {
+      return DEFAULT_ORDER;
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(FACET_ORDER_KEY, JSON.stringify(order));
+    } catch {
+      /* ignore quota / serialization errors */
+    }
+  }, [order]);
   /** facet → selected node keys; a flow must match every filtered facet. */
   const [filters, setFilters] = useState<Map<FacetId, Set<string>>>(new Map());
   const [verdictFilter, setVerdictFilter] = useState<"all" | "allow" | "block">("all");
@@ -806,17 +841,20 @@ export default function TrafficFlowPage() {
           {/* Top flows (table view of the same data) */}
           {topFlows.length > 0 && (
             <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-              <table className="qz-table" style={{ width: "100%" }}>
+              <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
+                <colgroup>
+                  {TOP_FLOW_COLS.map((c) => (
+                    <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+                  ))}
+                </colgroup>
                 <thead>
                   <tr>
-                    <th>Source</th>
-                    <th>In If</th>
-                    <th>Rule</th>
-                    <th>Out If</th>
-                    <th>Destination</th>
-                    <th>Service</th>
-                    <th style={{ textAlign: "right" }}>Hits</th>
-                    <th style={{ textAlign: "right" }}>Bytes</th>
+                    {TOP_FLOW_COLS.map((c, i) => (
+                      <th key={c.key} {...resize.thProps(i)} style={c.right ? { textAlign: "right" } : undefined}>
+                        {c.header}
+                        {resize.handle(i)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>

@@ -14,6 +14,37 @@ import Link from "next/link";
 import { AlertTriangle, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
+
+/** Resizable columns of the Actions tab table (trailing edit cell fixed). */
+const GEO_ACTION_COLS = [
+  { key: "action", header: "Action", width: 180 },
+  { key: "mode", header: "Mode", width: 210 },
+  { key: "countries", header: "Countries" },
+  { key: "unknown", header: "Unknown IPs", width: 110 },
+  { key: "log", header: "Log", width: 70, minWidth: 50 },
+  { key: "policies", header: "Policies", width: 80 },
+  { key: "blocked", header: "Blocked", width: 110 },
+];
+
+/** Resizable columns of the Policies tab's rules table. */
+const GEO_RULE_COLS = [
+  { key: "rule", header: "#", width: 60, minWidth: 40 },
+  { key: "name", header: "Name" },
+  { key: "fromto", header: "From → To", width: 150 },
+  { key: "action", header: "Action", width: 80 },
+  { key: "geo", header: "Geolocation", width: 190 },
+  { key: "direction", header: "Direction", width: 150 },
+  { key: "hits", header: "Hits", width: 70, minWidth: 50 },
+];
+
+/** Resizable columns of the orphaned-policies table (trailing remove cell fixed). */
+const GEO_ORPHAN_COLS = [
+  { key: "rule", header: "Rule", width: 90 },
+  { key: "chain", header: "Chain", width: 130 },
+  { key: "action", header: "Action" },
+  { key: "direction", header: "Direction", width: 150 },
+];
 import { Tabs } from "@/components/ui/Tabs";
 import { useDashboard } from "@/lib/DashboardContext";
 import { emptyFirewallConfig, fetchFirewall, FirewallConfig, FirewallRule, isBaseChain, ruleKey } from "@/lib/firewall";
@@ -216,6 +247,7 @@ function ActionsTab({
   const { setToast } = useDashboard();
   const [editing, setEditing] = useState<GeoAction | null>(null);
   const [creating, setCreating] = useState(false);
+  const resize = useColumnResize("geo-actions", GEO_ACTION_COLS);
 
   const hits = status?.counters?.actions ?? {};
 
@@ -279,26 +311,21 @@ function ActionsTab({
       </div>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ width: "100%" }}>
+        <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
-            <col style={{ width: 180 }} />
-            <col style={{ width: 210 }} />
-            <col />
-            <col style={{ width: 110 }} />
-            <col style={{ width: 70 }} />
-            <col style={{ width: 80 }} />
-            <col style={{ width: 110 }} />
+            {GEO_ACTION_COLS.map((c) => (
+              <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+            ))}
             <col style={{ width: 80 }} />
           </colgroup>
           <thead>
             <tr>
-              <th>Action</th>
-              <th>Mode</th>
-              <th>Countries</th>
-              <th>Unknown IPs</th>
-              <th>Log</th>
-              <th>Policies</th>
-              <th>Blocked</th>
+              {GEO_ACTION_COLS.map((c, i) => (
+                <th key={c.key} {...resize.thProps(i)}>
+                  {c.header}
+                  {resize.handle(i)}
+                </th>
+              ))}
               <th />
             </tr>
           </thead>
@@ -401,6 +428,8 @@ function PoliciesTab({
   onChanged: () => void;
 }) {
   const { setToast } = useDashboard();
+  const resize = useColumnResize("geo-rules", GEO_RULE_COLS);
+  const orphanResize = useColumnResize("geo-orphans", GEO_ORPHAN_COLS);
   const [fw, setFw] = useState<FirewallConfig>(emptyFirewallConfig);
   const [fwState, setFwState] = useState<"loading" | "ready" | "error">("loading");
   const [fwError, setFwError] = useState("");
@@ -568,25 +597,20 @@ function PoliciesTab({
       </p>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ width: "100%" }}>
+        <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
-            <col style={{ width: 60 }} />
-            <col />
-            <col style={{ width: 150 }} />
-            <col style={{ width: 80 }} />
-            <col style={{ width: 190 }} />
-            <col style={{ width: 150 }} />
-            <col style={{ width: 70 }} />
+            {GEO_RULE_COLS.map((c) => (
+              <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+            ))}
           </colgroup>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Name</th>
-              <th>From → To</th>
-              <th>Action</th>
-              <th>Geolocation</th>
-              <th>Direction</th>
-              <th>Hits</th>
+              {GEO_RULE_COLS.map((c, i) => (
+                <th key={c.key} {...resize.thProps(i)}>
+                  {c.header}
+                  {resize.handle(i)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -694,20 +718,21 @@ function PoliciesTab({
             </span>
           </div>
           <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-            <table className="qz-table" style={{ width: "100%" }}>
+            <table ref={orphanResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: orphanResize.tableLayout }}>
               <colgroup>
-                <col style={{ width: 90 }} />
-                <col style={{ width: 130 }} />
-                <col />
-                <col style={{ width: 150 }} />
+                {GEO_ORPHAN_COLS.map((c) => (
+                  <col key={c.key} style={{ width: orphanResize.colWidth(c.key) }} />
+                ))}
                 <col style={{ width: 80 }} />
               </colgroup>
               <thead>
                 <tr>
-                  <th>Rule</th>
-                  <th>Chain</th>
-                  <th>Action</th>
-                  <th>Direction</th>
+                  {GEO_ORPHAN_COLS.map((c, i) => (
+                    <th key={c.key} {...orphanResize.thProps(i)}>
+                      {c.header}
+                      {orphanResize.handle(i)}
+                    </th>
+                  ))}
                   <th />
                 </tr>
               </thead>
@@ -904,6 +929,7 @@ function AlertsTab() {
 
   const vis = useColumnVisibility("geo-alerts", GEO_ALERT_COLUMNS);
   const cols = GEO_ALERT_COLUMNS.filter((c) => vis.isVisible(c.key));
+  const alertResize = useColumnResize("geo-alerts", cols.map((c) => ({ key: c.key, width: c.width })));
 
   const geoCell = (key: string, r: AlertRow): React.ReactNode => {
     switch (key) {
@@ -989,16 +1015,19 @@ function AlertsTab() {
       </div>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ width: "100%" }}>
+        <table ref={alertResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: alertResize.tableLayout }}>
           <colgroup>
             {cols.map((c) => (
-              <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+              <col key={c.key} style={{ width: alertResize.colWidth(c.key) }} />
             ))}
           </colgroup>
           <thead>
             <tr>
-              {cols.map((c) => (
-                <th key={c.key}>{c.header}</th>
+              {cols.map((c, i) => (
+                <th key={c.key} {...alertResize.thProps(i)}>
+                  {c.header}
+                  {alertResize.handle(i)}
+                </th>
               ))}
             </tr>
           </thead>

@@ -25,7 +25,20 @@ import { formatBytes } from "@/lib/format";
 import { fetchInterfaceStats } from "@/lib/vyos";
 import { useDashboard } from "@/lib/DashboardContext";
 import { RowActions } from "@/components/dashboard/RowActions";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
 import { RuleFormModal } from "./RuleFormModal";
+
+/** Resizable columns of the rules table (the trailing Actions cell is fixed). */
+const RULE_COLS = [
+  { key: "order", header: "Order", width: 70 },
+  { key: "action", header: "Action", width: 100 },
+  { key: "name", header: "Name" },
+  { key: "from", header: "From" },
+  { key: "to", header: "To" },
+  { key: "policy", header: "Policy" },
+  { key: "hits", header: "Hits", width: 80 },
+  { key: "status", header: "Status", width: 100 },
+];
 
 function ActionPill({ action }: { action: FirewallRule["action"] }) {
   if (action === "accept") return <span className="badge badge-ok">Allow</span>;
@@ -82,6 +95,7 @@ function EndpointCell({
 
 export default function FirewallRulesPage() {
   const { setToast } = useDashboard();
+  const resize = useColumnResize("firewall-rules", RULE_COLS, { fixed: true });
   const [data, setData] = useState<FirewallConfig>(emptyFirewallConfig);
   const [interfaces, setInterfaces] = useState<string[]>([]);
   const [ifaceDescriptions, setIfaceDescriptions] = useState<Record<string, string>>({});
@@ -431,28 +445,21 @@ export default function FirewallRulesPage() {
 
             {/* Table */}
             <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-              <table className="qz-table" style={{ width: "100%", tableLayout: "fixed" }}>
+              <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
                 <colgroup>
-                  <col style={{ width: 70 }} />
-                  <col style={{ width: 100 }} />
-                  <col />
-                  <col />
-                  <col />
-                  <col />
-                  <col style={{ width: 80 }} />
-                  <col style={{ width: 100 }} />
+                  {RULE_COLS.map((c) => (
+                    <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+                  ))}
                   <col style={{ width: 90 }} />
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>Order</th>
-                    <th>Action</th>
-                    <th>Name</th>
-                    <th>From</th>
-                    <th>To</th>
-                    <th>Policy</th>
-                    <th>Hits</th>
-                    <th>Status</th>
+                    {RULE_COLS.map((c, i) => (
+                      <th key={c.key} {...resize.thProps(i)}>
+                        {c.header}
+                        {resize.handle(i)}
+                      </th>
+                    ))}
                     <th className="text-right">Actions</th>
                   </tr>
                 </thead>

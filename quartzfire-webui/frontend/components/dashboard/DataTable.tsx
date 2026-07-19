@@ -594,19 +594,13 @@ export function DataTable<T>({
                   </span>
                   {index < visibleCols.length - 1 && (
                     <span
+                      className={
+                        "qz-col-resize" +
+                        (resizing && resizeRef.current?.leftKey === c.key ? " active" : "")
+                      }
                       onMouseDown={(e) => onResizeDown(e, index)}
                       onClick={(e) => e.stopPropagation()}
                       onDragStart={(e) => e.preventDefault()}
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        right: -3,
-                        width: 7,
-                        height: "100%",
-                        cursor: "col-resize",
-                        zIndex: 2,
-                        userSelect: "none",
-                      }}
                       aria-hidden
                     />
                   )}

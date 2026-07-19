@@ -14,6 +14,7 @@ import Link from "next/link";
 import { AlertTriangle, Eraser, Pause, Play, Plus, RotateCw, Search, ShieldAlert, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
 import { Switch } from "@/components/ui/Switch";
@@ -390,8 +391,18 @@ function policyLabel(rule: FirewallRule): string {
   return "Any";
 }
 
+/** Resizable columns of the Policies tab's rules table. */
+const IPS_RULE_COLS = [
+  { key: "rule", header: "#", width: 60, minWidth: 40 },
+  { key: "name", header: "Name" },
+  { key: "policy", header: "Policy", width: 160 },
+  { key: "action", header: "Action", width: 100 },
+  { key: "ips", header: "IPS", width: 130 },
+];
+
 function PoliciesTab() {
   const { setToast } = useDashboard();
+  const rulesResize = useColumnResize("ips-rules", IPS_RULE_COLS);
   const [config, setConfig] = useState<FirewallConfig>(emptyFirewallConfig);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
@@ -467,21 +478,20 @@ function PoliciesTab() {
       </div>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ width: "100%" }}>
+        <table ref={rulesResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: rulesResize.tableLayout }}>
           <colgroup>
-            <col style={{ width: 60 }} />
-            <col />
-            <col style={{ width: 160 }} />
-            <col style={{ width: 100 }} />
-            <col style={{ width: 130 }} />
+            {IPS_RULE_COLS.map((c) => (
+              <col key={c.key} style={{ width: rulesResize.colWidth(c.key) }} />
+            ))}
           </colgroup>
           <thead>
             <tr>
-              <th>#</th>
-              <th>Name</th>
-              <th>Policy</th>
-              <th>Action</th>
-              <th>IPS</th>
+              {IPS_RULE_COLS.map((c, i) => (
+                <th key={c.key} {...rulesResize.thProps(i)}>
+                  {c.header}
+                  {rulesResize.handle(i)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
@@ -722,6 +732,7 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
 
   const vis = useColumnVisibility("ips-alerts", IPS_ALERT_COLUMNS);
   const cols = IPS_ALERT_COLUMNS.filter((c) => vis.isVisible(c.key));
+  const resize = useColumnResize("ips-alerts", cols.map((c) => ({ key: c.key, width: c.width })));
 
   return (
     <div className="flex flex-col gap-3">
@@ -789,16 +800,19 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
       </div>
 
       <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ width: "100%" }}>
+        <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {cols.map((c) => (
-              <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+              <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
             ))}
           </colgroup>
           <thead>
             <tr>
-              {cols.map((c) => (
-                <th key={c.key}>{c.header}</th>
+              {cols.map((c, i) => (
+                <th key={c.key} {...resize.thProps(i)}>
+                  {c.header}
+                  {resize.handle(i)}
+                </th>
               ))}
             </tr>
           </thead>

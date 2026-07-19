@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
 import { OpTable } from "@/lib/vpn-status";
 
 const REFRESH_MS = 5000;
@@ -107,22 +108,40 @@ export function EmptyState({ children }: { children: React.ReactNode }) {
 
 /// Render a parsed op-mode table. Purely presentational — column meaning is
 /// whatever the command emitted. `renderCell` lets a caller badge a column.
-export function OpTableView({ table, renderCell, emptyMessage }: {
+/// Columns are drag-resizable; widths persist per header set (or per
+/// `storageKey` when a caller wants an explicit namespace).
+export function OpTableView({ table, renderCell, emptyMessage, storageKey }: {
   table: OpTable;
   renderCell?: (colHeader: string, value: string) => React.ReactNode;
   emptyMessage: string;
+  storageKey?: string;
 }) {
+  const resize = useColumnResize(
+    storageKey ?? `op:${table.headers.join(",")}`,
+    table.headers.map((h, i) => ({ key: `${i}:${h}` })),
+  );
   if (table.headers.length === 0 || table.rows.length === 0) {
     return <EmptyState>{emptyMessage}</EmptyState>;
   }
   return (
     <div className="overflow-x-auto rounded-lg" style={{ border: "1px solid var(--qz-border)" }}>
-      <table className="w-full border-collapse text-[13px]">
+      <table ref={resize.tableRef} className="w-full border-collapse text-[13px]" style={{ tableLayout: resize.tableLayout }}>
+        <colgroup>
+          {table.headers.map((h, i) => (
+            <col key={i} style={{ width: resize.colWidth(`${i}:${h}`) }} />
+          ))}
+        </colgroup>
         <thead>
           <tr>
             {table.headers.map((h, i) => (
-              <th key={i} className="text-left font-semibold text-[var(--qz-fg-3)] px-3 py-2 whitespace-nowrap" style={{ background: "var(--qz-surface)", borderBottom: "1px solid var(--qz-border)" }}>
+              <th
+                key={i}
+                {...resize.thProps(i)}
+                className="text-left font-semibold text-[var(--qz-fg-3)] px-3 py-2 whitespace-nowrap"
+                style={{ background: "var(--qz-surface)", borderBottom: "1px solid var(--qz-border)", position: "relative" }}
+              >
                 {h}
+                {resize.handle(i)}
               </th>
             ))}
           </tr>
@@ -131,7 +150,11 @@ export function OpTableView({ table, renderCell, emptyMessage }: {
           {table.rows.map((row, ri) => (
             <tr key={ri} style={{ borderBottom: ri < table.rows.length - 1 ? "1px solid var(--qz-border)" : undefined }}>
               {table.headers.map((h, ci) => (
-                <td key={ci} className="px-3 py-2 whitespace-nowrap text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
+                <td
+                  key={ci}
+                  className="px-3 py-2 whitespace-nowrap text-[var(--qz-fg-1)]"
+                  style={{ fontFamily: "var(--qz-font-mono)", overflow: "hidden", textOverflow: "ellipsis" }}
+                >
                   {renderCell ? renderCell(h, row[ci] ?? "") : (row[ci] || "—")}
                 </td>
               ))}

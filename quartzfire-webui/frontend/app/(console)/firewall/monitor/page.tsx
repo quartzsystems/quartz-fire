@@ -11,6 +11,7 @@ import Link from "next/link";
 import { AlertTriangle, Eraser, Pause, Play, RotateCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
 import { Segmented } from "@/components/ui/Segmented";
 import {
   emptyFirewallConfig,
@@ -375,6 +376,7 @@ export default function TrafficMonitorPage() {
 
   const vis = useColumnVisibility("firewall-monitor", MONITOR_COLUMNS);
   const cols = MONITOR_COLUMNS.filter((c) => vis.isVisible(c.key));
+  const resize = useColumnResize("firewall-monitor", cols.map((c) => ({ key: c.key, width: c.width })));
 
   return (
     <div className="flex flex-col h-full">
@@ -513,16 +515,19 @@ export default function TrafficMonitorPage() {
 
           {/* Table */}
           <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-            <table className="qz-table" style={{ width: "100%" }}>
+            <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
               <colgroup>
                 {cols.map((c) => (
-                  <col key={c.key} style={c.width ? { width: c.width } : undefined} />
+                  <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
                 ))}
               </colgroup>
               <thead>
                 <tr>
-                  {cols.map((c) => (
-                    <th key={c.key}>{c.header}</th>
+                  {cols.map((c, i) => (
+                    <th key={c.key} {...resize.thProps(i)}>
+                      {c.header}
+                      {resize.handle(i)}
+                    </th>
                   ))}
                 </tr>
               </thead>

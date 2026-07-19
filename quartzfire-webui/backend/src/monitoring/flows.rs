@@ -237,6 +237,21 @@ fn window_secs(window: Option<&str>) -> i64 {
     }
 }
 
+/// qfdevd aggregates flows into 5-minute-aligned buckets (its db.rs
+/// BUCKET_SECS), and `bucket_ts` is the bucket's START. A raw `now - window`
+/// cutoff drops the previous bucket the instant a 5-minute boundary passes,
+/// leaving only the current partial bucket — for the 5m window that is the
+/// whole picture vanishing every five minutes until the next conntrack
+/// snapshot (30s cadence) refills it. So align the cutoff DOWN to a bucket
+/// boundary: every bucket overlapping the window stays in, and the window
+/// reads as "flows active within the last N minutes, bucket-granular".
+const FLOW_BUCKET_SECS: i64 = 300;
+
+fn window_since(now: i64, win_secs: i64) -> i64 {
+    let raw = now - win_secs;
+    raw - raw.rem_euclid(FLOW_BUCKET_SECS)
+}
+
 /// One aggregated flow: the byte sums for a service tuple over the window,
 /// plus rule attribution when the flow ever logged. `chain: None` means
 /// unattributed (not logged / logged before our backfill) — distinct from
@@ -354,7 +369,7 @@ pub async fn list(
     let (rows, names, total_bytes, total_conns, flow_count, available) =
         tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
             let now = now_secs();
-            let since = now - win_secs;
+            let since = window_since(now, win_secs);
             let Some(conn) = open_db(&db_path)? else {
                 return Ok((Vec::new(), HashMap::new(), 0, 0, 0, false));
             };
@@ -493,6 +508,19 @@ mod tests {
         assert_eq!(window_secs(Some("1h")), 3_600);
         assert_eq!(window_secs(None), 300);
         assert_eq!(window_secs(Some("bogus")), 300);
+    }
+
+    #[test]
+    fn window_since_keeps_the_bucket_a_boundary_just_closed() {
+        // One second after the 1200 boundary, a raw 5m cutoff (901) would
+        // exclude bucket 900 — the only complete one — and the page would go
+        // blank until the next snapshot. Aligned, bucket 900 stays in.
+        assert_eq!(window_since(1201, 300), 900);
+        assert_eq!(window_since(1200, 300), 900);
+        // Just before the next boundary the same buckets are still the answer.
+        assert_eq!(window_since(1499, 300), 900);
+        // Larger windows align the same way.
+        assert_eq!(window_since(1201, 900), 300);
     }
 
     #[test]

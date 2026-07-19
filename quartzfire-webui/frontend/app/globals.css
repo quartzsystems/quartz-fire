@@ -153,6 +153,37 @@ body {
 .qz-table tbody tr.selected td { background: var(--qz-accent-soft); }
 .qz-table td.mono { font-family: var(--qz-font-mono); color: var(--qz-fg-1); }
 
+/* Draggable column-width handle at a header-cell boundary. The ::after line is
+   the always-visible "|" affordance; the span itself is a wider hit target. */
+.qz-col-resize {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  width: 11px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+  user-select: none;
+  touch-action: none;
+}
+.qz-col-resize::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 55%;
+  width: 1px;
+  background: var(--qz-border-strong);
+  transition: background 0.12s ease, width 0.12s ease;
+}
+.qz-col-resize:hover::after,
+.qz-col-resize.active::after {
+  left: 4.5px;
+  width: 2px;
+  background: var(--qz-accent);
+}
+
 /* --- Dark checkbox --- */
 .qz-check {
   appearance: none;

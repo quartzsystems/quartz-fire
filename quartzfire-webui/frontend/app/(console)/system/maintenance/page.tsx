@@ -28,6 +28,14 @@ import {
   uploadImageFile,
 } from "@/lib/system";
 import { useDashboard } from "@/lib/DashboardContext";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
+
+/** Resizable columns of the system-images table (trailing Actions cell fixed). */
+const IMAGE_COLS = [
+  { key: "image", header: "Image" },
+  { key: "default", header: "Default Boot", width: 130 },
+  { key: "running", header: "Running", width: 110 },
+];
 
 const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
 const monoSt = {
@@ -582,6 +590,7 @@ function FactoryResetModal({
 
 export default function MaintenancePage() {
   const { setToast } = useDashboard();
+  const resize = useColumnResize("system-images", IMAGE_COLS);
   const [images, setImages] = useState<SystemImage[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -735,13 +744,22 @@ export default function MaintenancePage() {
               <div className="text-[13px] text-[var(--qz-fg-4)]">Loading images…</div>
             ) : images && images.length > 0 ? (
               <div className="rounded-md overflow-x-auto" style={{ border: "1px solid var(--qz-border)" }}>
-                <table className="qz-table" style={{ width: "100%" }}>
+                <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
+                  <colgroup>
+                    {IMAGE_COLS.map((c) => (
+                      <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+                    ))}
+                    <col style={{ width: 150 }} />
+                  </colgroup>
                   <thead>
                     <tr>
-                      <th>Image</th>
-                      <th style={{ width: 130 }}>Default Boot</th>
-                      <th style={{ width: 110 }}>Running</th>
-                      <th style={{ width: 150 }} className="text-right">Actions</th>
+                      {IMAGE_COLS.map((c, i) => (
+                        <th key={c.key} {...resize.thProps(i)}>
+                          {c.header}
+                          {resize.handle(i)}
+                        </th>
+                      ))}
+                      <th className="text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>

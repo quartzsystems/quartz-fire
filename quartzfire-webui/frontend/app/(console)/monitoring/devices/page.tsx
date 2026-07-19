@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
+import { useColumnResize } from "@/components/dashboard/ColumnResize";
 import { Segmented } from "@/components/ui/Segmented";
 import { PingChart } from "@/components/ui/PingChart";
 import { UsageChart } from "@/components/ui/UsageChart";
@@ -132,6 +133,11 @@ export default function DevicesPage() {
   // ── data state ────────────────────────────────────────────────────────────
   const vis = useColumnVisibility("devices", COLUMNS);
   const visibleColumns = COLUMNS.filter((c) => vis.isVisible(c.key));
+  const resize = useColumnResize(
+    "devices",
+    visibleColumns.map((c) => ({ key: c.key, width: c.width ? parseInt(c.width, 10) : undefined })),
+    { fixed: true },
+  );
 
   const [data, setData] = useState<DeviceList | null>(null);
   const [loading, setLoading] = useState(true);
@@ -365,19 +371,20 @@ export default function DevicesPage() {
 
       {/* Table */}
       <div className="mt-4 rounded-md overflow-x-auto" style={{ border: "1px solid var(--qz-border)" }}>
-        <table className="qz-table" style={{ tableLayout: "fixed", width: "100%" }}>
+        <table ref={resize.tableRef} className="qz-table" style={{ tableLayout: resize.tableLayout, width: "100%" }}>
           <colgroup>
             <col style={{ width: 34 }} />
             {visibleColumns.map((c) => (
-              <col key={c.key} style={{ width: c.width }} />
+              <col key={c.key} style={{ width: resize.colWidth(c.key) ?? c.width }} />
             ))}
           </colgroup>
           <thead>
             <tr>
               <th style={{ width: 34 }} aria-hidden />
-              {visibleColumns.map((c) => (
+              {visibleColumns.map((c, i) => (
                 <th
                   key={c.key}
+                  {...resize.thProps(i)}
                   onClick={() => toggleSort(c.sort)}
                   style={{ cursor: c.sort ? "pointer" : "default" }}
                 >
@@ -385,6 +392,7 @@ export default function DevicesPage() {
                     {c.header}
                     {sort === c.sort && (dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
                   </span>
+                  {resize.handle(i)}
                 </th>
               ))}
             </tr>
