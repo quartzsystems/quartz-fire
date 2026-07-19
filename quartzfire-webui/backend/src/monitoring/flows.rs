@@ -47,9 +47,6 @@ type AttrKey = (String, String, String, u16);
 /// dropped. 100k tuples ≈ a few tens of MB worst case — a bound, not a budget.
 const ATTR_CAP: usize = 100_000;
 
-/// Journal lines to backfill when the follower starts, so the first page load
-/// isn't blind to rules that logged before it.
-const BACKFILL_LINES: &str = "20000";
 
 /// What one logged packet taught us about its flow's rule.
 #[derive(Debug, Clone)]
@@ -64,8 +61,9 @@ pub struct Attr {
     ts: u64,
 }
 
-/// The tuple → rule cache. Lives in AppState; its journal follower is spawned
-/// lazily on the first flows request so an unused page costs nothing.
+/// The tuple → rule cache. Lives in AppState; main.rs starts its journal
+/// follower at backend startup so coverage begins the moment the box is up,
+/// not when someone first opens the page.
 #[derive(Default)]
 pub struct Attribution {
     map: Mutex<HashMap<AttrKey, Attr>>,
@@ -74,6 +72,8 @@ pub struct Attribution {
 
 impl Attribution {
     /// Spawn the journal follower exactly once (idempotent, cheap after that).
+    /// Called from main at startup; the request handler also calls it as a
+    /// belt-and-braces fallback.
     pub fn ensure_started(self: &Arc<Self>) {
         self.started.get_or_init(|| {
             let attr = self.clone();
@@ -83,10 +83,17 @@ impl Attribution {
 
     /// Follow the kernel journal forever, folding every firewall log line into
     /// the cache. journalctl exiting (rotation, restart) just respawns it.
+    ///
+    /// `-b` replays the WHOLE current boot before following. Rule logging fires
+    /// once per connection (only the first packet walks the rule chain), so a
+    /// connection is attributable forever only if that one line is inside our
+    /// replay — and conntrack entries cannot predate boot, so a boot-wide
+    /// replay is the attribution ceiling. Bounded by journald's own retention
+    /// caps; the replay is a startup burst of hash inserts, nothing more.
     async fn follow_journal(self: Arc<Self>) {
         loop {
             let child = Command::new("journalctl")
-                .args(["-k", "-f", "-n", BACKFILL_LINES, "-o", "json", "--no-pager"])
+                .args(["-k", "-b", "-f", "-o", "json", "--no-pager"])
                 .stdout(Stdio::piped())
                 .stderr(Stdio::null())
                 .kill_on_drop(true)
@@ -165,9 +172,14 @@ pub struct FlowsQuery {
     /// flow retention ceiling).
     #[serde(default)]
     window: Option<String>,
-    /// Max flow records returned (top by bytes). Default 400, capped at 2000.
+    /// Max flow records returned (top by the chosen metric). Default 400,
+    /// capped at 2000.
     #[serde(default)]
     limit: Option<u32>,
+    /// Top-N ranking metric: `bytes` (default) or `hits` (connections begun).
+    /// Whitelisted here — never interpolated from user input.
+    #[serde(default)]
+    metric: Option<String>,
 }
 
 fn window_secs(window: Option<&str>) -> i64 {
@@ -192,8 +204,10 @@ pub struct FlowRecord {
     pub bytes_orig: i64,
     /// dst → src bytes over the window.
     pub bytes_reply: i64,
-    /// Convenience total (orig + reply) — the Sankey's ribbon weight.
+    /// Convenience total (orig + reply) — the Sankey's byte ribbon weight.
     pub bytes: i64,
+    /// Connections begun over the window — the "hits" ribbon weight.
+    pub conns: i64,
     /// Device name (user description, else hostname) when the IP is a known
     /// client, so the UI can label nodes better than bare addresses.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -221,11 +235,13 @@ pub struct FlowsResponse {
     /// Window totals over ALL tuples (not just the returned top-N), so the UI
     /// can render an honest "showing X of Y" and an Other rollup.
     pub total_bytes: i64,
+    pub total_conns: i64,
     pub flow_count: i64,
     pub truncated: bool,
-    /// Sum of bytes on returned flows that carry attribution — the "how much
-    /// of this picture is rule-labeled" figure.
+    /// Sums over returned flows that carry attribution — the "how much of this
+    /// picture is rule-labeled" figures, one per metric.
     pub attributed_bytes: i64,
+    pub attributed_conns: i64,
     /// False when qfdevd (or a version with flow recording) isn't running yet.
     pub available: bool,
     pub window: String,
@@ -240,22 +256,31 @@ struct TupleRow {
     dport: u16,
     bytes_orig: i64,
     bytes_reply: i64,
+    conns: i64,
 }
 
-// The three queries against qfdevd's DB, as consts so the tests below can run
-// the VERBATIM strings against a qfdevd-shaped schema — the schema lives in
-// another crate, and nothing else would catch the two drifting apart.
+// The queries against qfdevd's DB, as consts/builders so the tests below can
+// run the VERBATIM strings against a qfdevd-shaped schema — the schema lives
+// in another crate, and nothing else would catch the two drifting apart.
 
-/// Top-N service tuples by bytes over the window. ?1 = since, ?2 = limit.
-const TOP_FLOWS_SQL: &str = "SELECT proto, src, dst, dport, SUM(bytes_orig), SUM(bytes_reply)
-     FROM flow_buckets WHERE bucket_ts >= ?1
-     GROUP BY proto, src, dst, dport
-     ORDER BY SUM(bytes_orig + bytes_reply) DESC
-     LIMIT ?2";
+/// Top-N service tuples over the window, ranked by the chosen metric.
+/// ?1 = since, ?2 = limit. `by_hits` comes from the whitelist match in the
+/// handler, never from raw user input.
+fn top_flows_sql(by_hits: bool) -> String {
+    let rank = if by_hits { "SUM(conns)" } else { "SUM(bytes_orig + bytes_reply)" };
+    format!(
+        "SELECT proto, src, dst, dport, SUM(bytes_orig), SUM(bytes_reply), SUM(conns)
+         FROM flow_buckets WHERE bucket_ts >= ?1
+         GROUP BY proto, src, dst, dport
+         ORDER BY {rank} DESC
+         LIMIT ?2"
+    )
+}
 
-/// Window totals over ALL tuples (inner: one row + byte sum per tuple). ?1 = since.
-const TOTALS_SQL: &str = "SELECT COALESCE(SUM(b), 0), COUNT(*) FROM
-       (SELECT SUM(bytes_orig + bytes_reply) AS b FROM flow_buckets
+/// Window totals over ALL tuples (inner: one row per tuple with its byte and
+/// connection sums; outer aggregates them). ?1 = since.
+const TOTALS_SQL: &str = "SELECT COALESCE(SUM(b), 0), COALESCE(SUM(c), 0), COUNT(*) FROM
+       (SELECT SUM(bytes_orig + bytes_reply) AS b, SUM(conns) AS c FROM flow_buckets
         WHERE bucket_ts >= ?1 GROUP BY proto, src, dst, dport)";
 
 /// IP → display name over the whole (small) device table.
@@ -276,21 +301,26 @@ pub async fn list(
     let window = q.window.clone().unwrap_or_else(|| "5m".into());
     let win_secs = window_secs(q.window.as_deref());
     let limit = q.limit.unwrap_or(400).clamp(1, 2000) as i64;
+    // Whitelist the ranking metric — anything unrecognized falls back to bytes.
+    let by_hits = q.metric.as_deref() == Some("hits");
 
-    let (rows, names, total_bytes, flow_count, available) =
+    let (rows, names, total_bytes, total_conns, flow_count, available) =
         tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
             let now = now_secs();
             let since = now - win_secs;
             let Some(conn) = open_db(&db_path)? else {
-                return Ok((Vec::new(), HashMap::new(), 0, 0, false));
+                return Ok((Vec::new(), HashMap::new(), 0, 0, 0, false));
             };
 
-            // An older qfdevd without flow recording has no flow_buckets table;
-            // report "not available" rather than erroring the page.
-            let mut stmt = match conn.prepare(TOP_FLOWS_SQL) {
+            // An older qfdevd has no flow_buckets table ("no such table"), or a
+            // pre-hits one that hasn't migrated the conns column yet ("no such
+            // column"); both mean "not available yet", not an error.
+            let mut stmt = match conn.prepare(&top_flows_sql(by_hits)) {
                 Ok(s) => s,
-                Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if msg.contains("no such table") => {
-                    return Ok((Vec::new(), HashMap::new(), 0, 0, false));
+                Err(rusqlite::Error::SqliteFailure(_, Some(msg)))
+                    if msg.contains("no such table") || msg.contains("no such column") =>
+                {
+                    return Ok((Vec::new(), HashMap::new(), 0, 0, 0, false));
                 }
                 Err(e) => return Err(e.into()),
             };
@@ -303,13 +333,14 @@ pub async fn list(
                         dport: r.get::<_, i64>(3)? as u16,
                         bytes_orig: r.get(4)?,
                         bytes_reply: r.get(5)?,
+                        conns: r.get(6)?,
                     })
                 })?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
 
-            let (total_bytes, flow_count): (i64, i64) =
+            let (total_bytes, total_conns, flow_count): (i64, i64, i64) =
                 conn.query_row(TOTALS_SQL, rusqlite::params![since], |r| {
-                    Ok((r.get(0)?, r.get(1)?))
+                    Ok((r.get(0)?, r.get(1)?, r.get(2)?))
                 })?;
 
             // IP → display name for every known client, so Sankey nodes read
@@ -325,7 +356,7 @@ pub async fn list(
                 }
             }
 
-            Ok((rows, names, total_bytes, flow_count, true))
+            Ok((rows, names, total_bytes, total_conns, flow_count, true))
         })
         .await
         .map_err(|e| AppError::Internal(e.into()))?
@@ -333,6 +364,7 @@ pub async fn list(
 
     let truncated = flow_count > rows.len() as i64;
     let mut attributed_bytes = 0i64;
+    let mut attributed_conns = 0i64;
     let flows: Vec<FlowRecord> = rows
         .into_iter()
         .map(|t| {
@@ -340,6 +372,7 @@ pub async fn list(
             let bytes = t.bytes_orig + t.bytes_reply;
             if attr.is_some() {
                 attributed_bytes += bytes;
+                attributed_conns += t.conns;
             }
             let (chain, rule, action, ips, in_if, out_if) = match attr {
                 Some(a) => (Some(a.chain), a.rule, Some(a.action), a.ips, a.in_if, a.out_if),
@@ -355,6 +388,7 @@ pub async fn list(
                 bytes_orig: t.bytes_orig,
                 bytes_reply: t.bytes_reply,
                 bytes,
+                conns: t.conns,
                 chain,
                 rule,
                 action,
@@ -368,9 +402,11 @@ pub async fn list(
     Ok(Json(FlowsResponse {
         flows,
         total_bytes,
+        total_conns,
         flow_count,
         truncated,
         attributed_bytes,
+        attributed_conns,
         available,
         window,
         now: now_secs(),
@@ -471,6 +507,7 @@ mod tests {
                 bucket_ts INTEGER NOT NULL, proto TEXT NOT NULL, src TEXT NOT NULL,
                 dst TEXT NOT NULL, dport INTEGER NOT NULL DEFAULT 0,
                 bytes_orig INTEGER NOT NULL DEFAULT 0, bytes_reply INTEGER NOT NULL DEFAULT 0,
+                conns INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (bucket_ts, proto, src, dst, dport));",
         )
         .unwrap();
@@ -480,34 +517,47 @@ mod tests {
             [],
         )
         .unwrap();
-        // Two buckets of one tuple (must merge), one other tuple, one aged out.
-        for (ts, dport, o, r) in [(600, 443, 100, 900), (900, 443, 50, 100), (900, 53, 10, 20), (0, 443, 999, 999)] {
+        // Two buckets of one tuple (must merge), one other tuple (few bytes but
+        // MANY connections — the hits ranking must surface it), one aged out.
+        for (ts, dport, o, r, h) in
+            [(600, 443, 100, 900, 1), (900, 443, 50, 100, 2), (900, 53, 10, 20, 40), (0, 443, 999, 999, 9)]
+        {
             conn.execute(
-                "INSERT INTO flow_buckets VALUES (?1, 'tcp', '10.0.0.5', '1.1.1.1', ?2, ?3, ?4)",
-                rusqlite::params![ts, dport, o, r],
+                "INSERT INTO flow_buckets VALUES (?1, 'tcp', '10.0.0.5', '1.1.1.1', ?2, ?3, ?4, ?5)",
+                rusqlite::params![ts, dport, o, r, h],
             )
             .unwrap();
         }
 
         let since = 300i64;
-        let mut stmt = conn.prepare(TOP_FLOWS_SQL).unwrap();
-        let rows: Vec<(String, String, String, i64, i64, i64)> = stmt
+        let mut stmt = conn.prepare(&top_flows_sql(false)).unwrap();
+        let rows: Vec<(String, String, String, i64, i64, i64, i64)> = stmt
             .query_map(rusqlite::params![since, 10i64], |r| {
-                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
             })
             .unwrap()
             .collect::<std::result::Result<_, _>>()
             .unwrap();
         assert_eq!(rows.len(), 2, "two live tuples; the aged bucket is out of window");
-        // Biggest first: the 443 tuple's two buckets merged (150 orig / 1000 reply).
+        // By bytes: the 443 tuple's two buckets merged (150 orig / 1000 reply, 3 conns).
         assert_eq!(rows[0].3, 443);
-        assert_eq!((rows[0].4, rows[0].5), (150, 1000));
+        assert_eq!((rows[0].4, rows[0].5, rows[0].6), (150, 1000, 3));
 
-        let (total, count): (i64, i64) = conn
-            .query_row(TOTALS_SQL, rusqlite::params![since], |r| Ok((r.get(0)?, r.get(1)?)))
+        // By hits: the chatty low-byte DNS tuple must rank first instead.
+        let mut hstmt = conn.prepare(&top_flows_sql(true)).unwrap();
+        let hrows: Vec<(i64, i64)> = hstmt
+            .query_map(rusqlite::params![since, 10i64], |r| Ok((r.get::<_, i64>(3)?, r.get::<_, i64>(6)?)))
+            .unwrap()
+            .collect::<std::result::Result<_, _>>()
+            .unwrap();
+        assert_eq!(hrows[0], (53, 40));
+
+        let (total, total_conns, count): (i64, i64, i64) = conn
+            .query_row(TOTALS_SQL, rusqlite::params![since], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
             .unwrap();
         assert_eq!(count, 2);
         assert_eq!(total, 150 + 1000 + 10 + 20);
+        assert_eq!(total_conns, 3 + 40);
 
         let mut nstmt = conn.prepare(NAMES_SQL).unwrap();
         let names: Vec<(String, String)> = nstmt

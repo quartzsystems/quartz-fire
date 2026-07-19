@@ -151,6 +151,7 @@ fn init_schema(conn: &Connection) -> Result<()> {
             dport       INTEGER NOT NULL DEFAULT 0, -- service port (0 = none)
             bytes_orig  INTEGER NOT NULL DEFAULT 0, -- src → dst
             bytes_reply INTEGER NOT NULL DEFAULT 0, -- dst → src
+            conns       INTEGER NOT NULL DEFAULT 0, -- connections begun (hits)
             PRIMARY KEY (bucket_ts, proto, src, dst, dport)
         );
         CREATE INDEX IF NOT EXISTS idx_flow_bucket_ts ON flow_buckets(bucket_ts);
@@ -164,6 +165,7 @@ fn init_schema(conn: &Connection) -> Result<()> {
     // "duplicate column name" when it is already present, so we ignore that and
     // keep the call idempotent.
     add_column_if_missing(conn, "ALTER TABLE devices ADD COLUMN current_ipv6 TEXT")?;
+    add_column_if_missing(conn, "ALTER TABLE flow_buckets ADD COLUMN conns INTEGER NOT NULL DEFAULT 0")?;
     Ok(())
 }
 
@@ -307,7 +309,9 @@ pub fn add_app_usage(
     Ok(())
 }
 
-/// Add a raw byte delta to a service tuple's current 5-minute flow bucket.
+/// Add a raw byte delta (and any connections begun) to a service tuple's
+/// current 5-minute flow bucket.
+#[allow(clippy::too_many_arguments)]
 pub fn add_flow_usage(
     conn: &Connection,
     bucket_ts: i64,
@@ -317,19 +321,21 @@ pub fn add_flow_usage(
     dport: u16,
     bytes_orig: u64,
     bytes_reply: u64,
+    conns: u64,
 ) -> Result<()> {
-    if bytes_orig == 0 && bytes_reply == 0 {
+    if bytes_orig == 0 && bytes_reply == 0 && conns == 0 {
         return Ok(());
     }
     conn.execute(
         r#"
-        INSERT INTO flow_buckets (bucket_ts, proto, src, dst, dport, bytes_orig, bytes_reply)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        INSERT INTO flow_buckets (bucket_ts, proto, src, dst, dport, bytes_orig, bytes_reply, conns)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
         ON CONFLICT(bucket_ts, proto, src, dst, dport) DO UPDATE SET
             bytes_orig  = flow_buckets.bytes_orig  + excluded.bytes_orig,
-            bytes_reply = flow_buckets.bytes_reply + excluded.bytes_reply
+            bytes_reply = flow_buckets.bytes_reply + excluded.bytes_reply,
+            conns       = flow_buckets.conns       + excluded.conns
         "#,
-        params![bucket_ts, proto, src, dst, dport as i64, bytes_orig as i64, bytes_reply as i64],
+        params![bucket_ts, proto, src, dst, dport as i64, bytes_orig as i64, bytes_reply as i64, conns as i64],
     )?;
     Ok(())
 }
@@ -785,37 +791,68 @@ mod tests {
     #[test]
     fn flow_usage_accumulates_per_service_tuple() {
         let c = mem();
-        add_flow_usage(&c, 300, "tcp", "10.0.0.5", "1.1.1.1", 443, 100, 900).unwrap();
-        add_flow_usage(&c, 300, "tcp", "10.0.0.5", "1.1.1.1", 443, 50, 100).unwrap();
+        add_flow_usage(&c, 300, "tcp", "10.0.0.5", "1.1.1.1", 443, 100, 900, 1).unwrap();
+        add_flow_usage(&c, 300, "tcp", "10.0.0.5", "1.1.1.1", 443, 50, 100, 2).unwrap();
         // Different dport → its own row; different bucket → its own row.
-        add_flow_usage(&c, 300, "tcp", "10.0.0.5", "1.1.1.1", 80, 1, 1).unwrap();
-        add_flow_usage(&c, 600, "tcp", "10.0.0.5", "1.1.1.1", 443, 7, 7).unwrap();
-        // Zero delta writes nothing.
-        add_flow_usage(&c, 300, "udp", "10.0.0.5", "8.8.8.8", 53, 0, 0).unwrap();
+        add_flow_usage(&c, 300, "tcp", "10.0.0.5", "1.1.1.1", 80, 1, 1, 1).unwrap();
+        add_flow_usage(&c, 600, "tcp", "10.0.0.5", "1.1.1.1", 443, 7, 7, 0).unwrap();
+        // All-zero delta writes nothing…
+        add_flow_usage(&c, 300, "udp", "10.0.0.5", "8.8.8.8", 53, 0, 0, 0).unwrap();
+        // …but a zero-byte connection start still lands (the hits signal).
+        add_flow_usage(&c, 300, "udp", "10.0.0.5", "9.9.9.9", 53, 0, 0, 1).unwrap();
 
-        let (o, r): (i64, i64) = c
+        let (o, r, h): (i64, i64, i64) = c
             .query_row(
-                "SELECT bytes_orig, bytes_reply FROM flow_buckets
+                "SELECT bytes_orig, bytes_reply, conns FROM flow_buckets
                  WHERE bucket_ts=300 AND proto='tcp' AND src='10.0.0.5' AND dst='1.1.1.1' AND dport=443",
                 [],
-                |row| Ok((row.get(0)?, row.get(1)?)),
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .unwrap();
-        assert_eq!((o, r), (150, 1000));
+        assert_eq!((o, r, h), (150, 1000, 3));
         let n: i64 = c.query_row("SELECT COUNT(*) FROM flow_buckets", [], |row| row.get(0)).unwrap();
-        assert_eq!(n, 3);
+        assert_eq!(n, 4);
     }
 
     #[test]
     fn flow_prune_uses_seconds_retention() {
         let c = mem();
         let now = 10_000;
-        add_flow_usage(&c, bucket_of(now - 30), "tcp", "a", "b", 443, 1, 1).unwrap();
-        add_flow_usage(&c, bucket_of(now - 7200), "tcp", "a", "b", 443, 1, 1).unwrap();
+        add_flow_usage(&c, bucket_of(now - 30), "tcp", "a", "b", 443, 1, 1, 1).unwrap();
+        add_flow_usage(&c, bucket_of(now - 7200), "tcp", "a", "b", 443, 1, 1, 1).unwrap();
         let dropped = prune_flows(&c, now, 3600).unwrap();
         assert_eq!(dropped, 1);
         let n: i64 = c.query_row("SELECT COUNT(*) FROM flow_buckets", [], |row| row.get(0)).unwrap();
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn conns_column_migrates_onto_a_pre_hits_table() {
+        // A box that created flow_buckets before the conns column existed (the
+        // first deployed schema) must gain it on the next open, defaulted to 0.
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch(
+            "CREATE TABLE flow_buckets (
+                bucket_ts INTEGER NOT NULL, proto TEXT NOT NULL, src TEXT NOT NULL,
+                dst TEXT NOT NULL, dport INTEGER NOT NULL DEFAULT 0,
+                bytes_orig INTEGER NOT NULL DEFAULT 0, bytes_reply INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (bucket_ts, proto, src, dst, dport));
+             INSERT INTO flow_buckets VALUES (300, 'tcp', 'a', 'b', 443, 10, 20);",
+        )
+        .unwrap();
+        init_schema(&c).unwrap();
+        let (conns,): (i64,) = c
+            .query_row("SELECT conns FROM flow_buckets WHERE bucket_ts=300", [], |r| Ok((r.get(0)?,)))
+            .unwrap();
+        assert_eq!(conns, 0);
+        // And the new write path works against the migrated table.
+        add_flow_usage(&c, 300, "tcp", "a", "b", 443, 1, 2, 1).unwrap();
+        let (o, h): (i64, i64) = c
+            .query_row("SELECT bytes_orig, conns FROM flow_buckets WHERE bucket_ts=300", [], |r| {
+                Ok((r.get(0)?, r.get(1)?))
+            })
+            .unwrap();
+        assert_eq!((o, h), (11, 1));
     }
 
     #[test]

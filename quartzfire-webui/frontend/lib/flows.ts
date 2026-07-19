@@ -8,6 +8,7 @@
 import { apiFetch } from "./api";
 
 export type FlowWindow = "5m" | "15m" | "1h";
+export type FlowMetric = "bytes" | "hits";
 
 /// One aggregated flow, matching backend FlowRecord. Attribution fields are
 /// absent when no packet of the tuple was ever logged: `chain` undefined means
@@ -20,6 +21,8 @@ export interface FlowRecord {
   bytes_orig: number;
   bytes_reply: number;
   bytes: number;
+  /** Connections begun over the window — the "hits" weight. */
+  conns: number;
   src_name?: string;
   dst_name?: string;
   chain?: string;
@@ -34,15 +37,19 @@ export interface FlowsResponse {
   flows: FlowRecord[];
   /** Window totals over ALL tuples, not just the returned top-N. */
   total_bytes: number;
+  total_conns: number;
   flow_count: number;
   truncated: boolean;
   attributed_bytes: number;
+  attributed_conns: number;
   /** False until a qfdevd with flow recording has created the table. */
   available: boolean;
   window: string;
   now: number;
 }
 
-export async function fetchFlows(window: FlowWindow, limit = 400): Promise<FlowsResponse> {
-  return apiFetch<FlowsResponse>(`/monitoring/flows?window=${window}&limit=${limit}`);
+/** `metric` picks the server-side top-N ranking so a truncated result keeps
+ * the heaviest flows for whichever weight the diagram is showing. */
+export async function fetchFlows(window: FlowWindow, metric: FlowMetric, limit = 400): Promise<FlowsResponse> {
+  return apiFetch<FlowsResponse>(`/monitoring/flows?window=${window}&metric=${metric}&limit=${limit}`);
 }

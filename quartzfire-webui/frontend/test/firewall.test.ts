@@ -13,6 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  aliasUsage,
   diffRule,
   diffZone,
   emptyFirewallConfig,
@@ -27,6 +28,7 @@ import {
   zoneRuleChain,
   zoneUsage,
   type EndpointSelection,
+  type FirewallAlias,
   type FirewallConfig,
   type FirewallRule,
   type FirewallZone,
@@ -624,4 +626,112 @@ test("a pair a rule no longer spans loses its geolocation policy", () => {
   const rule = { rule: 20, scopes: [{ chain: zoneRuleChain(pairRuleset("LAN", "WAN")) }] };
   const cmds = diffGeoPoliciesForRule(live, rule, "Block_CN", "source");
   assert.ok(has(cmds, "delete service geolocation policy 20"));
+});
+
+// ── interface aliases (named interface-groups) ───────────────────────────────
+
+const ifaceAlias = (over: Partial<FirewallAlias> = {}): FirewallAlias => ({
+  name: "Internal",
+  display: "Internal",
+  type: "iface",
+  description: null,
+  members: ["eth9.10", "eth9.20"],
+  ...over,
+});
+
+test("an interface alias writes the rule-level group match, not a source group", () => {
+  const cmds = diffRule(
+    null,
+    baseRuleUpdate({ from: [{ kind: "alias", type: "iface", name: "Internal" }] }),
+    emptyFirewallConfig(),
+  );
+  assert.ok(has(cmds, "set firewall ipv4 forward filter rule 10 inbound-interface group Internal"));
+  // It must NOT leak into the source group ref — `source group
+  // interface-group` isn't a thing; the rule-level node is the only match.
+  assert.ok(!lines(cmds).some((l) => l.includes("source group")));
+});
+
+test("an interface alias on the To side writes outbound-interface group", () => {
+  const cmds = diffRule(
+    null,
+    baseRuleUpdate({ to: [{ kind: "alias", type: "iface", name: "Internal" }] }),
+    emptyFirewallConfig(),
+  );
+  assert.ok(has(cmds, "set firewall ipv4 forward filter rule 10 outbound-interface group Internal"));
+});
+
+test("an interface alias can narrow alongside an address alias on the other axis", () => {
+  // From = interface alias, To = host alias: different sides, no conflict.
+  const cfg: FirewallConfig = {
+    ...emptyFirewallConfig(),
+    aliases: [ifaceAlias(), { name: "Admins", display: "Admins", type: "host", description: null, members: ["10.0.0.5"] }],
+  };
+  const cmds = diffRule(
+    null,
+    baseRuleUpdate({
+      from: [{ kind: "alias", type: "iface", name: "Internal" }],
+      to: [{ kind: "alias", type: "host", name: "Admins" }],
+    }),
+    cfg,
+  );
+  assert.ok(has(cmds, "set firewall ipv4 forward filter rule 10 inbound-interface group Internal"));
+  assert.ok(has(cmds, "set firewall ipv4 forward filter rule 10 destination group address-group Admins"));
+});
+
+test("an interface alias stands alone — mixing with interfaces is refused", () => {
+  // interface-group `include` isn't verified against the pinned rolling XML,
+  // so the UI refuses instead of emitting config that may not commit.
+  assert.throws(
+    () =>
+      diffRule(
+        null,
+        baseRuleUpdate({
+          from: [
+            { kind: "alias", type: "iface", name: "Internal" },
+            { kind: "interface", name: "eth1" },
+          ],
+        }),
+        emptyFirewallConfig(),
+      ),
+    /stands alone/,
+  );
+});
+
+test("a stored interface-group reference reopens as an interface alias", () => {
+  // CLI-created references resolve the same way — the alias model covers them,
+  // falling back to the group name for display.
+  const rule = baseRule({ from: { ...noEndpoint(), iface_group: "Internal" } });
+  const cfg = emptyFirewallConfig();
+  assert.deepEqual(ruleSelection(rule, "from", cfg.auto_groups, cfg), [
+    { kind: "alias", type: "iface", name: "Internal" },
+  ]);
+});
+
+test("an auto-managed interface-group still reopens as individual interfaces", () => {
+  // The rule editor's own multi-interface OR groups must not surface as
+  // aliases — they're internals, resolved back to their members.
+  const rule = baseRule({ from: { ...noEndpoint(), iface_group: "QZ-R10-FROM" } });
+  const cfg: FirewallConfig = {
+    ...emptyFirewallConfig(),
+    auto_groups: [{ name: "QZ-R10-FROM", node: "interface-group", includes: [], interfaces: ["eth1", "eth2"], members: [] }],
+  };
+  assert.deepEqual(ruleSelection(rule, "from", cfg.auto_groups, cfg), [
+    { kind: "interface", name: "eth1" },
+    { kind: "interface", name: "eth2" },
+  ]);
+});
+
+test("interface-alias usage counts the rules referencing the group", () => {
+  const rules = [
+    baseRule({ from: { ...noEndpoint(), iface_group: "Internal" } }),
+    baseRule({ rule: 20 }),
+  ];
+  assert.deepEqual(aliasUsage(rules, [], ifaceAlias()), [10]);
+});
+
+test("an interface alias expands into its member interfaces for App Control", () => {
+  const cfg = zonedConfig({ aliases: [ifaceAlias()] });
+  const m = acMatchFromSelections([{ kind: "alias", type: "iface", name: "Internal" }], [], cfg);
+  assert.deepEqual(m.iifname, ["eth9.10", "eth9.20"]);
+  assert.equal(m.saddr, undefined);
 });

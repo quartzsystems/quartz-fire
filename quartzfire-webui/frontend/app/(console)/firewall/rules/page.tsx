@@ -62,7 +62,9 @@ function EndpointCell({
     if (e.kind === "zone") return config.zones.find((z) => z.name === e.name)?.display ?? e.name;
     return e.name;
   });
-  const allIfaces = sel.every((e) => e.kind === "interface" || e.kind === "ifgroup");
+  const allIfaces = sel.every(
+    (e) => e.kind === "interface" || e.kind === "ifgroup" || (e.kind === "alias" && e.type === "iface"),
+  );
   // Long endpoint lists blow out the column and get truncated mid-word; show
   // the first few names plus a "+N" overflow chip instead. The full list stays
   // in the tooltip.

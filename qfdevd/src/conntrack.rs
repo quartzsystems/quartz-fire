@@ -153,6 +153,10 @@ pub struct RawDelta {
     pub d_orig: u64,
     /// New bytes in the reply direction.
     pub d_reply: u64,
+    /// True when this observation began a new conntrack entry: the first
+    /// sighting of the key, or a tuple reuse (counters went backwards). The
+    /// connection-count ("hits") signal — each conntrack entry trips it once.
+    pub new_flow: bool,
 }
 
 /// A per-device byte delta ready to fold into a usage bucket.
@@ -234,12 +238,17 @@ impl Accountant {
     /// destroyed flow (drop its accounting slot so the map doesn't grow without
     /// bound).
     pub fn observe_raw(&mut self, flow: &Flow, remove: bool) -> Option<RawDelta> {
-        let prev = self.counted.get(&flow.key).copied().unwrap_or_default();
+        let prev_slot = self.counted.get(&flow.key).copied();
+        let prev = prev_slot.unwrap_or_default();
         // Counters going backwards = tuple reused by a new flow → credit from 0.
+        let reset = flow.orig_bytes < prev.orig || flow.reply_bytes < prev.reply;
         let base_orig = if flow.orig_bytes < prev.orig { 0 } else { prev.orig };
         let base_reply = if flow.reply_bytes < prev.reply { 0 } else { prev.reply };
         let d_orig = flow.orig_bytes.saturating_sub(base_orig);
         let d_reply = flow.reply_bytes.saturating_sub(base_reply);
+        // A connection is counted exactly once — at its first sighting (no
+        // prior slot) or when a reused tuple restarts its counters.
+        let new_flow = prev_slot.is_none() || reset;
 
         if remove {
             self.counted.remove(&flow.key);
@@ -254,10 +263,12 @@ impl Accountant {
             return None;
         }
 
-        if d_orig == 0 && d_reply == 0 {
+        // A zero-byte observation still matters when it BEGINS a connection —
+        // dropping it would lose the hit count for e.g. blocked-after-SYN flows.
+        if d_orig == 0 && d_reply == 0 && !new_flow {
             return None;
         }
-        Some(RawDelta { d_orig, d_reply })
+        Some(RawDelta { d_orig, d_reply, new_flow })
     }
 
     /// Observe a flow and return the device delta to credit, if any. `resolve`
@@ -452,12 +463,45 @@ mod tests {
             reply_bytes: 900,
             ..Default::default()
         };
-        assert_eq!(acct.observe_raw(&f, false).unwrap(), RawDelta { d_orig: 100, d_reply: 900 });
+        let first = acct.observe_raw(&f, false).unwrap();
+        assert_eq!(first, RawDelta { d_orig: 100, d_reply: 900, new_flow: true });
         // …and orientation still finds no device to credit.
-        assert!(orient(&f, RawDelta { d_orig: 100, d_reply: 900 }, |_| None).is_none());
-        // Growth on the next snapshot is delta-only, exactly like device flows.
+        assert!(orient(&f, first, |_| None).is_none());
+        // Growth on the next snapshot is delta-only, and not a new connection.
         let f2 = Flow { orig_bytes: 150, reply_bytes: 1000, ..f.clone() };
-        assert_eq!(acct.observe_raw(&f2, false).unwrap(), RawDelta { d_orig: 50, d_reply: 100 });
+        assert_eq!(
+            acct.observe_raw(&f2, false).unwrap(),
+            RawDelta { d_orig: 50, d_reply: 100, new_flow: false },
+        );
+    }
+
+    #[test]
+    fn new_flow_counts_each_connection_exactly_once() {
+        let mut acct = primed();
+        // First sighting → new.
+        let f = flow("42", "10.0.0.5", 100, 200);
+        assert!(acct.observe_raw(&f, false).unwrap().new_flow);
+        // Same connection growing → not new; its DESTROY → not new either.
+        let f2 = Flow { orig_bytes: 150, reply_bytes: 300, ..f.clone() };
+        assert!(!acct.observe_raw(&f2, false).unwrap().new_flow);
+        let f3 = Flow { orig_bytes: 200, reply_bytes: 400, ..f.clone() };
+        assert!(!acct.observe_raw(&f3, true).unwrap().new_flow);
+        // A short flow only ever seen at DESTROY → one new connection.
+        let short = flow("77", "10.0.0.5", 60, 0);
+        assert!(acct.observe_raw(&short, true).unwrap().new_flow);
+        // Tuple reuse (counters restart) → the reused tuple is a new connection.
+        let key = "tcp|10.0.0.5:5|1.2.3.4:6";
+        acct.observe_raw(&flow(key, "10.0.0.5", 9000, 100), false);
+        assert!(acct.observe_raw(&flow(key, "10.0.0.5", 20, 5), false).unwrap().new_flow);
+        // A zero-byte observation that BEGINS a connection still reports, so
+        // the hit is countable even when no payload ever moved.
+        let empty = flow("88", "10.0.0.5", 0, 0);
+        let d = acct.observe_raw(&empty, true).unwrap();
+        assert!(d.new_flow);
+        assert_eq!((d.d_orig, d.d_reply), (0, 0));
+        // …but a zero-byte NON-new observation stays silent as before.
+        acct.observe_raw(&flow("99", "10.0.0.5", 10, 10), false);
+        assert!(acct.observe_raw(&flow("99", "10.0.0.5", 10, 10), false).is_none());
     }
 
     #[test]

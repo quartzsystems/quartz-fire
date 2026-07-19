@@ -416,9 +416,9 @@ async fn conntrack_snapshot_loop(shared: Arc<Shared>) {
         let record_flows = shared.cfg.flow_retention_secs > 0;
         let mut live_keys = std::collections::HashSet::new();
         let mut deltas: Vec<conntrack::Delta> = Vec::new();
-        // Per-service-tuple raw deltas for the same pass, batched so the DB
-        // sees one upsert per tuple rather than one per conntrack line.
-        let mut flow_aggs: HashMap<(String, String, String, u16), (u64, u64)> = HashMap::new();
+        // Per-service-tuple raw deltas (+ connections begun) for the same pass,
+        // batched so the DB sees one upsert per tuple, not one per line.
+        let mut flow_aggs: HashMap<(String, String, String, u16), (u64, u64, u64)> = HashMap::new();
         {
             let mut acct = shared.accountant.lock().unwrap();
             for line in text.lines() {
@@ -437,6 +437,7 @@ async fn conntrack_snapshot_loop(shared: Arc<Shared>) {
                             .or_default();
                         slot.0 += raw.d_orig;
                         slot.1 += raw.d_reply;
+                        slot.2 += raw.new_flow as u64;
                     }
                 }
             }
@@ -505,7 +506,7 @@ async fn conntrack_destroy_loop(shared: Arc<Shared>) {
                         let conn = shared.db.lock().unwrap();
                         if let Err(e) = db::add_flow_usage(
                             &conn, bucket, &flow.proto, &flow.orig_src, &flow.orig_dst, flow.dport,
-                            raw.d_orig, raw.d_reply,
+                            raw.d_orig, raw.d_reply, raw.new_flow as u64,
                         ) {
                             tracing::warn!("add_flow_usage {}->{}: {e}", flow.orig_src, flow.orig_dst);
                         }
@@ -551,13 +552,13 @@ fn commit_deltas(shared: &Shared, bucket: i64, deltas: &[conntrack::Delta]) {
 }
 
 /// Fold a snapshot pass's per-service-tuple raw deltas into flow buckets.
-fn commit_flows(shared: &Shared, bucket: i64, aggs: &HashMap<(String, String, String, u16), (u64, u64)>) {
+fn commit_flows(shared: &Shared, bucket: i64, aggs: &HashMap<(String, String, String, u16), (u64, u64, u64)>) {
     if aggs.is_empty() {
         return;
     }
     let conn = shared.db.lock().unwrap();
-    for ((proto, src, dst, dport), (d_orig, d_reply)) in aggs {
-        if let Err(e) = db::add_flow_usage(&conn, bucket, proto, src, dst, *dport, *d_orig, *d_reply) {
+    for ((proto, src, dst, dport), (d_orig, d_reply, conns)) in aggs {
+        if let Err(e) = db::add_flow_usage(&conn, bucket, proto, src, dst, *dport, *d_orig, *d_reply, *conns) {
             tracing::warn!("add_flow_usage {src}->{dst}: {e}");
         }
     }

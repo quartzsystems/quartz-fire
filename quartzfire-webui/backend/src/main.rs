@@ -126,6 +126,11 @@ async fn main() -> Result<()> {
         flow_attr: Arc::new(flows::Attribution::default()),
     });
 
+    // Start the Traffic Flow rule-attribution follower now, not on first page
+    // load: rule logs fire once per connection, so every connection that starts
+    // while nobody is watching would otherwise be unattributable forever.
+    state.flow_attr.ensure_started();
+
     // Everything except the SPA itself and login/logout requires a session:
     // the VyOS API proxy is the crown jewels, so it sits behind `require_auth`.
     let protected = Router::new()

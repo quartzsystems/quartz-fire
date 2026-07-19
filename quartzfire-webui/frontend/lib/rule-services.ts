@@ -125,7 +125,9 @@ function sideMatch(
         if (!alias) reject(`references alias ${e.name}, which no longer exists`);
         if (e.type === "fqdn") reject(`uses the FQDN alias ${e.name}, and qfappd matches addresses, not names`);
         if (alias!.members.length === 0) reject(`uses alias ${e.name}, which has no members`);
-        addrs.push(...alias!.members);
+        // An interface alias resolves to its member interfaces, same as a zone.
+        if (e.type === "iface") ifaces.push(...alias!.members);
+        else addrs.push(...alias!.members);
         break;
       }
       case "inline":

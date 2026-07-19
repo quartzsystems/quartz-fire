@@ -70,6 +70,7 @@ const INLINE_PLACEHOLDER: Record<AliasType, string> = {
   host: "192.168.1.10",
   network: "192.168.1.0/24",
   fqdn: "example.com",
+  iface: "", // interfaces are never typed inline (picker only)
 };
 
 /// Built-in policy sentinels for the policy select — values no port-group can
@@ -157,10 +158,17 @@ function EndpointField({
   value: EndpointSelection;
   onChange: (sel: EndpointSelection) => void;
 }) {
-  const hasIface = value.some((e) => e.kind === "interface" || e.kind === "ifgroup");
+  // An interface alias (a named interface-group) occupies the side's one
+  // interface-match slot and stands alone — it can't be OR'd with more
+  // interfaces (include support isn't verified) nor with address entries
+  // (those would AND, not OR).
+  const hasIfaceAlias = value.some((e) => e.kind === "alias" && e.type === "iface");
+  const hasIface = value.some((e) => e.kind === "interface" || e.kind === "ifgroup") || hasIfaceAlias;
   const hasFirewall = value.some((e) => e.kind === "firewall");
   const hasZone = value.some((e) => e.kind === "zone");
-  const aliasEntries = value.filter((e) => e.kind === "alias");
+  const aliasEntries = value.filter(
+    (e): e is Extract<EndpointEntry, { kind: "alias" }> => e.kind === "alias" && e.type !== "iface",
+  );
   const inlineEntries = value.filter((e) => e.kind === "inline");
   // Aliases and inline values share one family per side (they end up in one
   // VyOS group) — host, network, or FQDN.
@@ -173,13 +181,15 @@ function EndpointField({
   // picks the ruleset, the alias narrows the match inside it.
   const zoneNames = value.filter((e) => e.kind === "zone").map((e) => (e as { name: string }).name);
   const addableIfaces =
-    familyType || hasLegacy || hasFirewall || hasZone
+    familyType || hasLegacy || hasFirewall || hasZone || hasIfaceAlias
       ? []
       : interfaces.filter((n) => !value.some((e) => e.kind === "interface" && e.name === n));
   const addableAliases = hasIface || hasLegacy || hasFirewall
     ? []
     : aliases.filter((a) => {
         if (value.some((e) => e.kind === "alias" && e.type === a.type && e.name === a.name)) return false;
+        // An interface alias stands alone — only offered on an empty side.
+        if (a.type === "iface") return value.length === 0;
         // FQDN aliases stand alone (domain groups have no include).
         if (familyType) return a.type === familyType && familyType !== "fqdn";
         return true;

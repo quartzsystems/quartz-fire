@@ -39,19 +39,24 @@ import { showText } from "./vyos";
 const commitAndSave = (commands: VyosCommand[]) =>
   guardedCommitAndSave(commands, "Firewall configuration change");
 
-export type AliasType = "host" | "network" | "fqdn";
+export type AliasType = "host" | "network" | "fqdn" | "iface";
 
-/// VyOS group node + member leaf backing each alias type.
+/// VyOS group node + member leaf backing each alias type. `iface` is a named
+/// set of interfaces (`firewall group interface-group`) — zone-like grouping
+/// without zone-based mode; a rule matches it via `inbound-interface group` /
+/// `outbound-interface group`.
 export const ALIAS_GROUP: Record<AliasType, { node: string; memberLeaf: string; label: string }> = {
-  host:    { node: "address-group", memberLeaf: "address", label: "Host" },
-  network: { node: "network-group", memberLeaf: "network", label: "Network" },
-  fqdn:    { node: "domain-group",  memberLeaf: "address", label: "FQDN" },
+  host:    { node: "address-group",   memberLeaf: "address",   label: "Host" },
+  network: { node: "network-group",   memberLeaf: "network",   label: "Network" },
+  fqdn:    { node: "domain-group",    memberLeaf: "address",   label: "FQDN" },
+  iface:   { node: "interface-group", memberLeaf: "interface", label: "Interface Group" },
 };
 
 const GROUP_NODE_TO_TYPE: Record<string, AliasType> = {
   "address-group": "host",
   "network-group": "network",
   "domain-group": "fqdn",
+  "interface-group": "iface",
 };
 
 export interface FirewallAlias {
@@ -733,6 +738,13 @@ export async function fetchFirewall(): Promise<FirewallConfig> {
 /// Rule numbers referencing an alias in From or To, directly or through an
 /// auto-managed OR group that includes it.
 export function aliasUsage(rules: FirewallRule[], autoGroups: AutoGroup[], alias: FirewallAlias): number[] {
+  // Interface aliases are matched at rule level (`inbound-interface group`),
+  // not as a source/destination group ref. They stand alone on a side (no
+  // include), so a direct reference is the only way a rule can use one.
+  if (alias.type === "iface") {
+    const matches = (e: RuleEndpoint) => e.iface_group === alias.name;
+    return rules.filter((r) => matches(r.from) || matches(r.to)).map((r) => r.rule);
+  }
   const node = ALIAS_GROUP[alias.type].node;
   const viaAuto = new Set(
     autoGroups.filter((g) => g.node === node && g.includes.includes(alias.name)).map((g) => g.name),
@@ -1129,6 +1141,10 @@ export function validateInline(type: AliasType, value: string): string | null {
       }
       return null;
     }
+    case "iface":
+      // Interfaces are never typed inline — they're picked from the configured
+      // list (rule form) or the alias editor. Reaching this is a UI bug.
+      return "Pick interfaces from the list instead of typing them.";
   }
 }
 
@@ -1148,8 +1164,11 @@ export function endpointToSelection(e: RuleEndpoint, autoGroups: AutoGroup[]): E
   if (e.iface) out.push({ kind: "interface", name: e.iface });
   if (e.iface_group) {
     const auto = autoGroups.find((g) => g.node === "interface-group" && g.name === e.iface_group);
+    // A named (non-auto) interface-group is an interface alias — the user's or
+    // one written on the CLI; either way the alias model covers it (its display
+    // name falls back to the group name when it isn't a modeled alias).
     if (auto) for (const name of auto.interfaces) out.push({ kind: "interface", name });
-    else out.push({ kind: "ifgroup", name: e.iface_group });
+    else out.push({ kind: "alias", type: "iface", name: e.iface_group });
   }
   if (e.address) out.push({ kind: "address", address: e.address });
   return out;
@@ -1378,9 +1397,15 @@ function planEndpoint(
   const findAuto = (node: string | null, name: string | null) =>
     (node && name && ctx.autoGroups.find((g) => g.node === node && g.name === name)) || null;
 
+  // Interface aliases live in the rule-level interface slot, not the
+  // source/destination group ref — split them off before the family logic.
+  // (Explicit predicates: TS doesn't infer one for compound conditions.)
+  type AliasEntry = Extract<EndpointEntry, { kind: "alias" }>;
+  const ifaceAliases = sel.filter((e): e is AliasEntry => e.kind === "alias" && e.type === "iface");
+
   // ── aliases & inline values: a single alias → direct group ref; anything
   //    else → auto OR group carrying alias includes and/or literal members.
-  const aliases = sel.filter((e) => e.kind === "alias");
+  const aliases = sel.filter((e): e is AliasEntry => e.kind === "alias" && e.type !== "iface");
   const inline = sel.filter((e) => e.kind === "inline");
   const types = new Set([...aliases.map((a) => a.type), ...inline.map((i) => i.type)]);
   if (types.size > 1) throw new Error("From/To entries must all be of the same type (host, network, or FQDN).");
@@ -1424,16 +1449,25 @@ function planEndpoint(
   const addrEntry = sel.find((e) => e.kind === "address");
   const desiredAddr = addrEntry?.address.trim() || null;
 
-  // ── interfaces: one → `name <if>`; several → auto interface-group; a legacy
-  //    ifgroup entry keeps its `group <g>` form.
+  // ── interfaces: an interface alias → `group <alias>` (it stands alone — the
+  //    pinned rolling XML isn't verified to support interface-group include, so
+  //    an alias can't be OR'd with more interfaces); one plain interface →
+  //    `name <if>`; several → auto interface-group; a legacy ifgroup entry
+  //    keeps its `group <g>` form.
   const ifaces = sel.filter((e) => e.kind === "interface").map((e) => e.name.trim()).filter(Boolean);
-  const legacyIfGroup = sel.find((e) => e.kind === "ifgroup")?.name ?? null;
+  const namedIfGroup =
+    ifaceAliases[0]?.name ?? sel.find((e) => e.kind === "ifgroup")?.name ?? null;
+  if (namedIfGroup !== null && (ifaceAliases.length + sel.filter((e) => e.kind === "ifgroup").length > 1 || ifaces.length > 0)) {
+    throw new Error(
+      "An interface alias stands alone on its side — add interfaces to the alias itself, or list individual interfaces instead.",
+    );
+  }
   const liveIfAuto = findAuto(live?.iface_group ? "interface-group" : null, live?.iface_group ?? null);
 
   let desiredIface: string | null = null;
   let desiredIfGroup: string | null = null;
-  if (legacyIfGroup !== null) {
-    desiredIfGroup = legacyIfGroup;
+  if (namedIfGroup !== null) {
+    desiredIfGroup = namedIfGroup;
   } else if (ifaces.length === 1) {
     desiredIface = ifaces[0];
   } else if (ifaces.length > 1) {

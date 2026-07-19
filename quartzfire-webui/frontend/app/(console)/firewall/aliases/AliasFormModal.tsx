@@ -50,6 +50,13 @@ const MEMBER_INFO: Record<AliasType, { placeholder: string; hint: string; valid:
     hint: "One fully-qualified domain name per line. No wildcards — VyOS resolves each name to its DNS addresses, and subdomains are not covered.",
     valid: (m) => FQDN_RE.test(m),
   },
+  // Interface members come from the checkbox picker, never the textarea — this
+  // entry only satisfies the Record and validates leftovers defensively.
+  iface: {
+    placeholder: "eth9.20",
+    hint: "Pick the member interfaces below.",
+    valid: (m) => /^[a-z][a-z0-9.-]*$/i.test(m),
+  },
 };
 
 /// Create/edit an alias (a named host / network / FQDN group). Diffs against
@@ -58,6 +65,7 @@ export function AliasFormModal({
   initial,
   existing,
   usedByRules,
+  interfaces,
   onClose,
   onSaved,
 }: {
@@ -67,6 +75,8 @@ export function AliasFormModal({
   existing: FirewallAlias[];
   /** Rule numbers referencing the edited alias — locks name/type changes. */
   usedByRules: number[];
+  /** Configured interfaces offered as interface-group members. */
+  interfaces: { name: string; label: string }[];
   onClose: () => void;
   /** Called after a successful apply with a toast-able summary. */
   onSaved: (message: string) => void;
@@ -77,7 +87,22 @@ export function AliasFormModal({
   const [name, setName] = useState(initial?.display ?? "");
   const [type, setType] = useState<AliasType>(initial?.type ?? "host");
   const [description, setDescription] = useState(initial?.description ?? "");
-  const [membersText, setMembersText] = useState(initial?.members.join("\n") ?? "");
+  const [membersText, setMembersText] = useState(
+    initial && initial.type !== "iface" ? initial.members.join("\n") : "",
+  );
+  // Interface members are picked, not typed. A member no longer configured
+  // (e.g. a deleted VLAN) still shows so it can be seen and unchecked.
+  const [ifaceMembers, setIfaceMembers] = useState<string[]>(
+    initial?.type === "iface" ? initial.members : [],
+  );
+  const ifaceOptions = [
+    ...interfaces,
+    ...ifaceMembers
+      .filter((m) => !interfaces.some((i) => i.name === m))
+      .map((m) => ({ name: m, label: `${m} (not configured)` })),
+  ];
+  const toggleIface = (n: string) =>
+    setIfaceMembers((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -102,12 +127,15 @@ export function AliasFormModal({
       return;
     }
 
-    const members = membersText
-      .split("\n")
-      .map((m) => m.trim())
-      .filter(Boolean);
+    const members =
+      type === "iface"
+        ? ifaceMembers
+        : membersText
+            .split("\n")
+            .map((m) => m.trim())
+            .filter(Boolean);
     if (members.length === 0) {
-      setError("Add at least one member.");
+      setError(type === "iface" ? "Pick at least one interface." : "Add at least one member.");
       return;
     }
     const bad = members.find((m) => !MEMBER_INFO[type].valid(m));
@@ -143,7 +171,7 @@ export function AliasFormModal({
     <ModalShell onClose={onClose} maxWidth={520}>
       <ModalHeader
         title={`${isEdit ? "Edit" : "Create"} Alias`}
-        subtitle="Named hosts, networks, or FQDNs for firewall rules"
+        subtitle="Named hosts, networks, FQDNs, or interface groups for firewall rules"
         onClose={onClose}
       />
 
@@ -158,6 +186,7 @@ export function AliasFormModal({
                 { value: "host", label: "IPv4 Host" },
                 { value: "network", label: "IPv4 Network" },
                 { value: "fqdn", label: "FQDN" },
+                { value: "iface", label: "Interfaces" },
               ]}
               value={type}
               onChange={(v) => setType(v as AliasType)}
@@ -185,18 +214,51 @@ export function AliasFormModal({
           />
         </Field>
 
-        <Field label="Members" hint={MEMBER_INFO[type].hint}>
-          <textarea
-            value={membersText}
-            onChange={(e) => setMembersText(e.target.value)}
-            placeholder={MEMBER_INFO[type].placeholder}
-            rows={5}
-            className={`${inputCls} resize-y`}
-            style={monoSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
-          />
-        </Field>
+        {type === "iface" ? (
+          <Field
+            label="Member interfaces"
+            hint="In a rule this alias stands alone on its side and matches traffic on any of these interfaces — zone-like grouping, without zone-based mode."
+          >
+            <div
+              className="rounded-md overflow-y-auto"
+              style={{ ...monoSt, maxHeight: 180, padding: "4px 0" }}
+            >
+              {ifaceOptions.length === 0 ? (
+                <div className="px-3 py-2 text-[13px] text-[var(--qz-fg-4)]">
+                  No configured interfaces found — set up interfaces (or their descriptions) first.
+                </div>
+              ) : (
+                ifaceOptions.map((i) => (
+                  <label
+                    key={i.name}
+                    className="flex items-center gap-2 px-3 py-[5px] text-[13px] text-[var(--qz-fg-1)] cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={ifaceMembers.includes(i.name)}
+                      onChange={() => toggleIface(i.name)}
+                      style={{ accentColor: "var(--qz-accent)" }}
+                    />
+                    {i.label}
+                  </label>
+                ))
+              )}
+            </div>
+          </Field>
+        ) : (
+          <Field label="Members" hint={MEMBER_INFO[type].hint}>
+            <textarea
+              value={membersText}
+              onChange={(e) => setMembersText(e.target.value)}
+              placeholder={MEMBER_INFO[type].placeholder}
+              rows={5}
+              className={`${inputCls} resize-y`}
+              style={monoSt}
+              onFocus={focusBorder}
+              onBlur={blurBorder}
+            />
+          </Field>
+        )}
 
         <Field label="Description">
           <input

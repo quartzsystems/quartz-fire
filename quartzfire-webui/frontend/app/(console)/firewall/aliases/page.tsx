@@ -26,6 +26,10 @@ const TYPE_BADGE: Record<AliasType, string> = {
   host: "badge-info",
   network: "badge-ok",
   fqdn: "badge-warn",
+  // Interface-flavored rows read muted like the built-in interface aliases —
+  // the label ("Interface Group" vs "Interface") tells them apart; red/amber
+  // would miscue severity.
+  iface: "badge-muted",
 };
 
 function TypePill({ type }: { type: AliasType }) {
@@ -159,7 +163,7 @@ export default function FirewallAliasesPage() {
       label: "Type",
       options: [
         ...(Object.keys(ALIAS_GROUP) as AliasType[]).map((t) => ({ value: t, label: ALIAS_GROUP[t].label })),
-        { value: "interface", label: "Interface" },
+        { value: "interface", label: "Built-in Interface" },
       ],
       predicate: (r, v) => (v === "interface" ? r.kind === "builtin" : r.kind === "user" && r.alias.type === v),
     },
@@ -172,8 +176,8 @@ export default function FirewallAliasesPage() {
           Aliases
         </h1>
         <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
-          Named hosts, networks, and FQDNs used as From/To targets in firewall rules — every configured interface
-          and VLAN gets a built-in alias named by its description
+          Named hosts, networks, FQDNs, and interface groups used as From/To targets in firewall rules — every
+          configured interface and VLAN also gets a built-in alias named by its description
         </p>
       </div>
 
@@ -223,6 +227,10 @@ export default function FirewallAliasesPage() {
           initial={modal.alias}
           existing={data.aliases}
           usedByRules={modal.alias ? usedBy(modal.alias) : []}
+          interfaces={builtins.map((b) => ({
+            name: b.iface,
+            label: b.display === b.iface ? b.iface : `${b.display} (${b.iface})`,
+          }))}
           onClose={() => setModal(null)}
           onSaved={(msg) => {
             setModal(null);

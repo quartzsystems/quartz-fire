@@ -27,6 +27,7 @@ import { ChartTooltip } from "@/components/ui/ChartTooltip";
 import type { TooltipRow } from "@/components/ui/ChartTooltip";
 import { emptyFirewallConfig, fetchFirewall, FirewallConfig } from "@/lib/firewall";
 import { fetchFlows, FlowRecord, FlowsResponse, FlowWindow } from "@/lib/flows";
+import type { FlowMetric } from "@/lib/flows";
 import { formatBytes } from "@/lib/format";
 
 const POLL_MS = 5000;
@@ -88,7 +89,8 @@ const PAD_X = 4;
 interface SNode {
   key: string;
   label: string;
-  bytes: number;
+  /** Weight in the active metric (bytes or hits). */
+  value: number;
   col: number;
   y0: number;
   y1: number;
@@ -102,7 +104,8 @@ interface SLink {
   a: string;
   b: string;
   verdict: Verdict;
-  bytes: number;
+  /** Weight in the active metric (bytes or hits). */
+  value: number;
   sy0: number;
   sy1: number;
   ty0: number;
@@ -121,24 +124,26 @@ interface Layout {
 /** Stable identity for a ribbon (link objects are rebuilt every poll). */
 const linkId = (col: number, a: string, b: string, v: Verdict) => `${col}\x00${a}\x00${b}\x00${v}`;
 
-/** Aggregate the filtered flows into positioned nodes + ribbons. */
+/** Aggregate the filtered flows into positioned nodes + ribbons, weighted by
+ * the active metric (`weight` maps a flow to bytes or hits). */
 function layoutSankey(
   flows: FlowRecord[],
   order: FacetId[],
   labelOf: (facet: FacetId, key: string) => string,
+  weight: (r: FlowRecord) => number,
 ): Layout {
   const nCols = order.length;
-  const total = flows.reduce((s, r) => s + r.bytes, 0);
+  const total = flows.reduce((s, r) => s + weight(r), 0);
   if (total <= 0 || nCols < 2) return { nodes: order.map(() => []), links: [], total: 0, mapped: [] };
 
-  // Per column: bytes per raw key, then keep the top N and fold the rest.
+  // Per column: weight per raw key, then keep the top N and fold the rest.
   const keyed = flows.map((r) => order.map((id) => FACET_BY_ID.get(id)!.key(r) ?? "\x00none"));
   const mapped: string[][] = keyed.map(() => new Array(nCols));
   const nodeCols: SNode[][] = [];
   for (let c = 0; c < nCols; c++) {
     const sums = new Map<string, number>();
     for (let i = 0; i < flows.length; i++) {
-      sums.set(keyed[i][c], (sums.get(keyed[i][c]) ?? 0) + flows[i].bytes);
+      sums.set(keyed[i][c], (sums.get(keyed[i][c]) ?? 0) + weight(flows[i]));
     }
     const ranked = [...sums.entries()].sort((x, y) => y[1] - x[1]);
     const kept = new Set(ranked.slice(0, TOP_NODES).map(([k]) => k));
@@ -148,18 +153,18 @@ function layoutSankey(
     }
     const colNodes: SNode[] = ranked
       .filter(([k]) => kept.has(k))
-      .map(([k, bytes]) => ({
+      .map(([k, value]) => ({
         key: k,
         label: k === "\x00none" ? "—" : labelOf(order[c], k),
-        bytes,
+        value,
         col: c,
         y0: 0,
         y1: 0,
         filterable: k !== "\x00none",
       }));
     if (folded) {
-      const otherBytes = ranked.slice(TOP_NODES).reduce((s, [, b]) => s + b, 0);
-      colNodes.push({ key: OTHER, label: `Other (${ranked.length - TOP_NODES})`, bytes: otherBytes, col: c, y0: 0, y1: 0, filterable: false });
+      const otherValue = ranked.slice(TOP_NODES).reduce((s, [, b]) => s + b, 0);
+      colNodes.push({ key: OTHER, label: `Other (${ranked.length - TOP_NODES})`, value: otherValue, col: c, y0: 0, y1: 0, filterable: false });
     }
     nodeCols.push(colNodes);
   }
@@ -173,7 +178,7 @@ function layoutSankey(
     let y = PAD_TOP;
     for (const n of col) {
       n.y0 = y;
-      n.y1 = y + Math.max(n.bytes * scale, 1.5);
+      n.y1 = y + Math.max(n.value * scale, 1.5);
       y = n.y1 + NODE_GAP;
     }
   }
@@ -182,14 +187,14 @@ function layoutSankey(
   // as separate allow/block ribbons rather than one unreadable blend.
   const links: SLink[] = [];
   for (let c = 0; c < nCols - 1; c++) {
-    const sums = new Map<string, { a: string; b: string; verdict: Verdict; bytes: number }>();
+    const sums = new Map<string, { a: string; b: string; verdict: Verdict; value: number }>();
     for (let i = 0; i < flows.length; i++) {
       const a = mapped[i][c];
       const b = mapped[i][c + 1];
       const v = verdictOf(flows[i]);
       const k = `${a}\x01${b}\x01${v}`;
-      const slot = sums.get(k) ?? { a, b, verdict: v, bytes: 0 };
-      slot.bytes += flows[i].bytes;
+      const slot = sums.get(k) ?? { a, b, verdict: v, value: 0 };
+      slot.value += weight(flows[i]);
       sums.set(k, slot);
     }
     const aOrder = new Map(nodeCols[c].map((n, i) => [n.key, i]));
@@ -212,7 +217,7 @@ function layoutSankey(
     )) {
       const node = nodeCols[c][aOrder.get(l.a)!];
       const off = srcOff.get(l.a) ?? 0;
-      const h = l.bytes * scale;
+      const h = l.value * scale;
       l.sy0 = node.y0 + off;
       l.sy1 = l.sy0 + h;
       srcOff.set(l.a, off + h);
@@ -223,7 +228,7 @@ function layoutSankey(
     )) {
       const node = nodeCols[c + 1][bOrder.get(l.b)!];
       const off = tgtOff.get(l.b) ?? 0;
-      const h = l.bytes * scale;
+      const h = l.value * scale;
       l.ty0 = node.y0 + off;
       l.ty1 = l.ty0 + h;
       tgtOff.set(l.b, off + h);
@@ -246,12 +251,13 @@ export default function TrafficFlowPage() {
   const [resp, setResp] = useState<FlowsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [window_, setWindow] = useState<FlowWindow>("5m");
+  const [metric, setMetric] = useState<FlowMetric>("bytes");
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
 
-  const load = useCallback(async (w: FlowWindow) => {
+  const load = useCallback(async (w: FlowWindow, m: FlowMetric) => {
     try {
-      const r = await fetchFlows(w);
+      const r = await fetchFlows(w, m);
       setResp(r);
       setError(null);
     } catch (e) {
@@ -260,12 +266,12 @@ export default function TrafficFlowPage() {
   }, []);
 
   useEffect(() => {
-    load(window_);
+    load(window_, metric);
     const t = setInterval(() => {
-      if (!document.hidden && !pausedRef.current) load(window_);
+      if (!document.hidden && !pausedRef.current) load(window_, metric);
     }, POLL_MS);
     return () => clearInterval(t);
-  }, [load, window_]);
+  }, [load, window_, metric]);
 
   // Rule names, so the middle column reads "Allow LAN to WAN", not "Rule 20".
   const [config, setConfig] = useState<FirewallConfig>(emptyFirewallConfig);
@@ -356,21 +362,43 @@ export default function TrafficFlowPage() {
     });
   }, [resp, filters, verdictFilter]);
 
-  const layout = useMemo(() => layoutSankey(filtered, order, labelOf), [filtered, order, labelOf]);
+  // Metric weight + its value formatter, together so they can't disagree.
+  const weight = useCallback(
+    (r: FlowRecord) => (metric === "bytes" ? r.bytes : r.conns),
+    [metric],
+  );
+  const fmtVal = useCallback(
+    (v: number) => (metric === "bytes" ? formatBytes(v) : v.toLocaleString()),
+    [metric],
+  );
+
+  const layout = useMemo(
+    () => layoutSankey(filtered, order, labelOf, weight),
+    [filtered, order, labelOf, weight],
+  );
 
   // ── measuring + hover ──
-  const wrapRef = useRef<HTMLDivElement>(null);
+  // The diagram div only mounts once data exists, so measure via a callback
+  // ref (state), not a plain ref — an effect keyed on [] runs while the
+  // loading placeholder is up, never observes the real element, and the SVG
+  // would stay at its 900px fallback instead of filling the page.
+  const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const attachWrap = useCallback((el: HTMLDivElement | null) => {
+    wrapRef.current = el;
+    setWrapEl(el);
+  }, []);
   const [width, setWidth] = useState(900);
   useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
+    if (!wrapEl) return;
+    setWidth(wrapEl.getBoundingClientRect().width || 900);
     const ro = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
       if (w) setWidth(w);
     });
-    ro.observe(el);
+    ro.observe(wrapEl);
     return () => ro.disconnect();
-  }, []);
+  }, [wrapEl]);
 
   const [hover, setHover] = useState<Hover>(null);
 
@@ -421,8 +449,14 @@ export default function TrafficFlowPage() {
     return { x: e.clientX - (rect?.left ?? 0), y: e.clientY - (rect?.top ?? 0) };
   };
 
-  const attributedPct =
-    resp && resp.total_bytes > 0 ? Math.round((100 * resp.attributed_bytes) / resp.total_bytes) : null;
+  const attributedPct = useMemo(() => {
+    if (!resp) return null;
+    const [attributed, total] =
+      metric === "bytes"
+        ? [resp.attributed_bytes, resp.total_bytes]
+        : [resp.attributed_conns, resp.total_conns];
+    return total > 0 ? Math.round((100 * attributed) / total) : null;
+  }, [resp, metric]);
 
   // Tooltip content for the current hover.
   const tip = useMemo((): { title: string; rows: TooltipRow[] } | null => {
@@ -436,7 +470,7 @@ export default function TrafficFlowPage() {
         rows: [
           {
             label: VERDICT_META[l.verdict].label,
-            value: formatBytes(l.bytes),
+            value: fmtVal(l.value),
             color: VERDICT_META[l.verdict].color,
           },
         ],
@@ -451,11 +485,11 @@ export default function TrafficFlowPage() {
     return {
       title: n.label,
       rows: [
-        { label: FACET_BY_ID.get(order[hover.col])!.label, value: formatBytes(n.bytes), color: "var(--qz-accent)" },
+        { label: metric === "bytes" ? "Bytes" : "Hits", value: fmtVal(n.value), color: "var(--qz-accent)" },
         { label: "Flows", value: String(count), color: "var(--qz-fg-4)" },
       ],
     };
-  }, [hover, layout, order, filtered]);
+  }, [hover, layout, filtered, metric, fmtVal]);
 
   const activeFilterChips = useMemo(() => {
     const chips: { facet: FacetId; key: string; label: string }[] = [];
@@ -474,7 +508,7 @@ export default function TrafficFlowPage() {
           Traffic Flow
         </h1>
         <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
-          Where traffic enters, which firewall rule carries it, and where it goes — ribbon width is bytes over the window; color is the verdict
+          Where traffic enters, which firewall rule carries it, and where it goes — ribbon width is {metric === "bytes" ? "bytes" : "connections (hits)"} over the window; color is the verdict
         </p>
       </div>
 
@@ -493,6 +527,14 @@ export default function TrafficFlowPage() {
             />
             <Segmented
               items={[
+                { value: "bytes", label: "Bytes" },
+                { value: "hits", label: "Hits" },
+              ]}
+              value={metric}
+              onChange={(v) => setMetric(v as FlowMetric)}
+            />
+            <Segmented
+              items={[
                 { value: "all", label: "All" },
                 { value: "allow", label: "Allowed" },
                 { value: "block", label: "Blocked" },
@@ -501,7 +543,7 @@ export default function TrafficFlowPage() {
               onChange={(v) => setVerdictFilter(v as typeof verdictFilter)}
             />
             <div className="ml-auto flex items-center gap-3">
-              <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load(window_)}>
+              <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load(window_, metric)}>
                 Refresh
               </Button>
               <Button
@@ -520,7 +562,11 @@ export default function TrafficFlowPage() {
               <span className="text-[12px] text-[var(--qz-fg-4)]">
                 {resp ? (
                   <>
-                    {formatBytes(resp.total_bytes)} · {resp.flow_count} flows
+                    {metric === "bytes"
+                      ? formatBytes(resp.total_bytes)
+                      : `${resp.total_conns.toLocaleString()} hits`}
+                    {" · "}
+                    {resp.flow_count} flows
                     {attributedPct !== null && <> · {attributedPct}% rule-attributed</>}
                   </>
                 ) : (
@@ -648,7 +694,7 @@ export default function TrafficFlowPage() {
                   : "Loading…"}
               </div>
             ) : (
-              <div ref={wrapRef} className="relative" onMouseLeave={() => setHover(null)}>
+              <div ref={attachWrap} className="relative" onMouseLeave={() => setHover(null)}>
                 <svg width={width} height={CHART_H} style={{ display: "block" }}>
                   {/* ribbons under nodes */}
                   {layout.links.map((l, i) => {
@@ -769,6 +815,7 @@ export default function TrafficFlowPage() {
                     <th>Out If</th>
                     <th>Destination</th>
                     <th>Service</th>
+                    <th style={{ textAlign: "right" }}>Hits</th>
                     <th style={{ textAlign: "right" }}>Bytes</th>
                   </tr>
                 </thead>
@@ -795,6 +842,7 @@ export default function TrafficFlowPage() {
                         <td className="mono text-[12px]">{r.out_if ?? "—"}</td>
                         <td className="mono text-[12px]">{r.dst_name ?? r.dst}</td>
                         <td className="mono text-[12px]">{r.proto ? (r.dport ? `${r.proto}/${r.dport}` : r.proto) : "—"}</td>
+                        <td className="mono text-[12px]" style={{ textAlign: "right" }}>{r.conns.toLocaleString()}</td>
                         <td className="mono text-[12px]" style={{ textAlign: "right" }}>{formatBytes(r.bytes)}</td>
                       </tr>
                     );
