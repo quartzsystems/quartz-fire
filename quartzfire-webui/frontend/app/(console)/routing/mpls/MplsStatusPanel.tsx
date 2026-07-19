@@ -161,7 +161,7 @@ export function MplsStatusPanel() {
             );
           })}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col items-end gap-2">
           {lastUpdated && <span className="text-[12px] text-[var(--qz-fg-4)]">Updated {lastUpdated.toLocaleTimeString()}</span>}
           <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load("poll")}>Refresh</Button>
         </div>

@@ -337,7 +337,7 @@ export function BgpStatusPanel() {
           <StatTile label="Router ID" value={dash(summary?.router_id)} sub={routerIdSub} subTone={routerIdTone} />
           <StatTile label="Sessions" value={`${totalEstablished}/${totalPeers}`} sub="established / total (all AFs)" />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col items-end gap-2">
           {lastUpdated && (
             <span className="text-[12px] text-[var(--qz-fg-4)]">
               Updated {lastUpdated.toLocaleTimeString()}

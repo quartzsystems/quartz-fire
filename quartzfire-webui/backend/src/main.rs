@@ -1,24 +1,57 @@
-mod appcontrol;
-mod auth;
+// Modules are grouped into folders by role (routing/, services/, monitoring/,
+// infra/) for readability. Each stays a top-level crate module via #[path], so
+// paths like `crate::vyos` and `bgp::summary` are unchanged by the layout.
+
+// Routing protocols — live FRR status via vtysh (config flows through proxy).
+#[path = "routing/bgp.rs"]
 mod bgp;
-mod config;
-mod config_sync;
-mod content_filtering;
-mod dashboard;
-mod error;
+#[path = "routing/frr.rs"]
 mod frr;
-mod geolocation;
-mod guard;
-mod image;
-mod ips;
+#[path = "routing/isis.rs"]
 mod isis;
-mod monitor;
-mod monitoring;
+#[path = "routing/mpls.rs"]
 mod mpls;
+#[path = "routing/ospf.rs"]
 mod ospf;
-mod phy;
-mod proxy;
+
+// Security / inspection services (config via VyOS proxy + status endpoints).
+#[path = "services/appcontrol.rs"]
+mod appcontrol;
+#[path = "services/content_filtering.rs"]
+mod content_filtering;
+#[path = "services/geolocation.rs"]
+mod geolocation;
+#[path = "services/ips.rs"]
+mod ips;
+#[path = "services/ssl_inspection.rs"]
 mod ssl_inspection;
+
+// Monitoring / telemetry read paths.
+#[path = "monitoring/dashboard.rs"]
+mod dashboard;
+#[path = "monitoring/monitor.rs"]
+mod monitor;
+#[path = "monitoring/monitoring.rs"]
+mod monitoring;
+#[path = "monitoring/phy.rs"]
+mod phy;
+
+// Core infrastructure: auth, config, VyOS proxy/guard, errors, image upload.
+#[path = "infra/auth.rs"]
+mod auth;
+#[path = "infra/config.rs"]
+mod config;
+#[path = "infra/config_sync.rs"]
+mod config_sync;
+#[path = "infra/error.rs"]
+mod error;
+#[path = "infra/guard.rs"]
+mod guard;
+#[path = "infra/image.rs"]
+mod image;
+#[path = "infra/proxy.rs"]
+mod proxy;
+#[path = "infra/vyos.rs"]
 mod vyos;
 
 use anyhow::Result;
