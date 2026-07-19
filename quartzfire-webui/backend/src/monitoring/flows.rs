@@ -242,6 +242,28 @@ struct TupleRow {
     bytes_reply: i64,
 }
 
+// The three queries against qfdevd's DB, as consts so the tests below can run
+// the VERBATIM strings against a qfdevd-shaped schema — the schema lives in
+// another crate, and nothing else would catch the two drifting apart.
+
+/// Top-N service tuples by bytes over the window. ?1 = since, ?2 = limit.
+const TOP_FLOWS_SQL: &str = "SELECT proto, src, dst, dport, SUM(bytes_orig), SUM(bytes_reply)
+     FROM flow_buckets WHERE bucket_ts >= ?1
+     GROUP BY proto, src, dst, dport
+     ORDER BY SUM(bytes_orig + bytes_reply) DESC
+     LIMIT ?2";
+
+/// Window totals over ALL tuples (inner: one row + byte sum per tuple). ?1 = since.
+const TOTALS_SQL: &str = "SELECT COALESCE(SUM(b), 0), COUNT(*) FROM
+       (SELECT SUM(bytes_orig + bytes_reply) AS b FROM flow_buckets
+        WHERE bucket_ts >= ?1 GROUP BY proto, src, dst, dport)";
+
+/// IP → display name over the whole (small) device table.
+const NAMES_SQL: &str = "SELECT current_ip, COALESCE(description, hostname)
+     FROM devices
+     WHERE current_ip IS NOT NULL
+       AND COALESCE(description, hostname) IS NOT NULL";
+
 pub async fn list(
     State(state): State<Arc<AppState>>,
     Query(q): Query<FlowsQuery>,
@@ -265,13 +287,7 @@ pub async fn list(
 
             // An older qfdevd without flow recording has no flow_buckets table;
             // report "not available" rather than erroring the page.
-            let mut stmt = match conn.prepare(
-                "SELECT proto, src, dst, dport, SUM(bytes_orig), SUM(bytes_reply)
-                 FROM flow_buckets WHERE bucket_ts >= ?1
-                 GROUP BY proto, src, dst, dport
-                 ORDER BY SUM(bytes_orig + bytes_reply) DESC
-                 LIMIT ?2",
-            ) {
+            let mut stmt = match conn.prepare(TOP_FLOWS_SQL) {
                 Ok(s) => s,
                 Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if msg.contains("no such table") => {
                     return Ok((Vec::new(), HashMap::new(), 0, 0, false));
@@ -291,24 +307,16 @@ pub async fn list(
                 })?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
 
-            let (total_bytes, flow_count): (i64, i64) = conn.query_row(
-                "SELECT COALESCE(SUM(bytes_orig + bytes_reply), 0), COUNT(*) FROM
-                   (SELECT 1 FROM flow_buckets WHERE bucket_ts >= ?1
-                    GROUP BY proto, src, dst, dport)",
-                rusqlite::params![since],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )?;
+            let (total_bytes, flow_count): (i64, i64) =
+                conn.query_row(TOTALS_SQL, rusqlite::params![since], |r| {
+                    Ok((r.get(0)?, r.get(1)?))
+                })?;
 
             // IP → display name for every known client, so Sankey nodes read
             // "Front desk printer" instead of 10.0.0.23. The device table is
             // small (hundreds), so loading the whole map beats a dynamic IN.
             let mut names: HashMap<String, String> = HashMap::new();
-            let mut nstmt = conn.prepare(
-                "SELECT current_ip, COALESCE(description, hostname)
-                 FROM devices
-                 WHERE current_ip IS NOT NULL
-                   AND COALESCE(description, hostname) IS NOT NULL",
-            )?;
+            let mut nstmt = conn.prepare(NAMES_SQL)?;
             for row in nstmt.query_map([], |r| {
                 Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
             })? {
@@ -442,6 +450,72 @@ mod tests {
         e.dst = None;
         attr.record(&e);
         assert!(attr.map.lock().unwrap().is_empty());
+    }
+
+    /// Run the handler's VERBATIM SQL against a DB shaped exactly like
+    /// qfdevd's (see qfdevd/src/db.rs init_schema). The schema lives in the
+    /// other crate, so nothing else pins this seam — the totals query once
+    /// shipped referencing a column its subquery didn't expose, which every
+    /// per-query unit test missed and every real box hit.
+    #[test]
+    fn handler_sql_runs_against_qfdevd_schema() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE devices (
+                mac TEXT PRIMARY KEY, description TEXT, first_seen INTEGER NOT NULL,
+                last_seen INTEGER NOT NULL, hostname TEXT, vendor TEXT, client_type TEXT,
+                os_guess TEXT, current_ip TEXT, current_ipv6 TEXT, interface TEXT, vlan TEXT,
+                dhcp_static INTEGER, lease_expiry INTEGER, neigh_state TEXT,
+                online INTEGER NOT NULL DEFAULT 0);
+             CREATE TABLE flow_buckets (
+                bucket_ts INTEGER NOT NULL, proto TEXT NOT NULL, src TEXT NOT NULL,
+                dst TEXT NOT NULL, dport INTEGER NOT NULL DEFAULT 0,
+                bytes_orig INTEGER NOT NULL DEFAULT 0, bytes_reply INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (bucket_ts, proto, src, dst, dport));",
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO devices (mac, first_seen, last_seen, hostname, current_ip)
+             VALUES ('aa', 1, 1, 'laptop', '10.0.0.5')",
+            [],
+        )
+        .unwrap();
+        // Two buckets of one tuple (must merge), one other tuple, one aged out.
+        for (ts, dport, o, r) in [(600, 443, 100, 900), (900, 443, 50, 100), (900, 53, 10, 20), (0, 443, 999, 999)] {
+            conn.execute(
+                "INSERT INTO flow_buckets VALUES (?1, 'tcp', '10.0.0.5', '1.1.1.1', ?2, ?3, ?4)",
+                rusqlite::params![ts, dport, o, r],
+            )
+            .unwrap();
+        }
+
+        let since = 300i64;
+        let mut stmt = conn.prepare(TOP_FLOWS_SQL).unwrap();
+        let rows: Vec<(String, String, String, i64, i64, i64)> = stmt
+            .query_map(rusqlite::params![since, 10i64], |r| {
+                Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+            })
+            .unwrap()
+            .collect::<std::result::Result<_, _>>()
+            .unwrap();
+        assert_eq!(rows.len(), 2, "two live tuples; the aged bucket is out of window");
+        // Biggest first: the 443 tuple's two buckets merged (150 orig / 1000 reply).
+        assert_eq!(rows[0].3, 443);
+        assert_eq!((rows[0].4, rows[0].5), (150, 1000));
+
+        let (total, count): (i64, i64) = conn
+            .query_row(TOTALS_SQL, rusqlite::params![since], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap();
+        assert_eq!(count, 2);
+        assert_eq!(total, 150 + 1000 + 10 + 20);
+
+        let mut nstmt = conn.prepare(NAMES_SQL).unwrap();
+        let names: Vec<(String, String)> = nstmt
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .unwrap()
+            .collect::<std::result::Result<_, _>>()
+            .unwrap();
+        assert_eq!(names, vec![("10.0.0.5".into(), "laptop".into())]);
     }
 
     #[test]
