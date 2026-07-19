@@ -11,9 +11,11 @@ mod geolocation;
 mod guard;
 mod image;
 mod ips;
+mod isis;
 mod monitor;
 mod monitoring;
 mod mpls;
+mod ospf;
 mod phy;
 mod proxy;
 mod ssl_inspection;
@@ -115,6 +117,11 @@ async fn main() -> Result<()> {
         .route("/api/mpls/status", get(mpls::status))
         .route("/api/mpls/bindings", get(mpls::bindings))
         .route("/api/mpls/table", get(mpls::table))
+        // Live OSPFv2 / IS-IS status (Routing → OSPF|IS-IS → Status). Read-only
+        // FRR queries via vtysh; config flows through the /api proxy. See
+        // ospf.rs / isis.rs.
+        .route("/api/ospf/summary", get(ospf::summary))
+        .route("/api/isis/summary", get(isis::summary))
         .route("/api/ips/status", get(ips::status))
         .route("/api/ips/settings", put(ips::put_settings))
         .route("/api/ips/update", post(ips::request_update))

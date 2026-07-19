@@ -30,6 +30,8 @@ const ACTIONS: PaletteAction[] = [
   { id: "nav-fw-monitor",  section: "Go to", label: "Firewall › Traffic Monitor", kbd: "", href: "/firewall/monitor" },
   { id: "nav-routing",    section: "Go to", label: "Routing",    kbd: "G R", href: "/routing" },
   { id: "nav-rt-static",   section: "Go to", label: "Routing › Static", kbd: "", href: "/routing/static" },
+  { id: "nav-rt-ospf",     section: "Go to", label: "Routing › OSPF",   kbd: "", href: "/routing/ospf" },
+  { id: "nav-rt-isis",     section: "Go to", label: "Routing › IS-IS",  kbd: "", href: "/routing/isis" },
   { id: "nav-rt-bgp",      section: "Go to", label: "Routing › BGP",    kbd: "", href: "/routing/bgp" },
   { id: "nav-rt-mpls",     section: "Go to", label: "Routing › MPLS",   kbd: "", href: "/routing/mpls" },
   { id: "nav-rt-policy",   section: "Go to", label: "Routing › Policy", kbd: "", href: "/routing/policy" },

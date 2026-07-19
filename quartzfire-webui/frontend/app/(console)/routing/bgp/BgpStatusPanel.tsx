@@ -5,7 +5,7 @@ import { AlertTriangle, RotateCw, Info } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
-import { AddressFamily } from "@/lib/bgp";
+import { AddressFamily, fetchBgp } from "@/lib/bgp";
 import {
   AfSummary,
   BgpSummary,
@@ -39,7 +39,7 @@ function stateBadge(state: string) {
 
 // ── summary tiles ─────────────────────────────────────────────────────────────
 
-function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatTile({ label, value, sub, subTone = "muted" }: { label: string; value: string; sub?: string; subTone?: "muted" | "warn" }) {
   return (
     <div
       className="rounded-lg p-4 flex flex-col gap-1"
@@ -49,7 +49,7 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
       <span className="text-[20px] font-semibold text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
         {value}
       </span>
-      {sub && <span className="text-[11px] text-[var(--qz-fg-4)]">{sub}</span>}
+      {sub && <span className="text-[11px]" style={{ color: subTone === "warn" ? "var(--qz-warn)" : "var(--qz-fg-4)" }}>{sub}</span>}
     </div>
   );
 }
@@ -243,6 +243,11 @@ export function BgpStatusPanel() {
   const [errorMsg, setErrorMsg] = useState("");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [inspect, setInspect] = useState<string | null>(null);
+  // Configured `protocols bgp parameters router-id` (null = not configured,
+  // undefined = not loaded / read failed). Read once so we can explain the
+  // operational Router ID below — FRR auto-derives it from interfaces when none
+  // is configured, which is why it can surface as an unexpected address.
+  const [cfgRouterId, setCfgRouterId] = useState<string | null | undefined>(undefined);
   const refreshing = useRef(false);
 
   const load = useCallback(async (mode: "load" | "poll" = "load") => {
@@ -264,6 +269,14 @@ export function BgpStatusPanel() {
     } finally {
       refreshing.current = false;
     }
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    fetchBgp()
+      .then((c) => { if (alive) setCfgRouterId(c.global.router_id); })
+      .catch(() => { /* leave undefined → neutral hint, never block the tab */ });
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => {
@@ -296,12 +309,32 @@ export function BgpStatusPanel() {
   const totalPeers = summary?.address_families.reduce((n, af) => n + af.total_peers, 0) ?? 0;
   const hasPeers = (summary?.address_families.length ?? 0) > 0;
 
+  // Explain the operational Router ID against what's configured. FRR auto-picks
+  // the highest interface address when no router-id is set; a configured value
+  // that differs from the live one means FRR hasn't applied it yet (`clear ip
+  // bgp *`).
+  const opRouterId = summary?.router_id ?? null;
+  let routerIdSub: string | undefined;
+  let routerIdTone: "muted" | "warn" = "muted";
+  if (opRouterId) {
+    if (cfgRouterId === undefined) {
+      routerIdSub = "operational value";
+    } else if (!cfgRouterId) {
+      routerIdSub = "auto-derived — none configured";
+    } else if (cfgRouterId !== opRouterId) {
+      routerIdSub = `configured ${cfgRouterId} — clear session to apply`;
+      routerIdTone = "warn";
+    } else {
+      routerIdSub = "configured";
+    }
+  }
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 flex-1 min-w-[280px]">
           <StatTile label="Local AS" value={dash(summary?.local_as)} />
-          <StatTile label="Router ID" value={dash(summary?.router_id)} />
+          <StatTile label="Router ID" value={dash(summary?.router_id)} sub={routerIdSub} subTone={routerIdTone} />
           <StatTile label="Sessions" value={`${totalEstablished}/${totalPeers}`} sub="established / total (all AFs)" />
         </div>
         <div className="flex items-center gap-3">

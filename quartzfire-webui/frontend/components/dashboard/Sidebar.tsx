@@ -66,6 +66,8 @@ const ITEMS: NavItem[] = [
     href: "/routing",
     children: [
       { id: "static", label: "Static", href: "/routing/static", icon: Milestone },
+      { id: "ospf",   label: "OSPF",   href: "/routing/ospf",   icon: Waypoints },
+      { id: "isis",   label: "IS-IS",  href: "/routing/isis",   icon: Spline },
       { id: "bgp",    label: "BGP",    href: "/routing/bgp",    icon: Share2 },
       { id: "mpls",   label: "MPLS",   href: "/routing/mpls",   icon: Waypoints },
       { id: "policy", label: "Policy", href: "/routing/policy", icon: Filter },
