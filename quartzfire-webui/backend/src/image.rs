@@ -31,8 +31,11 @@ fn upload_path(state: &AppState) -> std::path::PathBuf {
 /// against `path`.
 pub async fn upload(State(state): State<Arc<AppState>>, body: Body) -> Result<Json<serde_json::Value>> {
     let path = upload_path(&state);
-    let _ = std::fs::create_dir_all(&state.config.guard_dir);
-
+    // The staging dir is provisioned root:quartzfire mode 2775 by the service's
+    // ExecStartPre= (running as root before this sandboxed process starts), so
+    // we don't create it here — doing so as the backend user would stamp it
+    // with the wrong ownership and make later writes fail. A create error below
+    // therefore means a genuine provisioning problem, not a first-run race.
     let mut file = tokio::fs::File::create(&path).await.map_err(|e| {
         AppError::Internal(anyhow::anyhow!("creating {}: {e}", path.display()))
     })?;

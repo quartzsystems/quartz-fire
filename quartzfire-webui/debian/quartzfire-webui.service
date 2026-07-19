@@ -1,8 +1,9 @@
 [Unit]
 Description=QuartzFire WebUI backend
-# quartzfire-ips.service must run first: its boot run creates
-# /config/quartzfire, and with ProtectSystem=strict the ReadWritePaths= bind
-# below is only set up if the directory already exists when we start.
+# quartzfire-ips.service is ordered first because its boot run also uses
+# /config/quartzfire; the ExecStartPre= below no longer depends on it, though —
+# it creates the staging dir with the right ownership itself so the
+# ReadWritePaths= bind is always set up regardless of start order.
 After=network-online.target quartzfire-register-api-key.service quartzfire-ips.service
 Wants=network-online.target quartzfire-register-api-key.service quartzfire-ips.service
 
@@ -12,6 +13,15 @@ ExecStart=/usr/bin/quartzfire-webui
 Environment=QUARTZFIRE_WEBUI_CONFIG=/etc/quartzfire/webui.toml
 Restart=on-failure
 RestartSec=2
+# Guarantee the shared staging/desired-state dir exists with deterministic
+# ownership *before* the sandboxed main process starts. The `+` prefix runs
+# this as root and OUTSIDE the mount namespace, so it reaches the real
+# late-mounted /config (not the read-only view ProtectSystem=strict gives the
+# main process) and it runs before that process's ReadWritePaths= bind is set
+# up — so the bind is always active and the backend (member of the quartzfire
+# group) can always write here. `test -d /config` skips dev boxes with no
+# /config. mode 2775 (setgid) keeps files group-owned by quartzfire.
+ExecStartPre=+/bin/sh -c 'test -d /config || exit 0; mkdir -p /config/quartzfire && chown root:quartzfire /config/quartzfire && chmod 2775 /config/quartzfire'
 # Hardening — the backend only needs to read its config/key, talk localhost,
 # follow the kernel journal (systemd-journal) for the Traffic Monitor, and reach
 # the FRR VTY sockets for read-only BGP/MPLS status via vtysh.
@@ -36,9 +46,10 @@ ProtectSystem=strict
 ProtectHome=yes
 PrivateTmp=yes
 ReadOnlyPaths=/etc/quartzfire
-# IPS desired state (/config persists across image upgrades). Written here,
-# applied by the root quartzfire-ips units. `-` tolerates absence on dev
-# boxes without /config; the ips-apply boot run creates it group-writable.
+# Shared staging/desired-state dir (/config persists across image upgrades):
+# IPS desired state, plus the browser-uploaded system image. The ExecStartPre=
+# above creates it group-writable before this bind is set up; `-` still
+# tolerates absence on dev boxes without /config.
 ReadWritePaths=-/config/quartzfire
 # Writable persistent dir (/var/lib/quartzfire-webui) for the session-signing
 # secret, generated on first start so logins survive restarts.
