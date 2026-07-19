@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Bookmark,
   ChevronLeft,
   ChevronRight,
   GripVertical,
@@ -19,6 +20,7 @@ import {
   Play,
   Plus,
   RotateCw,
+  Trash2,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -77,8 +79,65 @@ const FACET_BY_ID = new Map(FACETS.map((f) => [f.id, f]));
 /** The user's original ask: interfaces on the left, rules in the middle,
  * destinations on the right. Everything else is one click away. */
 const DEFAULT_ORDER: FacetId[] = ["in_if", "rule", "dst"];
-/** localStorage key for the saved facet-column view. */
-const FACET_ORDER_KEY = "qz-sankey:traffic-flow";
+type VerdictFilter = "all" | "allow" | "block";
+
+/** Everything a view captures: facet columns + metric + window + verdict. */
+interface SankeyView {
+  order: FacetId[];
+  metric: FlowMetric;
+  window: FlowWindow;
+  verdict: VerdictFilter;
+}
+
+/** localStorage keys: the last-used view (auto-restored on mount) and the
+ * user's named views. */
+const LAST_VIEW_KEY = "qz-sankey:traffic-flow";
+const VIEWS_KEY = "qz-sankey-views:traffic-flow";
+
+/** Coerce untrusted storage into a valid view (null when unusable). */
+function sanitizeView(v: unknown): SankeyView | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  const order = Array.isArray(o.order)
+    ? (o.order as FacetId[]).filter((id) => FACET_BY_ID.has(id))
+    : [];
+  if (order.length < 2) return null;
+  return {
+    order,
+    metric: o.metric === "hits" ? "hits" : "bytes",
+    window: o.window === "15m" || o.window === "1h" ? o.window : "5m",
+    verdict: o.verdict === "allow" || o.verdict === "block" ? o.verdict : "all",
+  };
+}
+
+function loadLastView(): SankeyView | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LAST_VIEW_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    // An early build stored just the facet-order array.
+    return sanitizeView(Array.isArray(parsed) ? { order: parsed } : parsed);
+  } catch {
+    return null;
+  }
+}
+
+function loadViews(): Record<string, SankeyView> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(VIEWS_KEY);
+    if (!raw) return {};
+    const out: Record<string, SankeyView> = {};
+    for (const [name, v] of Object.entries(JSON.parse(raw) as Record<string, unknown>)) {
+      const s = sanitizeView(v);
+      if (s) out[name] = s;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
 
 /** Columns of the "top flows" table under the Sankey. */
 const TOP_FLOW_COLS: { key: string; header: string; right?: boolean }[] = [
@@ -98,7 +157,9 @@ const CHART_H = 520;
 const NODE_W = 10;
 const NODE_GAP = 8;
 const PAD_TOP = 6;
-const PAD_BOTTOM = 6;
+/** Reserves a clear strip under the ribbons for the column-name labels —
+ * without it they render on top of the edge ribbons and become unreadable. */
+const PAD_BOTTOM = 28;
 const PAD_X = 4;
 
 interface SNode {
@@ -262,11 +323,14 @@ type Hover =
   | null;
 
 export default function TrafficFlowPage() {
+  // The last-used view auto-restores; named views are applied on demand.
+  const [initView] = useState(loadLastView);
+
   // ── data ──
   const [resp, setResp] = useState<FlowsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [window_, setWindow] = useState<FlowWindow>("5m");
-  const [metric, setMetric] = useState<FlowMetric>("bytes");
+  const [window_, setWindow] = useState<FlowWindow>(initView?.window ?? "5m");
+  const [metric, setMetric] = useState<FlowMetric>(initView?.metric ?? "bytes");
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
 
@@ -325,28 +389,62 @@ export default function TrafficFlowPage() {
   const resize = useColumnResize("traffic-flow-top", TOP_FLOW_COLS);
 
   // ── facet order + filters ──
-  // The chosen columns (and their order) persist across visits.
-  const [order, setOrder] = useState<FacetId[]>(() => {
-    if (typeof window === "undefined") return DEFAULT_ORDER;
-    try {
-      const raw = window.localStorage.getItem(FACET_ORDER_KEY);
-      if (!raw) return DEFAULT_ORDER;
-      const parsed = (JSON.parse(raw) as FacetId[]).filter((id) => FACET_BY_ID.has(id));
-      return parsed.length >= 2 ? parsed : DEFAULT_ORDER;
-    } catch {
-      return DEFAULT_ORDER;
-    }
-  });
+  const [order, setOrder] = useState<FacetId[]>(initView?.order ?? DEFAULT_ORDER);
+  /** facet → selected node keys; a flow must match every filtered facet. */
+  const [filters, setFilters] = useState<Map<FacetId, Set<string>>>(new Map());
+  const [verdictFilter, setVerdictFilter] = useState<VerdictFilter>(initView?.verdict ?? "all");
+
+  // Whatever is selected right now IS the last-used view; keep it saved.
   useEffect(() => {
     try {
-      window.localStorage.setItem(FACET_ORDER_KEY, JSON.stringify(order));
+      window.localStorage.setItem(
+        LAST_VIEW_KEY,
+        JSON.stringify({ order, metric, window: window_, verdict: verdictFilter } satisfies SankeyView),
+      );
     } catch {
       /* ignore quota / serialization errors */
     }
-  }, [order]);
-  /** facet → selected node keys; a flow must match every filtered facet. */
-  const [filters, setFilters] = useState<Map<FacetId, Set<string>>>(new Map());
-  const [verdictFilter, setVerdictFilter] = useState<"all" | "allow" | "block">("all");
+  }, [order, metric, window_, verdictFilter]);
+
+  // ── named views ──
+  const [views, setViews] = useState<Record<string, SankeyView>>(loadViews);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEWS_KEY, JSON.stringify(views));
+    } catch {
+      /* ignore quota / serialization errors */
+    }
+  }, [views]);
+
+  const [viewsOpen, setViewsOpen] = useState(false);
+  const [viewName, setViewName] = useState("");
+  const viewsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!viewsOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (viewsRef.current && !viewsRef.current.contains(e.target as Node)) setViewsOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    return () => window.removeEventListener("mousedown", onDown);
+  }, [viewsOpen]);
+
+  const applyView = (v: SankeyView) => {
+    setOrder(v.order);
+    setMetric(v.metric);
+    setWindow(v.window);
+    setVerdictFilter(v.verdict);
+  };
+
+  const saveView = () => {
+    const name = viewName.trim();
+    if (!name) return;
+    setViews((prev) => ({
+      ...prev,
+      [name]: { order, metric, window: window_, verdict: verdictFilter },
+    }));
+    setViewName("");
+    setViewsOpen(false);
+  };
 
   const move = (id: FacetId, dir: -1 | 1) =>
     setOrder((o) => {
@@ -578,6 +676,79 @@ export default function TrafficFlowPage() {
               onChange={(v) => setVerdictFilter(v as typeof verdictFilter)}
             />
             <div className="ml-auto flex items-center gap-3">
+              {/* Named views: save the current columns/metric/window/verdict, recall by name */}
+              <div className="relative" ref={viewsRef}>
+                <Button kind="secondary" size="sm" icon={Bookmark} onClick={() => setViewsOpen((o) => !o)}>
+                  Views
+                </Button>
+                {viewsOpen && (
+                  <div
+                    className="absolute right-0 mt-1 z-20 rounded-md py-1 min-w-[240px]"
+                    style={{
+                      background: "var(--qz-surface)",
+                      border: "1px solid var(--qz-border)",
+                      boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+                    }}
+                  >
+                    <div className="px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--qz-fg-4)]">
+                      Saved views
+                    </div>
+                    {Object.keys(views).length === 0 && (
+                      <div className="px-3 py-[6px] text-[12.5px] text-[var(--qz-fg-4)]">
+                        No saved views yet.
+                      </div>
+                    )}
+                    {Object.entries(views).map(([name, v]) => (
+                      <div key={name} className="flex items-center w-full">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            applyView(v);
+                            setViewsOpen(false);
+                          }}
+                          className="flex-1 min-w-0 px-3 py-[6px] text-[13px] text-left bg-transparent border-0 text-[var(--qz-fg-2)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer truncate"
+                          title={`${v.order.map((id) => FACET_BY_ID.get(id)?.label ?? id).join(" → ")}`}
+                        >
+                          {name}
+                          <span className="ml-2 text-[11px] text-[var(--qz-fg-4)]">
+                            {v.window} · {v.metric === "bytes" ? "Bytes" : "Hits"}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setViews((prev) => {
+                              const next = { ...prev };
+                              delete next[name];
+                              return next;
+                            })
+                          }
+                          className="p-1 mr-2 rounded bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer flex-shrink-0"
+                          title="Delete view"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                    <div className="my-1 mx-3 border-t" style={{ borderColor: "var(--qz-divider)" }} />
+                    <div className="flex items-center gap-2 px-3 py-[6px]">
+                      <input
+                        value={viewName}
+                        onChange={(e) => setViewName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveView();
+                        }}
+                        placeholder="Save current as…"
+                        className="flex-1 min-w-0 rounded-md px-2 py-[5px] text-[12.5px] text-[var(--qz-fg-1)] outline-none"
+                        style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+                      />
+                      <Button kind="primary" size="sm" onClick={saveView} disabled={!viewName.trim()}>
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load(window_, metric)}>
                 Refresh
               </Button>
@@ -799,12 +970,12 @@ export default function TrafficFlowPage() {
                       );
                     }),
                   )}
-                  {/* column headers */}
+                  {/* column headers, in the strip PAD_BOTTOM reserves below the ribbons */}
                   {order.map((id, c) => (
                     <text
                       key={id}
                       x={c === order.length - 1 ? colX(c) + NODE_W : colX(c)}
-                      y={CHART_H - 2}
+                      y={CHART_H - 8}
                       textAnchor={c === order.length - 1 ? "end" : "start"}
                       fontSize={11}
                       fontWeight={600}
