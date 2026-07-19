@@ -453,9 +453,10 @@ function RestoreConfigModal({
         </p>
         <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
           The restore applies under commit-confirm: unless you confirm it in the banner within 2 minutes,
-          the current configuration is restored automatically. A backup taken on a different device must
-          include this WebUI&apos;s API access settings (<span className="mono">service https</span>),
-          or the UI will lose control of the firewall until the auto-revert kicks in.
+          the current configuration is restored automatically. Plain VyOS config.boot files (migrating
+          from a stock VyOS box) work too — this WebUI&apos;s own access settings
+          (<span className="mono">service https</span>) are preserved from the running configuration,
+          so a restore can never lock the UI out.
         </p>
         {error && (
           <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>

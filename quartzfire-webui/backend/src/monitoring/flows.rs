@@ -23,7 +23,7 @@
 //!     the post-DNAT one, so the keys differ. A future refinement could key on
 //!     the reply tuple as well.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -47,6 +47,13 @@ type AttrKey = (String, String, String, u16);
 /// dropped. 100k tuples ≈ a few tens of MB worst case — a bound, not a budget.
 const ATTR_CAP: usize = 100_000;
 
+/// Same bound for the journal-side blocked-flow buckets.
+const BLOCKED_CAP: usize = 100_000;
+
+/// Blocked-flow buckets older than this are dropped (longest window is 1h;
+/// the slack covers the aligned window start).
+const BLOCKED_RETENTION_SECS: i64 = 3_900;
+
 
 /// What one logged packet taught us about its flow's rule.
 #[derive(Debug, Clone)]
@@ -67,6 +74,13 @@ pub struct Attr {
 #[derive(Default)]
 pub struct Attribution {
     map: Mutex<HashMap<AttrKey, Attr>>,
+    /// Journal-side byte/packet sums for BLOCKED tuples, in the same 5-minute
+    /// buckets as qfdevd's flow_buckets. A dropped packet dies before its
+    /// conntrack entry is ever confirmed, so blocked flows have NO flow_buckets
+    /// rows — these sums are the only way they can appear in the Sankey.
+    /// Value is (bytes = Σ logged LEN, hits = logged packets; every blocked
+    /// packet re-walks the chain, so lines ≈ attempts).
+    blocked: Mutex<HashMap<(i64, AttrKey), (i64, i64)>>,
     started: OnceLock<()>,
 }
 
@@ -141,6 +155,18 @@ impl Attribution {
             out_if: e.out_if.clone(),
             ts: e.ts,
         };
+        if e.action == "drop" || e.action == "reject" {
+            let secs = (e.ts / 1000) as i64;
+            let bucket = secs - secs.rem_euclid(FLOW_BUCKET_SECS);
+            let mut blocked = self.blocked.lock().unwrap();
+            if blocked.len() >= BLOCKED_CAP && !blocked.contains_key(&(bucket, key.clone())) {
+                prune_blocked_oldest_half(&mut blocked);
+            }
+            let sums = blocked.entry((bucket, key.clone())).or_insert((0, 0));
+            sums.0 += e.len.unwrap_or(0) as i64;
+            sums.1 += 1;
+        }
+
         let mut map = self.map.lock().unwrap();
         if map.len() >= ATTR_CAP && !map.contains_key(&key) {
             prune_oldest_half(&mut map);
@@ -152,6 +178,23 @@ impl Attribution {
     fn lookup(&self, proto: &str, src: &str, dst: &str, dport: u16) -> Option<Attr> {
         let key: AttrKey = (proto.to_string(), src.to_string(), dst.to_string(), dport);
         self.map.lock().unwrap().get(&key).cloned()
+    }
+
+    /// Per-tuple (bytes, hits) sums over blocked buckets within the window,
+    /// pruning past-retention buckets while holding the lock anyway.
+    fn blocked_in_window(&self, since: i64, now: i64) -> HashMap<AttrKey, (i64, i64)> {
+        let mut blocked = self.blocked.lock().unwrap();
+        let cutoff = now - BLOCKED_RETENTION_SECS;
+        blocked.retain(|(b, _), _| *b >= cutoff);
+        let mut out: HashMap<AttrKey, (i64, i64)> = HashMap::new();
+        for ((bucket, key), (bytes, hits)) in blocked.iter() {
+            if *bucket >= since {
+                let sums = out.entry(key.clone()).or_insert((0, 0));
+                sums.0 += bytes;
+                sums.1 += hits;
+            }
+        }
+        out
     }
 
     /// Re-point cached entries after a rule renumber (WebUI drag-reorder).
@@ -209,6 +252,14 @@ fn prune_oldest_half(map: &mut HashMap<AttrKey, Attr>) {
     stamps.sort_unstable();
     let cutoff = stamps[stamps.len() / 2];
     map.retain(|_, a| a.ts >= cutoff);
+}
+
+/// Same, for the blocked buckets (keyed by bucket timestamp).
+fn prune_blocked_oldest_half(map: &mut HashMap<(i64, AttrKey), (i64, i64)>) {
+    let mut stamps: Vec<i64> = map.keys().map(|(b, _)| *b).collect();
+    stamps.sort_unstable();
+    let cutoff = stamps[stamps.len() / 2];
+    map.retain(|(b, _), _| *b >= cutoff);
 }
 
 // ── GET /api/monitoring/flows ───────────────────────────────────────────────
@@ -366,10 +417,11 @@ pub async fn list(
     // Whitelist the ranking metric — anything unrecognized falls back to bytes.
     let by_hits = q.metric.as_deref() == Some("hits");
 
+    let now = now_secs();
+    let since = window_since(now, win_secs);
+
     let (rows, names, total_bytes, total_conns, flow_count, available) =
         tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
-            let now = now_secs();
-            let since = window_since(now, win_secs);
             let Some(conn) = open_db(&db_path)? else {
                 return Ok((Vec::new(), HashMap::new(), 0, 0, 0, false));
             };
@@ -424,10 +476,16 @@ pub async fn list(
         .map_err(|e| AppError::Internal(e.into()))?
         .map_err(AppError::Internal)?;
 
-    let truncated = flow_count > rows.len() as i64;
+    let mut total_bytes = total_bytes;
+    let mut total_conns = total_conns;
+    let mut flow_count = flow_count;
     let mut attributed_bytes = 0i64;
     let mut attributed_conns = 0i64;
-    let flows: Vec<FlowRecord> = rows
+    let seen: HashSet<AttrKey> = rows
+        .iter()
+        .map(|t| (t.proto.clone(), t.src.clone(), t.dst.clone(), t.dport))
+        .collect();
+    let mut flows: Vec<FlowRecord> = rows
         .into_iter()
         .map(|t| {
             let attr = state.flow_attr.lookup(&t.proto, &t.src, &t.dst, t.dport);
@@ -460,6 +518,51 @@ pub async fn list(
             }
         })
         .collect();
+
+    // Blocked flows never confirm a conntrack entry (the packet is dropped
+    // before the confirm hook), so flow_buckets can't have rows for them —
+    // synthesize records from the journal-side sums for tuples conntrack never
+    // saw. Weights are attempts: bytes = Σ logged packet LEN, hits = logged
+    // packets. Tuples whose LATEST verdict is accept are skipped (their
+    // blocked sums predate a rule change; conntrack owns them now).
+    for (key, (bytes, hits)) in state.flow_attr.blocked_in_window(since, now) {
+        if seen.contains(&key) {
+            continue;
+        }
+        let (proto, src, dst, dport) = key;
+        let Some(a) = state.flow_attr.lookup(&proto, &src, &dst, dport) else { continue };
+        if a.action == "accept" {
+            continue;
+        }
+        attributed_bytes += bytes;
+        attributed_conns += hits;
+        total_bytes += bytes;
+        total_conns += hits;
+        flow_count += 1;
+        flows.push(FlowRecord {
+            src_name: names.get(&src).cloned(),
+            dst_name: names.get(&dst).cloned(),
+            src,
+            dst,
+            proto,
+            dport,
+            bytes_orig: bytes,
+            bytes_reply: 0,
+            bytes,
+            conns: hits,
+            chain: Some(a.chain),
+            rule: a.rule,
+            action: Some(a.action),
+            ips: a.ips,
+            in_if: a.in_if,
+            out_if: a.out_if,
+        });
+    }
+
+    // Re-rank the merged set by the chosen metric and re-apply the cap.
+    flows.sort_by_key(|f| std::cmp::Reverse(if by_hits { f.conns } else { f.bytes }));
+    flows.truncate(limit as usize);
+    let truncated = flow_count > flows.len() as i64;
 
     Ok(Json(FlowsResponse {
         flows,
@@ -521,6 +624,48 @@ mod tests {
         assert_eq!(window_since(1499, 300), 900);
         // Larger windows align the same way.
         assert_eq!(window_since(1201, 900), 300);
+    }
+
+    #[test]
+    fn blocked_flows_accumulate_from_the_journal_side() {
+        // Two dropped QUIC packets of one tuple (ts in ms → bucket 900) must
+        // sum bytes+hits; an accepted flow must NOT land in the blocked sums —
+        // conntrack owns accepted flows.
+        let attr = Attribution::default();
+        let mut d = entry("udp", "172.16.20.102", "185.199.108.215", Some(443), Some(40), 1_000_000);
+        d.action = "drop".into();
+        d.len = Some(60);
+        attr.record(&d);
+        attr.record(&d);
+        let mut a = entry("tcp", "10.0.0.5", "1.1.1.1", Some(443), Some(10), 1_000_000);
+        a.len = Some(100);
+        attr.record(&a);
+
+        let sums = attr.blocked_in_window(0, 1_000);
+        assert_eq!(sums.len(), 1);
+        let key = ("udp".into(), "172.16.20.102".into(), "185.199.108.215".into(), 443u16);
+        assert_eq!(sums[&key], (120, 2));
+    }
+
+    #[test]
+    fn blocked_window_filters_by_bucket_and_prunes_retention() {
+        let attr = Attribution::default();
+        let mut old = entry("udp", "a", "b", Some(53), Some(1), 300_000); // bucket 300
+        old.action = "drop".into();
+        old.len = Some(10);
+        attr.record(&old);
+        let mut fresh = entry("udp", "a", "c", Some(53), Some(1), 4_000_000); // bucket 3900
+        fresh.action = "reject".into();
+        fresh.len = Some(20);
+        attr.record(&fresh);
+
+        // Window starting at 3600 sees only the fresh tuple.
+        let sums = attr.blocked_in_window(3_600, 4_000);
+        assert_eq!(sums.len(), 1);
+        assert!(sums.contains_key(&("udp".into(), "a".into(), "c".into(), 53u16)));
+
+        // A later call far past retention drops even that bucket.
+        assert!(attr.blocked_in_window(0, 3_900 + 4_000).is_empty());
     }
 
     #[test]

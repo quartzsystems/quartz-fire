@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, FileDiff, History, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
@@ -11,9 +11,34 @@ import {
   fetchCommitHistory,
   fetchSystemLog,
   rollbackToRevision,
+  summarizeCommitDiff,
   SystemLogEntry,
 } from "@/lib/audit";
 import { useDashboard } from "@/lib/DashboardContext";
+
+// ── per-commit change summaries ───────────────────────────────────────────────
+// Summaries are derived from each revision's diff, fetched lazily. Cached by
+// date+user (stable identity — revision NUMBERS shift with every new commit)
+// and persisted, so a normal visit only fetches the commits it hasn't seen.
+
+const SUMMARY_CACHE_KEY = "qz-audit-summaries";
+const SUMMARY_CACHE_MAX = 400;
+/** Only this many of the newest commits get summaries fetched. */
+const SUMMARY_FETCH_MAX = 50;
+/** Diff fetches in flight at once. */
+const SUMMARY_BATCH = 4;
+
+const summaryKey = (r: CommitEntry) => `${r.date}|${r.user}`;
+
+function loadSummaryCache(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(SUMMARY_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
 
 type Tab = "config" | "system";
 
@@ -35,18 +60,30 @@ function formatCommitStyle(ms: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-const commitColumns: Column<CommitEntry>[] = [
-  { key: "revision", header: "Revision", value: (r) => r.revision, mono: true, sortable: true, width: 90 },
-  { key: "date", header: "Date", value: (r) => r.date, mono: true, sortable: true, width: 180 },
-  { key: "user", header: "User", value: (r) => r.user, mono: true, sortable: true, width: 120 },
-  { key: "via", header: "Via", value: (r) => r.via, mono: true, sortable: true, width: 100 },
-  {
-    key: "comment",
-    header: "Comment",
-    value: (r) => r.comment ?? "",
-    render: (r) => (r.comment ? r.comment : <span className="text-[var(--qz-fg-4)]">—</span>),
-  },
-];
+function commitColumns(summaries: Record<string, string>): Column<CommitEntry>[] {
+  return [
+    { key: "revision", header: "Revision", value: (r) => r.revision, mono: true, sortable: true, width: 90 },
+    { key: "date", header: "Date", value: (r) => r.date, mono: true, sortable: true, width: 180 },
+    { key: "user", header: "User", value: (r) => r.user, mono: true, sortable: true, width: 120 },
+    { key: "via", header: "Via", value: (r) => r.via, mono: true, sortable: true, width: 100 },
+    {
+      key: "changes",
+      header: "Changes",
+      value: (r) => summaries[summaryKey(r)] ?? "",
+      render: (r) => {
+        const s = summaries[summaryKey(r)];
+        if (s === undefined) return <span className="text-[var(--qz-fg-4)]">…</span>;
+        return s ? s : <span className="text-[var(--qz-fg-4)]">—</span>;
+      },
+    },
+    {
+      key: "comment",
+      header: "Comment",
+      value: (r) => r.comment ?? "",
+      render: (r) => (r.comment ? r.comment : <span className="text-[var(--qz-fg-4)]">—</span>),
+    },
+  ];
+}
 
 const logColumns: Column<SystemLogEntry>[] = [
   {
@@ -220,6 +257,51 @@ export default function AuditLogPage() {
   const [diffRevision, setDiffRevision] = useState<number | null>(null);
   const [rollbackTarget, setRollbackTarget] = useState<CommitEntry | null>(null);
 
+  // ── change summaries (lazy, cached) ──
+  const [summaries, setSummaries] = useState<Record<string, string>>(loadSummaryCache);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      let toStore = summaries;
+      const keys = Object.keys(toStore);
+      if (keys.length > SUMMARY_CACHE_MAX) {
+        toStore = Object.fromEntries(keys.slice(-SUMMARY_CACHE_MAX).map((k) => [k, toStore[k]]));
+      }
+      window.localStorage.setItem(SUMMARY_CACHE_KEY, JSON.stringify(toStore));
+    } catch {
+      /* ignore quota / serialization errors */
+    }
+  }, [summaries]);
+
+  // Fetch one small batch of missing summaries per pass; each state update
+  // re-runs the effect for the next batch until nothing is missing. Failures
+  // cache as "" (rendered "—") so a bad revision can't retry-loop.
+  useEffect(() => {
+    const missing = commits
+      .slice(0, SUMMARY_FETCH_MAX)
+      .filter((c) => summaries[summaryKey(c)] === undefined)
+      .slice(0, SUMMARY_BATCH);
+    if (missing.length === 0) return;
+    let live = true;
+    Promise.allSettled(
+      missing.map(async (c) => [summaryKey(c), summarizeCommitDiff(await fetchCommitDiff(c.revision))] as const),
+    ).then((results) => {
+      if (!live) return;
+      setSummaries((prev) => {
+        const next = { ...prev };
+        results.forEach((res, i) => {
+          next[summaryKey(missing[i])] = res.status === "fulfilled" ? res.value[1] : "";
+        });
+        return next;
+      });
+    });
+    return () => {
+      live = false;
+    };
+  }, [commits, summaries]);
+
+  const commitCols = useMemo(() => commitColumns(summaries), [summaries]);
+
   const load = useCallback(async (mode: "load" | "refresh" = "load") => {
     if (mode === "load") setStatus("loading");
     try {
@@ -301,7 +383,7 @@ export default function AuditLogPage() {
             {tab === "config" ? (
               <DataTable
                 rows={commits}
-                columns={commitColumns}
+                columns={commitCols}
                 rowId={(r) => String(r.revision)}
                 storageKey="system-audit-commits"
                 searchPlaceholder="Search commits…"

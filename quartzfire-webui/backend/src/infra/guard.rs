@@ -745,27 +745,154 @@ fn validate_config_text(content: &str) -> std::result::Result<(), String> {
     Ok(())
 }
 
+// ── stock-config import: keep the WebUI reachable across a restore ────────────
+
+/// Inclusive line span of the block at `path` (e.g. ["service", "https"]),
+/// where a block opens with `<name> {` and closes with the matching `}`.
+/// Brace counting is per-line and naive about braces inside quoted values —
+/// same tolerance as validate_config_text, fine for real config.boot files.
+fn block_span(lines: &[&str], path: &[&str]) -> Option<(usize, usize)> {
+    fn find(lines: &[&str], start: usize, end: usize, path: &[&str]) -> Option<(usize, usize)> {
+        let header = format!("{} {{", path[0]);
+        let mut depth: i64 = 0;
+        let mut i = start;
+        while i < end {
+            let t = lines[i].trim();
+            if depth == 0 && t == header {
+                let mut d: i64 = 0;
+                let mut j = i;
+                while j < end {
+                    let tj = lines[j].trim();
+                    d += tj.matches('{').count() as i64 - tj.matches('}').count() as i64;
+                    if d == 0 {
+                        break;
+                    }
+                    j += 1;
+                }
+                if j >= end {
+                    return None; // unbalanced — validation would have caught it
+                }
+                if path.len() == 1 {
+                    return Some((i, j));
+                }
+                return find(lines, i + 1, j, &path[1..]);
+            }
+            depth += t.matches('{').count() as i64 - t.matches('}').count() as i64;
+            i += 1;
+        }
+        None
+    }
+    find(lines, 0, lines.len(), path)
+}
+
+/// Does this config carry the WebUI's own API key (`service https api keys
+/// id quartzfire`)? QuartzFire backups do; stock VyOS configs don't.
+fn has_webui_api_key(config: &str) -> bool {
+    let lines: Vec<&str> = config.lines().collect();
+    match block_span(&lines, &["service", "https", "api", "keys"]) {
+        Some((s, e)) => lines[s..=e].iter().any(|l| l.trim() == "id quartzfire {"),
+        None => false,
+    }
+}
+
+/// Graft the RUNNING config's `service https` subtree into an uploaded config
+/// that lacks the WebUI's API key — the supported path for migrating a plain
+/// VyOS config.boot onto a QuartzFire box. Loading such a config verbatim
+/// would commit away the loopback API listen and the quartzfire key: the
+/// backend loses the VyOS API mid-guard, the user can never confirm, and even
+/// the auto-revert needs that same API. Any `service https` subtree in the
+/// upload is replaced (on QuartzFire, nginx owns 443 and the API is pinned to
+/// loopback — a stock box's https choices don't transfer); everything else in
+/// the upload applies as-is.
+fn preserve_webui_access(uploaded: &str, running: &str) -> std::result::Result<String, String> {
+    let run_lines: Vec<&str> = running.lines().collect();
+    let (hs, he) = block_span(&run_lines, &["service", "https"]).ok_or_else(|| {
+        "the running configuration has no `service https` block to preserve".to_string()
+    })?;
+    let https_block = &run_lines[hs..=he];
+
+    let up_lines: Vec<&str> = uploaded.lines().collect();
+    let mut out: Vec<String> = Vec::with_capacity(up_lines.len() + https_block.len() + 2);
+    if let Some((ss, _)) = block_span(&up_lines, &["service"]) {
+        let drop = block_span(&up_lines, &["service", "https"]);
+        for (i, l) in up_lines.iter().enumerate() {
+            if let Some((ds, de)) = drop {
+                if i >= ds && i <= de {
+                    continue;
+                }
+            }
+            out.push((*l).to_string());
+            if i == ss {
+                out.extend(https_block.iter().map(|h| (*h).to_string()));
+            }
+        }
+    } else {
+        // No service block at all (a truly bare config): prepend one. Top-level
+        // block order is irrelevant to the config parser.
+        out.push("service {".to_string());
+        out.extend(https_block.iter().map(|h| (*h).to_string()));
+        out.push("}".to_string());
+        out.extend(up_lines.iter().map(|l| (*l).to_string()));
+    }
+    Ok(out.join("\n") + "\n")
+}
+
 /// Guarded full-config load shared by restore and rollback: snapshot, load
-/// the new config (which commits), arm the revert timer.
+/// the new config (which commits), arm the revert timer. With
+/// `graft_webui_access`, an upload lacking the WebUI API key first gets the
+/// running `service https` subtree grafted in (see preserve_webui_access).
 async fn guarded_load(
     state: &Arc<AppState>,
     new_config: &str,
     description: String,
     timeout_secs: Option<u64>,
+    graft_webui_access: bool,
 ) -> Result<Response> {
     if state.guard.is_pending() {
         return Ok(conflict(
             "Another change is awaiting confirmation — confirm or revert it first.",
         ));
     }
+
+    // The graft source is the commit archive, like backup(): the guard
+    // snapshot file is written as root and unreadable to us, and `show
+    // configuration` masks secrets (grafting a masked API key would be worse
+    // than no graft at all).
+    let grafted;
+    let config = if graft_webui_access && !has_webui_api_key(new_config) {
+        let body = vyos::api_request(
+            state,
+            "show",
+            &json!({ "op": "show", "path": ["system", "commit", "file", "0"] }),
+        )
+        .await
+        .map_err(|e| {
+            AppError::Gateway(format!(
+                "could not read the running configuration to preserve WebUI access: {e}"
+            ))
+        })?;
+        let running = body.get("data").and_then(Value::as_str).unwrap_or("");
+        if running.trim().is_empty() {
+            return Err(AppError::Gateway(
+                "the device returned an empty running configuration; refusing a restore that would drop WebUI access".into(),
+            ));
+        }
+        grafted = preserve_webui_access(new_config, running).map_err(AppError::BadRequest)?;
+        &grafted
+    } else {
+        new_config
+    };
+
     let snapshot_path = save_running_config(state, "guard-snapshot.boot").await?;
-    load_config_text(state, new_config, "guard-load.boot").await?;
+    load_config_text(state, config, "guard-load.boot").await?;
     let info = begin_pending(state, snapshot_path, description, clamp_timeout(timeout_secs));
     Ok(Json(info).into_response())
 }
 
 /// POST /api/config/restore — replace the entire configuration with an
-/// uploaded config.boot, under commit-confirm.
+/// uploaded config.boot, under commit-confirm. Plain VyOS configs (no
+/// quartzfire API key) are accepted: the WebUI's `service https` subtree is
+/// preserved from the running config so the restore can't strand the session.
 pub async fn restore(
     State(state): State<Arc<AppState>>,
     Json(req): Json<RestoreRequest>,
@@ -776,6 +903,7 @@ pub async fn restore(
         &req.content,
         "Restore configuration from backup".into(),
         req.timeout_secs,
+        true,
     )
     .await
 }
@@ -812,6 +940,8 @@ pub async fn rollback(
         text,
         format!("Roll back to commit revision {}", req.revision),
         req.timeout_secs,
+        // The device's own commit archive always carries the WebUI key.
+        false,
     )
     .await
 }
@@ -913,6 +1043,55 @@ mod tests {
         .is_err());
         assert!(validate_config_text("interfaces {\n").is_err()); // truncated
         assert!(validate_config_text("}\ninterfaces {").is_err()); // unbalanced
+    }
+
+    /// A QuartzFire box's `service https` subtree, as the running snapshot
+    /// would carry it (real key, loopback API).
+    const RUNNING_WITH_KEY: &str = "interfaces {\n    ethernet eth0 {\n    }\n}\nservice {\n    https {\n        api {\n            keys {\n                id quartzfire {\n                    key abc123\n                }\n            }\n            rest {\n            }\n        }\n        listen-address 127.0.0.1\n        port 4443\n    }\n    ntp {\n        server pool.ntp.org {\n        }\n    }\n}\n";
+
+    #[test]
+    fn webui_api_key_detection() {
+        assert!(has_webui_api_key(RUNNING_WITH_KEY));
+        // Stock config: an api block but no quartzfire key.
+        assert!(!has_webui_api_key(
+            "service {\n    https {\n        api {\n            keys {\n                id other {\n                    key zzz\n                }\n            }\n        }\n    }\n}\n"
+        ));
+        assert!(!has_webui_api_key("interfaces {\n    ethernet eth0 {\n    }\n}\n"));
+    }
+
+    #[test]
+    fn stock_config_without_service_block_gets_https_grafted() {
+        let uploaded = "interfaces {\n    ethernet eth0 {\n        address 192.0.2.1/24\n    }\n}\n// vyos-config-version: \"firewall@17\"\n";
+        let merged = preserve_webui_access(uploaded, RUNNING_WITH_KEY).unwrap();
+        assert!(has_webui_api_key(&merged));
+        assert!(validate_config_text(&merged).is_ok());
+        assert!(merged.contains("address 192.0.2.1/24"));
+        assert!(merged.contains("listen-address 127.0.0.1"));
+    }
+
+    #[test]
+    fn stock_service_block_without_https_keeps_its_other_services() {
+        let uploaded = "service {\n    ssh {\n        port 22\n    }\n}\nsystem {\n    host-name router\n}\n";
+        let merged = preserve_webui_access(uploaded, RUNNING_WITH_KEY).unwrap();
+        assert!(has_webui_api_key(&merged));
+        assert!(validate_config_text(&merged).is_ok());
+        assert!(merged.contains("port 22"));
+        assert!(merged.contains("host-name router"));
+    }
+
+    #[test]
+    fn stock_https_subtree_is_replaced_not_merged() {
+        // A stock box serving its API on 443 must not carry that in: on
+        // QuartzFire nginx owns 443 and the API lives on loopback:4443.
+        let uploaded = "service {\n    https {\n        api {\n            keys {\n                id legacy {\n                    key old\n                }\n            }\n        }\n        port 443\n    }\n    ssh {\n        port 22\n    }\n}\n";
+        let merged = preserve_webui_access(uploaded, RUNNING_WITH_KEY).unwrap();
+        assert!(has_webui_api_key(&merged));
+        assert!(validate_config_text(&merged).is_ok());
+        assert!(!merged.contains("id legacy"));
+        assert!(merged.contains("port 4443"));
+        assert!(merged.contains("ssh"));
+        // The running config's unrelated services must NOT leak in.
+        assert!(!merged.contains("pool.ntp.org"));
     }
 
     #[test]

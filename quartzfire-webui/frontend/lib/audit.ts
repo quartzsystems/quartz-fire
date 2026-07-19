@@ -4,8 +4,8 @@
 // Traffic Monitor page.
 
 import { apiFetch, vyosApi } from "./api";
-import { PendingWire, registerPending } from "./guard";
-import { VyosResponse } from "./interfaces";
+import { type PendingWire, registerPending } from "./guard";
+import type { VyosResponse } from "./interfaces";
 
 /// One configuration commit, from `show system commit`. Revision 0 is the
 /// most recent commit.
@@ -63,6 +63,58 @@ export async function fetchCommitHistory(): Promise<CommitEntry[]> {
     throw new Error(resp.error || "Device returned an error reading the commit history.");
   }
   return parseCommitHistory(resp.data ?? "");
+}
+
+/// Compress a commit diff into a one-line summary of which top-level config
+/// sections changed and by how many lines, e.g. `firewall +4 −1 · nat +2`.
+/// Handles both diff shapes VyOS produces: `[edit path]` headers with +/-
+/// lines, and a config tree with +/- markers on changed lines. Returns "" when
+/// the diff records no changes (also: the oldest retained revision).
+export function summarizeCommitDiff(diff: string): string {
+  const counts = new Map<string, { add: number; del: number }>();
+  let section = "";
+  let depth = 0;
+  const bump = (name: string, add: boolean) => {
+    const key = name || "(top level)";
+    const c = counts.get(key) ?? { add: 0, del: 0 };
+    if (add) c.add++;
+    else c.del++;
+    counts.set(key, c);
+  };
+  for (const raw of diff.split("\n")) {
+    const t = raw.trim();
+    if (!t) continue;
+    const edit = /^\[edit(?:\s+(\S+))?/.exec(t);
+    if (edit) {
+      section = edit[1] ?? "(top level)";
+      depth = 1;
+      continue;
+    }
+    const marked = t.startsWith("+") || t.startsWith("-");
+    const body = marked ? t.slice(1).trim() : t;
+    // Skip pure brace lines — a fully-added subtree marks its `}` lines too,
+    // and counting them would inflate the numbers.
+    if (marked && body && body !== "{" && body !== "}") {
+      bump(depth === 0 ? body.split(/\s+/)[0] : section, t.startsWith("+"));
+    }
+    for (const ch of body) {
+      if (ch === "{") {
+        if (depth === 0) section = body.split(/\s+/)[0] ?? section;
+        depth++;
+      } else if (ch === "}") {
+        depth = Math.max(0, depth - 1);
+      }
+    }
+  }
+  const parts = [...counts.entries()].sort(
+    (a, b) => b[1].add + b[1].del - (a[1].add + a[1].del),
+  );
+  if (parts.length === 0) return "";
+  const fmt = ([name, c]: (typeof parts)[number]) =>
+    [name, c.add ? `+${c.add}` : "", c.del ? `−${c.del}` : ""].filter(Boolean).join(" ");
+  const shown = parts.slice(0, 3).map(fmt);
+  const extra = parts.length - 3;
+  return shown.join(" · ") + (extra > 0 ? ` · +${extra} more` : "");
 }
 
 /// What one commit changed, as the device's own diff text (empty when the
