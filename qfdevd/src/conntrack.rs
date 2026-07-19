@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 
 /// A parsed conntrack flow line — just the fields accounting needs.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Flow {
     /// Stable per-entry key: conntrack `id=` when present, else the 5-tuple.
     pub key: String,
@@ -35,6 +35,12 @@ pub struct Flow {
     /// decoding needs the published bit layout, which is the daemon's business,
     /// not the parser's. 0 when absent (no `mark=` token).
     pub mark: u32,
+    /// Protocol name as conntrack prints it ("tcp"/"udp"/"icmp"/…); empty when
+    /// the line carried none.
+    pub proto: String,
+    /// Original-direction destination port (the service port). 0 when absent
+    /// (ICMP, or an unparseable value).
+    pub dport: u16,
 }
 
 /// Parse one conntrack line (`-L` snapshot or `-E` event, `--output extended`).
@@ -119,15 +125,34 @@ pub fn parse_line(line: &str) -> Option<Flow> {
         )
     });
 
-    Some(Flow { key, orig_src, orig_dst, orig_bytes, reply_bytes, mark: mark.unwrap_or(0) })
+    Some(Flow {
+        key,
+        orig_src,
+        orig_dst,
+        orig_bytes,
+        reply_bytes,
+        mark: mark.unwrap_or(0),
+        proto: proto.unwrap_or_default(),
+        dport: dport.and_then(|p| p.parse().ok()).unwrap_or(0),
+    })
 }
 
 /// Bytes already credited for a flow, so repeated observations only add the
-/// delta.
+/// delta. Kept in the flow's own orientation (orig/reply), not the device's.
 #[derive(Debug, Clone, Copy, Default)]
 struct Counted {
-    out: u64,
-    in_: u64,
+    orig: u64,
+    reply: u64,
+}
+
+/// Direction-neutral byte growth for one flow since it was last observed —
+/// the input both to device attribution (`orient`) and to per-flow recording.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RawDelta {
+    /// New bytes in the original direction (orig src → orig dst).
+    pub d_orig: u64,
+    /// New bytes in the reply direction.
+    pub d_reply: u64,
 }
 
 /// A per-device byte delta ready to fold into a usage bucket.
@@ -141,6 +166,28 @@ pub struct Delta {
     /// that produced the delta, so a flow classified mid-life attributes each
     /// delta to whatever it was known to be at the time — not retroactively.
     pub mark: u32,
+}
+
+/// Attribute a raw delta to a known device, orienting it as the device's
+/// up/download. Originator known → the device uploads in the orig direction;
+/// responder known → swap. None when neither endpoint is a tracked device
+/// (e.g. router-to-WAN) — those bytes still exist for per-flow recording,
+/// they just belong to no client.
+pub fn orient<F>(flow: &Flow, raw: RawDelta, resolve: F) -> Option<Delta>
+where
+    F: Fn(&str) -> Option<String>,
+{
+    let (mac, bytes_out, bytes_in) = if let Some(mac) = resolve(&flow.orig_src) {
+        (mac, raw.d_orig, raw.d_reply)
+    } else if let Some(mac) = resolve(&flow.orig_dst) {
+        (mac, raw.d_reply, raw.d_orig)
+    } else {
+        return None;
+    };
+    if bytes_in == 0 && bytes_out == 0 {
+        return None;
+    }
+    Some(Delta { mac, bytes_in, bytes_out, mark: flow.mark })
 }
 
 /// The accounting map shared by the snapshot poll and the destroy stream.
@@ -180,40 +227,25 @@ impl Accountant {
         self.primed = true;
     }
 
-    /// Observe a flow and return the device delta to credit, if any. `resolve`
-    /// maps an IP to a known device MAC. `remove` finalizes a destroyed flow
-    /// (drop its accounting slot so the map doesn't grow without bound).
-    pub fn observe<F>(&mut self, flow: &Flow, remove: bool, resolve: F) -> Option<Delta>
-    where
-        F: Fn(&str) -> Option<String>,
-    {
-        // Decide which endpoint is the LAN device and orient up/down.
-        // Originator known → device uploads in the orig direction.
-        // Responder known → device is the reply side; swap directions.
-        let (mac, dev_out_total, dev_in_total) = if let Some(mac) = resolve(&flow.orig_src) {
-            (mac, flow.orig_bytes, flow.reply_bytes)
-        } else if let Some(mac) = resolve(&flow.orig_dst) {
-            (mac, flow.reply_bytes, flow.orig_bytes)
-        } else {
-            // Neither endpoint is a tracked device (e.g. router-to-WAN). Still
-            // clear the slot on destroy so it can't leak.
-            if remove {
-                self.counted.remove(&flow.key);
-            }
-            return None;
-        };
-
+    /// Observe a flow and return its direction-neutral byte growth since the
+    /// last observation, if any. Tracked for *every* flow — device attribution
+    /// is a separate, later concern (`orient`) so per-flow recording also sees
+    /// router-to-WAN and other untracked-endpoint traffic. `remove` finalizes a
+    /// destroyed flow (drop its accounting slot so the map doesn't grow without
+    /// bound).
+    pub fn observe_raw(&mut self, flow: &Flow, remove: bool) -> Option<RawDelta> {
         let prev = self.counted.get(&flow.key).copied().unwrap_or_default();
         // Counters going backwards = tuple reused by a new flow → credit from 0.
-        let base_out = if dev_out_total < prev.out { 0 } else { prev.out };
-        let base_in = if dev_in_total < prev.in_ { 0 } else { prev.in_ };
-        let d_out = dev_out_total.saturating_sub(base_out);
-        let d_in = dev_in_total.saturating_sub(base_in);
+        let base_orig = if flow.orig_bytes < prev.orig { 0 } else { prev.orig };
+        let base_reply = if flow.reply_bytes < prev.reply { 0 } else { prev.reply };
+        let d_orig = flow.orig_bytes.saturating_sub(base_orig);
+        let d_reply = flow.reply_bytes.saturating_sub(base_reply);
 
         if remove {
             self.counted.remove(&flow.key);
         } else {
-            self.counted.insert(flow.key.clone(), Counted { out: dev_out_total, in_: dev_in_total });
+            self.counted
+                .insert(flow.key.clone(), Counted { orig: flow.orig_bytes, reply: flow.reply_bytes });
         }
 
         // Pre-baseline: the slot above is all we wanted. Anything this flow has
@@ -222,10 +254,21 @@ impl Accountant {
             return None;
         }
 
-        if d_out == 0 && d_in == 0 {
+        if d_orig == 0 && d_reply == 0 {
             return None;
         }
-        Some(Delta { mac, bytes_in: d_in, bytes_out: d_out, mark: flow.mark })
+        Some(RawDelta { d_orig, d_reply })
+    }
+
+    /// Observe a flow and return the device delta to credit, if any. `resolve`
+    /// maps an IP to a known device MAC. Thin composition of `observe_raw` +
+    /// `orient`, kept for callers that only care about device usage.
+    pub fn observe<F>(&mut self, flow: &Flow, remove: bool, resolve: F) -> Option<Delta>
+    where
+        F: Fn(&str) -> Option<String>,
+    {
+        let raw = self.observe_raw(flow, remove)?;
+        orient(flow, raw, resolve)
     }
 
     /// Forget flows no longer present in a snapshot (they were destroyed
@@ -259,7 +302,14 @@ mod tests {
     }
 
     fn flow(key: &str, orig_src: &str, orig_bytes: u64, reply_bytes: u64) -> Flow {
-        Flow { key: key.into(), orig_src: orig_src.into(), orig_dst: "1.2.3.4".into(), orig_bytes, reply_bytes, mark: 0 }
+        Flow {
+            key: key.into(),
+            orig_src: orig_src.into(),
+            orig_dst: "1.2.3.4".into(),
+            orig_bytes,
+            reply_bytes,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -272,6 +322,10 @@ mod tests {
         assert_eq!(f.orig_dst, "1.2.3.4");
         assert_eq!(f.orig_bytes, 1000);
         assert_eq!(f.reply_bytes, 8000);
+        // The service tuple pieces per-flow recording keys by. dport is the
+        // ORIGINAL direction's port (443), not the reply's ephemeral one.
+        assert_eq!(f.proto, "tcp");
+        assert_eq!(f.dport, 443);
     }
 
     #[test]
@@ -332,8 +386,8 @@ mod tests {
     fn short_flow_credited_from_destroy_only() {
         // A flow the snapshot never saw: its DESTROY credits the full total.
         let mut acct = primed();
-        let flow = Flow { key: "42".into(), orig_src: "10.0.0.5".into(), orig_dst: "1.2.3.4".into(), orig_bytes: 1000, reply_bytes: 8000, mark: 0 };
-        let d = acct.observe(&flow, true, resolver(&[("10.0.0.5", "aa")])).unwrap();
+        let f = flow("42", "10.0.0.5", 1000, 8000);
+        let d = acct.observe(&f, true, resolver(&[("10.0.0.5", "aa")])).unwrap();
         assert_eq!(d, Delta { mac: "aa".into(), bytes_in: 8000, bytes_out: 1000, mark: 0 });
         assert_eq!(acct.len(), 0); // finalized + removed
     }
@@ -343,13 +397,13 @@ mod tests {
         let mut acct = primed();
         let r = resolver(&[("10.0.0.5", "aa")]);
         // First snapshot: 1000/8000 → credited in full.
-        let f1 = Flow { key: "42".into(), orig_src: "10.0.0.5".into(), orig_dst: "1.2.3.4".into(), orig_bytes: 1000, reply_bytes: 8000, mark: 0 };
+        let f1 = flow("42", "10.0.0.5", 1000, 8000);
         assert_eq!(acct.observe(&f1, false, &r).unwrap(), Delta { mac: "aa".into(), bytes_in: 8000, bytes_out: 1000, mark: 0 });
         // Second snapshot: grew to 1500/9000 → only the +500/+1000 delta.
-        let f2 = Flow { key: "42".into(), orig_bytes: 1500, reply_bytes: 9000, ..f1.clone() };
+        let f2 = Flow { orig_bytes: 1500, reply_bytes: 9000, ..f1.clone() };
         assert_eq!(acct.observe(&f2, false, &r).unwrap(), Delta { mac: "aa".into(), bytes_in: 1000, bytes_out: 500, mark: 0 });
         // DESTROY at 1500/9000 → nothing left to credit, slot removed.
-        let f3 = Flow { key: "42".into(), orig_bytes: 1500, reply_bytes: 9000, ..f1.clone() };
+        let f3 = Flow { orig_bytes: 1500, reply_bytes: 9000, ..f1.clone() };
         assert!(acct.observe(&f3, true, &r).is_none());
         assert_eq!(acct.len(), 0);
     }
@@ -358,8 +412,15 @@ mod tests {
     fn responder_side_swaps_direction() {
         // Remote initiates to a LAN server: orig_dst is our device.
         let mut acct = primed();
-        let flow = Flow { key: "7".into(), orig_src: "1.2.3.4".into(), orig_dst: "10.0.0.9".into(), orig_bytes: 500, reply_bytes: 4000, mark: 0 };
-        let d = acct.observe(&flow, true, resolver(&[("10.0.0.9", "bb")])).unwrap();
+        let f = Flow {
+            key: "7".into(),
+            orig_src: "1.2.3.4".into(),
+            orig_dst: "10.0.0.9".into(),
+            orig_bytes: 500,
+            reply_bytes: 4000,
+            ..Default::default()
+        };
+        let d = acct.observe(&f, true, resolver(&[("10.0.0.9", "bb")])).unwrap();
         // Device received orig_bytes (download) and sent reply_bytes (upload).
         assert_eq!(d, Delta { mac: "bb".into(), bytes_in: 500, bytes_out: 4000, mark: 0 });
     }
@@ -369,12 +430,46 @@ mod tests {
         let mut acct = primed();
         let r = resolver(&[("10.0.0.5", "aa")]);
         let key = "tcp|10.0.0.5:5|1.2.3.4:6";
-        let f1 = Flow { key: key.into(), orig_src: "10.0.0.5".into(), orig_dst: "1.2.3.4".into(), orig_bytes: 9000, reply_bytes: 100, mark: 0 };
+        let f1 = flow(key, "10.0.0.5", 9000, 100);
         acct.observe(&f1, false, &r);
         // New flow reuses the tuple; counters restart low → credit from zero.
-        let f2 = Flow { key: key.into(), orig_src: "10.0.0.5".into(), orig_dst: "1.2.3.4".into(), orig_bytes: 200, reply_bytes: 5, mark: 0 };
+        let f2 = flow(key, "10.0.0.5", 200, 5);
         let d = acct.observe(&f2, false, &r).unwrap();
         assert_eq!(d, Delta { mac: "aa".into(), bytes_in: 5, bytes_out: 200, mark: 0 });
+    }
+
+    #[test]
+    fn raw_deltas_flow_for_untracked_endpoints() {
+        // Per-flow recording must see router-to-WAN traffic that device
+        // accounting drops: observe_raw credits growth regardless of whether
+        // any endpoint resolves to a device.
+        let mut acct = primed();
+        let f = Flow {
+            key: "9".into(),
+            orig_src: "192.0.2.1".into(),
+            orig_dst: "5.6.7.8".into(),
+            orig_bytes: 100,
+            reply_bytes: 900,
+            ..Default::default()
+        };
+        assert_eq!(acct.observe_raw(&f, false).unwrap(), RawDelta { d_orig: 100, d_reply: 900 });
+        // …and orientation still finds no device to credit.
+        assert!(orient(&f, RawDelta { d_orig: 100, d_reply: 900 }, |_| None).is_none());
+        // Growth on the next snapshot is delta-only, exactly like device flows.
+        let f2 = Flow { orig_bytes: 150, reply_bytes: 1000, ..f.clone() };
+        assert_eq!(acct.observe_raw(&f2, false).unwrap(), RawDelta { d_orig: 50, d_reply: 100 });
+    }
+
+    #[test]
+    fn observe_and_observe_raw_share_one_ledger() {
+        // A single observation must not be creditable twice: whichever entry
+        // point sees the flow advances the same per-flow baseline.
+        let mut acct = primed();
+        let r = resolver(&[("10.0.0.5", "aa")]);
+        let f = flow("42", "10.0.0.5", 1000, 8000);
+        assert!(acct.observe_raw(&f, false).is_some());
+        // The same totals through observe() yield nothing new.
+        assert!(acct.observe(&f, false, &r).is_none());
     }
 
     #[test]
@@ -433,8 +528,15 @@ mod tests {
     #[test]
     fn unknown_endpoints_dropped_but_slot_cleared() {
         let mut acct = primed();
-        let flow = Flow { key: "9".into(), orig_src: "1.2.3.4".into(), orig_dst: "5.6.7.8".into(), orig_bytes: 1, reply_bytes: 1, mark: 0 };
-        assert!(acct.observe(&flow, true, resolver(&[])).is_none());
+        let f = Flow {
+            key: "9".into(),
+            orig_src: "1.2.3.4".into(),
+            orig_dst: "5.6.7.8".into(),
+            orig_bytes: 1,
+            reply_bytes: 1,
+            ..Default::default()
+        };
+        assert!(acct.observe(&f, true, resolver(&[])).is_none());
         assert_eq!(acct.len(), 0);
         let _ = HashSet::<String>::new();
     }

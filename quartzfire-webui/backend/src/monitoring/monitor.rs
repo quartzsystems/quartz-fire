@@ -36,41 +36,43 @@ use tokio::{
 };
 use tokio_stream::{wrappers::LinesStream, StreamExt};
 
-/// One parsed firewall log line — the JSON payload of each SSE event.
+/// One parsed firewall log line — the JSON payload of each SSE event. Fields
+/// are pub(crate) so flows.rs can reuse the same parse for its rule-attribution
+/// cache (tuple → rule) without a second nftables-prefix parser drifting.
 #[derive(Serialize, Default)]
 pub struct LogEntry {
     /// Journal receive time, milliseconds since the epoch.
-    ts: u64,
+    pub(crate) ts: u64,
     /// `ipv4` or `ipv6`.
-    family: String,
+    pub(crate) family: String,
     /// Base chain the rule lives in: `forward`, `input`, or `output`.
-    chain: String,
+    pub(crate) chain: String,
     /// Rule number; null when the chain's default action fired.
-    rule: Option<u32>,
+    pub(crate) rule: Option<u32>,
     /// `accept`, `drop`, or `reject`.
-    action: String,
+    pub(crate) action: String,
     /// True when the rule queues matches to the IPS engine (`action queue`)
     /// — modeled as Allow with IPS on; Suricata gives the final verdict.
-    ips: bool,
+    pub(crate) ips: bool,
     #[serde(rename = "in", skip_serializing_if = "Option::is_none")]
-    in_if: Option<String>,
+    pub(crate) in_if: Option<String>,
     #[serde(rename = "out", skip_serializing_if = "Option::is_none")]
-    out_if: Option<String>,
+    pub(crate) out_if: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    src: Option<String>,
+    pub(crate) src: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    dst: Option<String>,
+    pub(crate) dst: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    proto: Option<String>,
+    pub(crate) proto: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    spt: Option<u32>,
+    pub(crate) spt: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    dpt: Option<u32>,
+    pub(crate) dpt: Option<u32>,
     /// IP total length of the logged packet.
     #[serde(skip_serializing_if = "Option::is_none")]
-    len: Option<u32>,
+    pub(crate) len: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    icmp_type: Option<u32>,
+    pub(crate) icmp_type: Option<u32>,
 }
 
 /// GET /api/monitor/firewall-log — SSE stream of parsed firewall log entries,
@@ -115,7 +117,7 @@ pub async fn firewall_log() -> Response {
 
 /// Parse one `journalctl -o json` line into a firewall log entry; None for
 /// anything that isn't a base-chain firewall log message.
-fn parse_journal_line(line: &str) -> Option<LogEntry> {
+pub(crate) fn parse_journal_line(line: &str) -> Option<LogEntry> {
     let v: serde_json::Value = serde_json::from_str(line).ok()?;
     // Non-UTF8 messages come through as byte arrays — as_str skips those.
     let msg = v.get("MESSAGE")?.as_str()?;

@@ -29,6 +29,8 @@ mod ssl_inspection;
 // Monitoring / telemetry read paths.
 #[path = "monitoring/dashboard.rs"]
 mod dashboard;
+#[path = "monitoring/flows.rs"]
+mod flows;
 #[path = "monitoring/monitor.rs"]
 mod monitor;
 #[path = "monitoring/monitoring.rs"]
@@ -87,6 +89,9 @@ pub struct AppState {
     /// A `None` value is a negative result (looked up, unresolved). Bounded in
     /// `geolocation::lookup_country`; never held across an await.
     pub geoip_cc: std::sync::Mutex<std::collections::HashMap<String, Option<(String, Option<String>)>>>,
+    /// Service-tuple → firewall-rule attribution cache for the Traffic Flow
+    /// page. Its journal follower starts lazily on the first flows request.
+    pub flow_attr: Arc<flows::Attribution>,
 }
 
 #[tokio::main]
@@ -118,6 +123,7 @@ async fn main() -> Result<()> {
         guard: guard::Guard::default(),
         dashboard_lock: std::sync::Mutex::new(()),
         geoip_cc: std::sync::Mutex::new(std::collections::HashMap::new()),
+        flow_attr: Arc::new(flows::Attribution::default()),
     });
 
     // Everything except the SPA itself and login/logout requires a session:
@@ -135,6 +141,9 @@ async fn main() -> Result<()> {
         // shared inventory qfdevd maintains, plus the user-owned description.
         .route("/api/monitoring/devices", get(monitoring::list))
         .route("/api/monitoring/usage", get(monitoring::usage))
+        // Bytes-weighted flow records with firewall-rule attribution — the
+        // Traffic Flow Sankey's data (see flows.rs for the two-source join).
+        .route("/api/monitoring/flows", get(flows::list))
         .route(
             "/api/monitoring/devices/:mac",
             get(monitoring::detail).patch(monitoring::patch),

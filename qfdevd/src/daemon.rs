@@ -413,15 +413,30 @@ async fn conntrack_snapshot_loop(shared: Arc<Shared>) {
         let resolve = |ip: &str| ip_snapshot.get(ip).cloned();
 
         let bucket = db::bucket_of(now_secs());
+        let record_flows = shared.cfg.flow_retention_secs > 0;
         let mut live_keys = std::collections::HashSet::new();
         let mut deltas: Vec<conntrack::Delta> = Vec::new();
+        // Per-service-tuple raw deltas for the same pass, batched so the DB
+        // sees one upsert per tuple rather than one per conntrack line.
+        let mut flow_aggs: HashMap<(String, String, String, u16), (u64, u64)> = HashMap::new();
         {
             let mut acct = shared.accountant.lock().unwrap();
             for line in text.lines() {
                 if let Some(flow) = conntrack::parse_line(line) {
                     live_keys.insert(flow.key.clone());
-                    if let Some(d) = acct.observe(&flow, false, &resolve) {
+                    let Some(raw) = acct.observe_raw(&flow, false) else { continue };
+                    // Device attribution and per-flow recording both come from
+                    // the ONE raw delta, so they can never disagree about how
+                    // many bytes this observation added.
+                    if let Some(d) = conntrack::orient(&flow, raw, &resolve) {
                         deltas.push(d);
+                    }
+                    if record_flows {
+                        let slot = flow_aggs
+                            .entry((flow.proto.clone(), flow.orig_src.clone(), flow.orig_dst.clone(), flow.dport))
+                            .or_default();
+                        slot.0 += raw.d_orig;
+                        slot.1 += raw.d_reply;
                     }
                 }
             }
@@ -443,6 +458,7 @@ async fn conntrack_snapshot_loop(shared: Arc<Shared>) {
             }
         }
         commit_deltas(&shared, bucket, &deltas);
+        commit_flows(&shared, bucket, &flow_aggs);
     }
 }
 
@@ -476,12 +492,23 @@ async fn conntrack_destroy_loop(shared: Arc<Shared>) {
                     let Some(flow) = conntrack::parse_line(&line) else { continue };
                     let ip_snapshot = shared.ip_map.lock().unwrap().clone();
                     let resolve = |ip: &str| ip_snapshot.get(ip).cloned();
-                    let delta = {
+                    let raw = {
                         let mut acct = shared.accountant.lock().unwrap();
-                        acct.observe(&flow, true, &resolve)
+                        acct.observe_raw(&flow, true)
                     };
-                    if let Some(d) = delta {
-                        commit_deltas(&shared, db::bucket_of(now_secs()), std::slice::from_ref(&d));
+                    let Some(raw) = raw else { continue };
+                    let bucket = db::bucket_of(now_secs());
+                    if let Some(d) = conntrack::orient(&flow, raw, &resolve) {
+                        commit_deltas(&shared, bucket, std::slice::from_ref(&d));
+                    }
+                    if shared.cfg.flow_retention_secs > 0 {
+                        let conn = shared.db.lock().unwrap();
+                        if let Err(e) = db::add_flow_usage(
+                            &conn, bucket, &flow.proto, &flow.orig_src, &flow.orig_dst, flow.dport,
+                            raw.d_orig, raw.d_reply,
+                        ) {
+                            tracing::warn!("add_flow_usage {}->{}: {e}", flow.orig_src, flow.orig_dst);
+                        }
                     }
                 }
                 Ok(None) => break, // stream ended; respawn
@@ -523,6 +550,19 @@ fn commit_deltas(shared: &Shared, bucket: i64, deltas: &[conntrack::Delta]) {
     shared.health.last_usage.store(now_secs() as u64, Ordering::Relaxed);
 }
 
+/// Fold a snapshot pass's per-service-tuple raw deltas into flow buckets.
+fn commit_flows(shared: &Shared, bucket: i64, aggs: &HashMap<(String, String, String, u16), (u64, u64)>) {
+    if aggs.is_empty() {
+        return;
+    }
+    let conn = shared.db.lock().unwrap();
+    for ((proto, src, dst, dport), (d_orig, d_reply)) in aggs {
+        if let Err(e) = db::add_flow_usage(&conn, bucket, proto, src, dst, *dport, *d_orig, *d_reply) {
+            tracing::warn!("add_flow_usage {src}->{dst}: {e}");
+        }
+    }
+}
+
 // ── maintenance + status ────────────────────────────────────────────────────
 
 async fn maintenance_loop(shared: Arc<Shared>) {
@@ -544,6 +584,13 @@ async fn maintenance_loop(shared: Arc<Shared>) {
                     Ok((b, d)) if b > 0 || d > 0 => tracing::info!("pruned {b} usage buckets, {d} devices"),
                     Ok(_) => {}
                     Err(e) => tracing::warn!("prune failed: {e}"),
+                }
+                if shared.cfg.flow_retention_secs > 0 {
+                    match db::prune_flows(&conn, now, shared.cfg.flow_retention_secs as i64) {
+                        Ok(n) if n > 0 => tracing::debug!("pruned {n} flow buckets"),
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!("flow prune failed: {e}"),
+                    }
                 }
             }
         }

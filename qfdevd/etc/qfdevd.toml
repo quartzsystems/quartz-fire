@@ -24,6 +24,11 @@
 # usage_retention_days      = 30
 # device_retention_days     = 90     # 0 disables device pruning
 
+# Per-flow (proto/src/dst/dport) byte buckets for the WebUI's Traffic Flow
+# Sankey. Much higher cardinality than per-device usage, so retention is short.
+# 0 disables per-flow recording.
+# flow_retention_secs = 3600
+
 # Kea DHCPv4 sources.
 # kea_lease_file     = "/config/dhcp/dhcpv4-leases.csv"
 # kea_control_socket = "/run/kea/kea4-ctrl-socket"

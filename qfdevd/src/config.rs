@@ -42,6 +42,12 @@ pub struct Config {
     /// Drop usage buckets older than this many days.
     pub usage_retention_days: u64,
 
+    /// Keep per-flow (service tuple) byte buckets this many seconds — the
+    /// WebUI's Traffic Flow page reads them for its live Sankey, so minutes to
+    /// an hour is the useful range; they are far higher cardinality than the
+    /// per-device buckets. 0 disables per-flow recording entirely.
+    pub flow_retention_secs: u64,
+
     /// Drop devices not seen for this many days (0 disables device pruning).
     pub device_retention_days: u64,
 
@@ -79,6 +85,7 @@ impl Default for Config {
             online_timeout_secs: 300,
             maintenance_interval_secs: 3600,
             usage_retention_days: 30,
+            flow_retention_secs: 3_600,
             device_retention_days: 90,
             kea_lease_file: PathBuf::from("/config/dhcp/dhcpv4-leases.csv"),
             kea_control_socket: PathBuf::from("/run/kea/kea4-ctrl-socket"),

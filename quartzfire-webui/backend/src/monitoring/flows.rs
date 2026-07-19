@@ -1,0 +1,469 @@
+//! Traffic Flow (Monitoring → Traffic Flow): bytes-weighted flow records with
+//! firewall-rule attribution — the data behind the Sankey.
+//!
+//! No single source on the box knows both "which rule" and "how many bytes":
+//!
+//!   * qfdevd's `flow_buckets` (shared SQLite) has per-service-tuple byte
+//!     deltas from conntrack — bytes, but no rule and no interfaces;
+//!   * the nftables log prefix (kernel journal) has rule/chain/action and the
+//!     in/out interfaces — but only one packet's length, not the flow's bytes.
+//!
+//! Their join key is the service tuple `(proto, src, dst, dport)`. This module
+//! follows the kernel journal (reusing monitor.rs's parser so the two can't
+//! drift) into an in-memory tuple → rule attribution cache, and the handler
+//! joins it against the windowed byte sums read from `flow_buckets`.
+//!
+//! Honest limits, surfaced rather than hidden:
+//!   * only rules with `log` enabled ever attribute — everything else returns
+//!     with no attribution and renders as "(not logged)";
+//!   * attribution starts at the follower's journal backfill, so a long-lived
+//!     flow that last logged before that sits unattributed until it re-logs;
+//!   * DNAT (port-forward) flows don't attribute: conntrack's original tuple
+//!     keeps the pre-DNAT destination while the forward-filter log line shows
+//!     the post-DNAT one, so the keys differ. A future refinement could key on
+//!     the reply tuple as well.
+
+use std::collections::HashMap;
+use std::process::Stdio;
+use std::sync::{Arc, Mutex, OnceLock};
+
+use axum::{
+    extract::{Query, State},
+    Json,
+};
+use serde::{Deserialize, Serialize};
+use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::process::Command;
+
+use crate::error::{AppError, Result};
+use crate::monitor;
+use crate::monitoring::open_db;
+use crate::AppState;
+
+/// Service tuple the two sides join on: (proto, src, dst, dport).
+type AttrKey = (String, String, String, u16);
+
+/// Keep at most this many attribution entries; above it the oldest half is
+/// dropped. 100k tuples ≈ a few tens of MB worst case — a bound, not a budget.
+const ATTR_CAP: usize = 100_000;
+
+/// Journal lines to backfill when the follower starts, so the first page load
+/// isn't blind to rules that logged before it.
+const BACKFILL_LINES: &str = "20000";
+
+/// What one logged packet taught us about its flow's rule.
+#[derive(Debug, Clone)]
+pub struct Attr {
+    chain: String,
+    rule: Option<u32>,
+    action: String,
+    ips: bool,
+    in_if: Option<String>,
+    out_if: Option<String>,
+    /// Journal ms timestamp of the sighting — the pruning order.
+    ts: u64,
+}
+
+/// The tuple → rule cache. Lives in AppState; its journal follower is spawned
+/// lazily on the first flows request so an unused page costs nothing.
+#[derive(Default)]
+pub struct Attribution {
+    map: Mutex<HashMap<AttrKey, Attr>>,
+    started: OnceLock<()>,
+}
+
+impl Attribution {
+    /// Spawn the journal follower exactly once (idempotent, cheap after that).
+    pub fn ensure_started(self: &Arc<Self>) {
+        self.started.get_or_init(|| {
+            let attr = self.clone();
+            tokio::spawn(async move { attr.follow_journal().await });
+        });
+    }
+
+    /// Follow the kernel journal forever, folding every firewall log line into
+    /// the cache. journalctl exiting (rotation, restart) just respawns it.
+    async fn follow_journal(self: Arc<Self>) {
+        loop {
+            let child = Command::new("journalctl")
+                .args(["-k", "-f", "-n", BACKFILL_LINES, "-o", "json", "--no-pager"])
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .kill_on_drop(true)
+                .spawn();
+            let mut child = match child {
+                Ok(c) => c,
+                Err(e) => {
+                    tracing::warn!("flow attribution: cannot start journalctl: {e}");
+                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                    continue;
+                }
+            };
+            let Some(stdout) = child.stdout.take() else {
+                tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                continue;
+            };
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                if let Some(e) = monitor::parse_journal_line(&line) {
+                    self.record(&e);
+                }
+            }
+            tracing::debug!("flow attribution journal stream ended; respawning");
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+    }
+
+    /// Fold one parsed firewall log entry into the cache. The newest sighting
+    /// of a tuple wins — after a rule renumber or policy change the latest
+    /// verdict is the one that matches what conntrack is now counting.
+    fn record(&self, e: &monitor::LogEntry) {
+        let (Some(src), Some(dst)) = (&e.src, &e.dst) else { return };
+        let key: AttrKey = (
+            e.proto.clone().unwrap_or_default(),
+            src.clone(),
+            dst.clone(),
+            e.dpt.unwrap_or(0) as u16,
+        );
+        let attr = Attr {
+            chain: e.chain.clone(),
+            rule: e.rule,
+            action: e.action.clone(),
+            ips: e.ips,
+            in_if: e.in_if.clone(),
+            out_if: e.out_if.clone(),
+            ts: e.ts,
+        };
+        let mut map = self.map.lock().unwrap();
+        if map.len() >= ATTR_CAP && !map.contains_key(&key) {
+            prune_oldest_half(&mut map);
+        }
+        map.insert(key, attr);
+    }
+
+    /// Attribution for a tuple, if any packet of it was ever logged.
+    fn lookup(&self, proto: &str, src: &str, dst: &str, dport: u16) -> Option<Attr> {
+        let key: AttrKey = (proto.to_string(), src.to_string(), dst.to_string(), dport);
+        self.map.lock().unwrap().get(&key).cloned()
+    }
+}
+
+/// Drop the oldest half of the cache by sighting time. O(n log n) at the cap,
+/// hit rarely; keeps recently-active tuples, which are the joinable ones.
+fn prune_oldest_half(map: &mut HashMap<AttrKey, Attr>) {
+    let mut stamps: Vec<u64> = map.values().map(|a| a.ts).collect();
+    stamps.sort_unstable();
+    let cutoff = stamps[stamps.len() / 2];
+    map.retain(|_, a| a.ts >= cutoff);
+}
+
+// ── GET /api/monitoring/flows ───────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct FlowsQuery {
+    /// Aggregation window: `5m` (default), `15m`, or `1h` (qfdevd's default
+    /// flow retention ceiling).
+    #[serde(default)]
+    window: Option<String>,
+    /// Max flow records returned (top by bytes). Default 400, capped at 2000.
+    #[serde(default)]
+    limit: Option<u32>,
+}
+
+fn window_secs(window: Option<&str>) -> i64 {
+    match window.unwrap_or("5m") {
+        "15m" => 900,
+        "1h" => 3_600,
+        _ => 300,
+    }
+}
+
+/// One aggregated flow: the byte sums for a service tuple over the window,
+/// plus rule attribution when the flow ever logged. `chain: None` means
+/// unattributed (not logged / logged before our backfill) — distinct from
+/// `chain: Some, rule: None`, which is a chain's default action.
+#[derive(Debug, Serialize)]
+pub struct FlowRecord {
+    pub src: String,
+    pub dst: String,
+    pub proto: String,
+    pub dport: u16,
+    /// src → dst bytes over the window.
+    pub bytes_orig: i64,
+    /// dst → src bytes over the window.
+    pub bytes_reply: i64,
+    /// Convenience total (orig + reply) — the Sankey's ribbon weight.
+    pub bytes: i64,
+    /// Device name (user description, else hostname) when the IP is a known
+    /// client, so the UI can label nodes better than bare addresses.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub src_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dst_name: Option<String>,
+    // ── attribution (all None/false when the flow never logged) ──
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rule: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ips: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub in_if: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub out_if: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FlowsResponse {
+    pub flows: Vec<FlowRecord>,
+    /// Window totals over ALL tuples (not just the returned top-N), so the UI
+    /// can render an honest "showing X of Y" and an Other rollup.
+    pub total_bytes: i64,
+    pub flow_count: i64,
+    pub truncated: bool,
+    /// Sum of bytes on returned flows that carry attribution — the "how much
+    /// of this picture is rule-labeled" figure.
+    pub attributed_bytes: i64,
+    /// False when qfdevd (or a version with flow recording) isn't running yet.
+    pub available: bool,
+    pub window: String,
+    pub now: i64,
+}
+
+/// Raw row out of the blocking DB read, pre-attribution.
+struct TupleRow {
+    proto: String,
+    src: String,
+    dst: String,
+    dport: u16,
+    bytes_orig: i64,
+    bytes_reply: i64,
+}
+
+pub async fn list(
+    State(state): State<Arc<AppState>>,
+    Query(q): Query<FlowsQuery>,
+) -> Result<Json<FlowsResponse>> {
+    // First use of the page arms the journal follower; by the next poll tick
+    // its backfill has usually landed.
+    state.flow_attr.ensure_started();
+
+    let db_path = state.config.devices_db_file.clone();
+    let window = q.window.clone().unwrap_or_else(|| "5m".into());
+    let win_secs = window_secs(q.window.as_deref());
+    let limit = q.limit.unwrap_or(400).clamp(1, 2000) as i64;
+
+    let (rows, names, total_bytes, flow_count, available) =
+        tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+            let now = now_secs();
+            let since = now - win_secs;
+            let Some(conn) = open_db(&db_path)? else {
+                return Ok((Vec::new(), HashMap::new(), 0, 0, false));
+            };
+
+            // An older qfdevd without flow recording has no flow_buckets table;
+            // report "not available" rather than erroring the page.
+            let mut stmt = match conn.prepare(
+                "SELECT proto, src, dst, dport, SUM(bytes_orig), SUM(bytes_reply)
+                 FROM flow_buckets WHERE bucket_ts >= ?1
+                 GROUP BY proto, src, dst, dport
+                 ORDER BY SUM(bytes_orig + bytes_reply) DESC
+                 LIMIT ?2",
+            ) {
+                Ok(s) => s,
+                Err(rusqlite::Error::SqliteFailure(_, Some(msg))) if msg.contains("no such table") => {
+                    return Ok((Vec::new(), HashMap::new(), 0, 0, false));
+                }
+                Err(e) => return Err(e.into()),
+            };
+            let rows = stmt
+                .query_map(rusqlite::params![since, limit], |r| {
+                    Ok(TupleRow {
+                        proto: r.get(0)?,
+                        src: r.get(1)?,
+                        dst: r.get(2)?,
+                        dport: r.get::<_, i64>(3)? as u16,
+                        bytes_orig: r.get(4)?,
+                        bytes_reply: r.get(5)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
+            let (total_bytes, flow_count): (i64, i64) = conn.query_row(
+                "SELECT COALESCE(SUM(bytes_orig + bytes_reply), 0), COUNT(*) FROM
+                   (SELECT 1 FROM flow_buckets WHERE bucket_ts >= ?1
+                    GROUP BY proto, src, dst, dport)",
+                rusqlite::params![since],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )?;
+
+            // IP → display name for every known client, so Sankey nodes read
+            // "Front desk printer" instead of 10.0.0.23. The device table is
+            // small (hundreds), so loading the whole map beats a dynamic IN.
+            let mut names: HashMap<String, String> = HashMap::new();
+            let mut nstmt = conn.prepare(
+                "SELECT current_ip, COALESCE(description, hostname)
+                 FROM devices
+                 WHERE current_ip IS NOT NULL
+                   AND COALESCE(description, hostname) IS NOT NULL",
+            )?;
+            for row in nstmt.query_map([], |r| {
+                Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            })? {
+                if let Ok((ip, name)) = row {
+                    names.insert(ip, name);
+                }
+            }
+
+            Ok((rows, names, total_bytes, flow_count, true))
+        })
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?
+        .map_err(AppError::Internal)?;
+
+    let truncated = flow_count > rows.len() as i64;
+    let mut attributed_bytes = 0i64;
+    let flows: Vec<FlowRecord> = rows
+        .into_iter()
+        .map(|t| {
+            let attr = state.flow_attr.lookup(&t.proto, &t.src, &t.dst, t.dport);
+            let bytes = t.bytes_orig + t.bytes_reply;
+            if attr.is_some() {
+                attributed_bytes += bytes;
+            }
+            let (chain, rule, action, ips, in_if, out_if) = match attr {
+                Some(a) => (Some(a.chain), a.rule, Some(a.action), a.ips, a.in_if, a.out_if),
+                None => (None, None, None, false, None, None),
+            };
+            FlowRecord {
+                src_name: names.get(&t.src).cloned(),
+                dst_name: names.get(&t.dst).cloned(),
+                src: t.src,
+                dst: t.dst,
+                proto: t.proto,
+                dport: t.dport,
+                bytes_orig: t.bytes_orig,
+                bytes_reply: t.bytes_reply,
+                bytes,
+                chain,
+                rule,
+                action,
+                ips,
+                in_if,
+                out_if,
+            }
+        })
+        .collect();
+
+    Ok(Json(FlowsResponse {
+        flows,
+        total_bytes,
+        flow_count,
+        truncated,
+        attributed_bytes,
+        available,
+        window,
+        now: now_secs(),
+    }))
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(proto: &str, src: &str, dst: &str, dpt: Option<u32>, rule: Option<u32>, ts: u64) -> monitor::LogEntry {
+        monitor::LogEntry {
+            ts,
+            family: "ipv4".into(),
+            chain: "forward".into(),
+            rule,
+            action: "accept".into(),
+            src: Some(src.into()),
+            dst: Some(dst.into()),
+            proto: Some(proto.into()),
+            dpt,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn windows_parse_with_default() {
+        assert_eq!(window_secs(Some("5m")), 300);
+        assert_eq!(window_secs(Some("15m")), 900);
+        assert_eq!(window_secs(Some("1h")), 3_600);
+        assert_eq!(window_secs(None), 300);
+        assert_eq!(window_secs(Some("bogus")), 300);
+    }
+
+    #[test]
+    fn record_then_lookup_round_trip() {
+        let attr = Attribution::default();
+        attr.record(&entry("tcp", "10.0.0.5", "1.1.1.1", Some(443), Some(10), 1));
+        let a = attr.lookup("tcp", "10.0.0.5", "1.1.1.1", 443).expect("attributed");
+        assert_eq!(a.chain, "forward");
+        assert_eq!(a.rule, Some(10));
+        assert_eq!(a.action, "accept");
+        // Different port → no attribution.
+        assert!(attr.lookup("tcp", "10.0.0.5", "1.1.1.1", 80).is_none());
+    }
+
+    #[test]
+    fn portless_protocols_key_on_zero() {
+        // ICMP has no DPT in the log line and dport 0 in conntrack — the two
+        // sides must land on the same key.
+        let attr = Attribution::default();
+        attr.record(&entry("icmp", "10.0.0.5", "1.1.1.1", None, Some(20), 1));
+        assert!(attr.lookup("icmp", "10.0.0.5", "1.1.1.1", 0).is_some());
+    }
+
+    #[test]
+    fn newest_sighting_wins() {
+        // After a renumber the tuple re-logs under the new rule; the cache must
+        // follow it, not stay pinned to the first sighting.
+        let attr = Attribution::default();
+        attr.record(&entry("tcp", "10.0.0.5", "1.1.1.1", Some(443), Some(10), 1));
+        attr.record(&entry("tcp", "10.0.0.5", "1.1.1.1", Some(443), Some(30), 2));
+        assert_eq!(attr.lookup("tcp", "10.0.0.5", "1.1.1.1", 443).unwrap().rule, Some(30));
+    }
+
+    #[test]
+    fn entries_without_endpoints_are_ignored() {
+        let attr = Attribution::default();
+        let mut e = entry("tcp", "10.0.0.5", "1.1.1.1", Some(443), Some(10), 1);
+        e.dst = None;
+        attr.record(&e);
+        assert!(attr.map.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn cap_prunes_the_oldest_half() {
+        let mut map: HashMap<AttrKey, Attr> = HashMap::new();
+        for i in 0..10u64 {
+            map.insert(
+                ("tcp".into(), format!("10.0.0.{i}"), "1.1.1.1".into(), 443),
+                Attr {
+                    chain: "forward".into(),
+                    rule: Some(1),
+                    action: "accept".into(),
+                    ips: false,
+                    in_if: None,
+                    out_if: None,
+                    ts: i,
+                },
+            );
+        }
+        prune_oldest_half(&mut map);
+        assert_eq!(map.len(), 5);
+        // The survivors are the recent half.
+        assert!(map.values().all(|a| a.ts >= 5));
+    }
+}

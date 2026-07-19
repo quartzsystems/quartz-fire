@@ -119,6 +119,7 @@ const ITEMS: NavItem[] = [
     href: "/monitoring",
     children: [
       { id: "devices", label: "Devices", href: "/monitoring/devices", icon: MonitorSmartphone },
+      { id: "traffic-flow", label: "Traffic Flow", href: "/monitoring/traffic-flow", icon: Share2 },
       { id: "logs", label: "Logs", href: "/monitoring/logs", icon: ScrollText },
     ],
   },

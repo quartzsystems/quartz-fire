@@ -186,7 +186,8 @@ pub struct PingResult {
 
 /// Open the inventory read/write WITHOUT creating it. A missing file means
 /// qfdevd hasn't run yet; callers decide whether that's empty-or-error.
-fn open_db(path: &Path) -> std::result::Result<Option<Connection>, rusqlite::Error> {
+/// pub(crate): flows.rs reads the same DB's flow_buckets table.
+pub(crate) fn open_db(path: &Path) -> std::result::Result<Option<Connection>, rusqlite::Error> {
     match Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_WRITE) {
         Ok(conn) => {
             // Match qfdevd's pragmas; a WAL reader must not force a rollback
