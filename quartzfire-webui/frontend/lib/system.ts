@@ -484,6 +484,35 @@ export function shutdownSystem(): Promise<void> {
   return opApi("poweroff", { op: "poweroff", path: ["now"] }, "shut down");
 }
 
+// ── scheduled reboot ──────────────────────────────────────────────────────────
+
+/// A pending scheduled reboot/poweroff, from systemd's schedule state (the
+/// backend reads /run/systemd/shutdown/scheduled).
+export interface ShutdownSchedule {
+  scheduled: boolean;
+  /** systemd mode: `reboot`, `poweroff`, … */
+  mode?: string;
+  /** Epoch milliseconds of the scheduled action. */
+  at_ms?: number;
+}
+
+export function fetchShutdownSchedule(): Promise<ShutdownSchedule> {
+  return apiFetch<ShutdownSchedule>("/system/shutdown-schedule");
+}
+
+/// Schedule a reboot via the op-mode grammar `reboot at HH:MM date DD/MM/YYYY`
+/// (non-interactive — the `at` form carries `--yes` in vyos-1x). powerctrl
+/// rejects moments in the past, and the time is interpreted in the FIREWALL's
+/// timezone, not the browser's.
+export function scheduleReboot(time: string, date: string): Promise<void> {
+  return opApi("reboot", { op: "reboot", path: ["at", time, "date", date] }, "schedule the reboot");
+}
+
+/// Cancel a pending scheduled reboot/poweroff (`reboot cancel` → shutdown -c).
+export function cancelScheduledReboot(): Promise<void> {
+  return opApi("reboot", { op: "reboot", path: ["cancel"] }, "cancel the scheduled reboot");
+}
+
 /// Request a full factory reset: the backend drops a trigger file that the
 /// root quartzfire-factory-reset unit acts on — it overwrites the boot config
 /// with the flavor default and reboots. The running config is left intact

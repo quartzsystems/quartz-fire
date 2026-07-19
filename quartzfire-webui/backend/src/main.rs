@@ -223,6 +223,10 @@ async fn main() -> Result<()> {
         // auto-revert; the root quartzfire-factory-reset units do the privileged
         // work. See guard::factory_reset.
         .route("/api/system/factory-reset", post(guard::factory_reset))
+        // Pending `reboot at`/`reboot in` schedule, read from systemd's
+        // /run/systemd/shutdown/scheduled (scheduling/cancel go through the
+        // VyOS op-mode API: `reboot at HH:MM date DD/MM/YYYY`, `reboot cancel`).
+        .route("/api/system/shutdown-schedule", get(guard::shutdown_schedule))
         .route("/api/interfaces/phy", get(phy::ethernet_phy))
         // High Availability config (VRRP + virtual-server + config-sync) is real
         // VyOS config edited through the /api proxy + commit guard; this endpoint

@@ -985,6 +985,50 @@ pub async fn factory_reset(State(state): State<Arc<AppState>>) -> Result<Json<Va
     Ok(Json(json!({ "requested": true })))
 }
 
+// ── scheduled reboot/poweroff status ──────────────────────────────────────────
+
+/// systemd's pending-shutdown state file: written by /sbin/shutdown (which is
+/// what the op-mode `reboot at`/`reboot in` grammar drives via powerctrl.py),
+/// removed on cancel or execution. The CLI's own `--check` reads it too.
+const SHUTDOWN_SCHEDULE_FILE: &str = "/run/systemd/shutdown/scheduled";
+
+/// A pending scheduled reboot/poweroff, if any.
+#[derive(Debug, Serialize)]
+pub struct ShutdownSchedule {
+    pub scheduled: bool,
+    /// systemd mode: `reboot`, `poweroff`, `halt`, …
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    /// Epoch milliseconds of the scheduled action.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at_ms: Option<i64>,
+}
+
+fn parse_shutdown_schedule(text: &str) -> ShutdownSchedule {
+    let mut mode = None;
+    let mut at_ms = None;
+    for line in text.lines() {
+        if let Some((k, v)) = line.split_once('=') {
+            match k {
+                "MODE" => mode = Some(v.trim().to_string()),
+                "USEC" => at_ms = v.trim().parse::<i64>().ok().map(|us| us / 1000),
+                _ => {}
+            }
+        }
+    }
+    ShutdownSchedule { scheduled: mode.is_some() && at_ms.is_some(), mode, at_ms }
+}
+
+/// GET /api/system/shutdown-schedule — the pending reboot/poweroff schedule.
+/// A missing (or unreadable) file reports `scheduled: false` — the schedule
+/// itself lives with systemd either way; this endpoint only feeds the banner.
+pub async fn shutdown_schedule() -> Json<ShutdownSchedule> {
+    Json(match std::fs::read_to_string(SHUTDOWN_SCHEDULE_FILE) {
+        Ok(text) => parse_shutdown_schedule(&text),
+        Err(_) => ShutdownSchedule { scheduled: false, mode: None, at_ms: None },
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1028,6 +1072,19 @@ mod tests {
         assert!(cidr_matches_ip("10.0.0.1", &ip));
         assert!(!cidr_matches_ip("10.0.0.2/24", &ip));
         assert!(!cidr_matches_ip("dhcp", &ip));
+    }
+
+    #[test]
+    fn shutdown_schedule_parses_systemd_state_file() {
+        let s = parse_shutdown_schedule(
+            "USEC=1753243200000000\nWARN_WALL=1\nMODE=reboot\nUID=0\nWALL_MESSAGE=System reboot scheduled\n",
+        );
+        assert!(s.scheduled);
+        assert_eq!(s.mode.as_deref(), Some("reboot"));
+        assert_eq!(s.at_ms, Some(1_753_243_200_000));
+        // Garbage or empty → not scheduled.
+        assert!(!parse_shutdown_schedule("").scheduled);
+        assert!(!parse_shutdown_schedule("MODE=reboot\n").scheduled); // no USEC
     }
 
     #[test]

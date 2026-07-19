@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
+  CalendarClock,
   Eraser,
   FileDown,
   FileUp,
@@ -10,20 +11,25 @@ import {
   Power,
   RotateCw,
   Trash2,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import {
   addImage,
+  cancelScheduledReboot,
   cleanupImageUpload,
   deleteImage,
   downloadConfigBackup,
   factoryReset,
   fetchImages,
+  fetchShutdownSchedule,
   imageNameFromIsoName,
   rebootSystem,
   restoreConfigBackup,
+  scheduleReboot,
   shutdownSystem,
+  ShutdownSchedule,
   SystemImage,
   uploadImageFile,
 } from "@/lib/system";
@@ -120,6 +126,100 @@ function PowerConfirmModal({
           >
             {working ? "Sending…" : isReboot ? "Reboot now" : "Shut down now"}
           </button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+/// Format a Date as the datetime-local input value (local wall time).
+function toLocalInputValue(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/// Schedule a reboot for a specific date/time via the device's own scheduler
+/// (`reboot at HH:MM date DD/MM/YYYY` → systemd shutdown). The chosen moment
+/// is interpreted in the FIREWALL's timezone.
+function ScheduleRebootModal({
+  onClose,
+  onScheduled,
+}: {
+  onClose: () => void;
+  onScheduled: () => void;
+}) {
+  // Default to one hour from now, on a whole minute.
+  const [when, setWhen] = useState(() => toLocalInputValue(new Date(Date.now() + 60 * 60 * 1000)));
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+
+  const run = async () => {
+    const d = new Date(when);
+    if (Number.isNaN(d.getTime())) {
+      setError("Pick a date and time.");
+      return;
+    }
+    if (d.getTime() <= Date.now()) {
+      setError("The scheduled time must be in the future.");
+      return;
+    }
+    setWorking(true);
+    setError("");
+    const p = (n: number) => String(n).padStart(2, "0");
+    try {
+      await scheduleReboot(
+        `${p(d.getHours())}:${p(d.getMinutes())}`,
+        `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`,
+      );
+      onScheduled();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Scheduling failed.");
+      setWorking(false);
+    }
+  };
+
+  return (
+    <ModalShell onClose={onClose} maxWidth={440}>
+      <ModalHeader
+        title="Schedule Reboot"
+        subtitle="Reboot the firewall at a chosen date and time"
+        onClose={onClose}
+      />
+      <div className="flex flex-col gap-4">
+        <label className="flex flex-col gap-2 text-[12.5px] text-[var(--qz-fg-3)]">
+          Reboot at
+          <input
+            type="datetime-local"
+            value={when}
+            min={toLocalInputValue(new Date())}
+            onChange={(e) => setWhen(e.target.value)}
+            className={inputCls}
+            style={monoSt}
+          />
+        </label>
+        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+          The time is interpreted in the firewall&apos;s timezone (System → General). The schedule
+          survives WebUI sessions and can be cancelled here any time before it fires; users logged in
+          at the console are warned by the system shortly before the reboot.
+        </p>
+        {error && (
+          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+            {error}
+          </p>
+        )}
+        <div className="flex gap-2 justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={working}
+            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer disabled:opacity-50"
+            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
+          >
+            Cancel
+          </button>
+          <Button kind="primary" icon={CalendarClock} onClick={run} disabled={working}>
+            {working ? "Scheduling…" : "Schedule reboot"}
+          </Button>
         </div>
       </div>
     </ModalShell>
@@ -596,7 +696,18 @@ export default function MaintenancePage() {
   const [loading, setLoading] = useState(true);
 
   const [powerModal, setPowerModal] = useState<PowerAction | null>(null);
+  const [scheduleModal, setScheduleModal] = useState(false);
+  const [schedule, setSchedule] = useState<ShutdownSchedule | null>(null);
   const [resetModal, setResetModal] = useState(false);
+
+  const refreshSchedule = useCallback(() => {
+    fetchShutdownSchedule()
+      .then(setSchedule)
+      .catch(() => setSchedule(null));
+  }, []);
+  useEffect(() => {
+    refreshSchedule();
+  }, [refreshSchedule]);
   const [addModal, setAddModal] = useState(false);
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -696,9 +807,42 @@ export default function MaintenancePage() {
               Both actions interrupt all traffic through the firewall. Configuration is already saved to the
               boot config after every apply, so nothing is lost by rebooting.
             </p>
+            {schedule?.scheduled && (
+              <div
+                className="flex items-center gap-3 px-3 py-2 mb-4 rounded-md text-[12.5px] text-[var(--qz-warn)]"
+                style={{
+                  background: "var(--qz-warn-soft)",
+                  border: "1px solid color-mix(in oklab, var(--qz-warn) 30%, transparent)",
+                }}
+              >
+                <CalendarClock size={14} className="flex-shrink-0" />
+                <span>
+                  {schedule.mode === "poweroff" ? "Shutdown" : "Reboot"} scheduled for{" "}
+                  {schedule.at_ms ? new Date(schedule.at_ms).toLocaleString() : "an unknown time"}.
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await cancelScheduledReboot();
+                      setToast("Scheduled reboot cancelled.");
+                    } catch (e) {
+                      setToast(e instanceof Error ? e.message : "Cancel failed.");
+                    }
+                    refreshSchedule();
+                  }}
+                  className="inline-flex items-center gap-1 ml-auto bg-transparent border-0 p-0 cursor-pointer text-[12.5px] font-medium text-[var(--qz-fg-2)] hover:text-[var(--qz-fg-1)]"
+                >
+                  <X size={13} /> Cancel schedule
+                </button>
+              </div>
+            )}
             <div className="flex gap-2">
               <Button kind="secondary" icon={RotateCw} onClick={() => setPowerModal("reboot")}>
                 Reboot
+              </Button>
+              <Button kind="secondary" icon={CalendarClock} onClick={() => setScheduleModal(true)}>
+                Schedule reboot…
               </Button>
               <Button kind="danger" icon={Power} onClick={() => setPowerModal("shutdown")}>
                 Shut down
@@ -813,6 +957,17 @@ export default function MaintenancePage() {
           onConfirmed={(msg) => {
             setPowerModal(null);
             setToast(msg);
+          }}
+        />
+      )}
+
+      {scheduleModal && (
+        <ScheduleRebootModal
+          onClose={() => setScheduleModal(false)}
+          onScheduled={() => {
+            setScheduleModal(false);
+            setToast("Reboot scheduled.");
+            refreshSchedule();
           }}
         />
       )}
