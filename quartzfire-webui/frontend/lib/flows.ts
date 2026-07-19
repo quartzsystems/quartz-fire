@@ -53,3 +53,19 @@ export interface FlowsResponse {
 export async function fetchFlows(window: FlowWindow, metric: FlowMetric, limit = 400): Promise<FlowsResponse> {
   return apiFetch<FlowsResponse>(`/monitoring/flows?window=${window}&metric=${metric}&limit=${limit}`);
 }
+
+/// One rule move of a reorder: (chain, old number) → new number.
+export interface AttributionMove {
+  chain: string;
+  from: number;
+  to: number;
+}
+
+/** Re-point the backend's flow-attribution cache after a rule renumber. The
+ * nftables log prefix only carries rule numbers, so without this a long-lived
+ * flow's cached number would resolve to whichever rule holds it NOW — the
+ * Sankey would file its bytes under the wrong rule until the flow re-logs. */
+export async function remapFlowAttribution(moves: AttributionMove[]): Promise<void> {
+  if (moves.length === 0) return;
+  await apiFetch(`/monitoring/flows/renumber`, { method: "POST", body: JSON.stringify(moves) });
+}

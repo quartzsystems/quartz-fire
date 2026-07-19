@@ -149,6 +149,10 @@ async fn main() -> Result<()> {
         // Bytes-weighted flow records with firewall-rule attribution — the
         // Traffic Flow Sankey's data (see flows.rs for the two-source join).
         .route("/api/monitoring/flows", get(flows::list))
+        // Rule-reorder remap: the log prefix only carries rule numbers, so a
+        // renumber must re-point the attribution cache or stale entries show
+        // under whichever rule holds their old number now.
+        .route("/api/monitoring/flows/renumber", post(flows::renumber))
         .route(
             "/api/monitoring/devices/:mac",
             get(monitoring::detail).patch(monitoring::patch),

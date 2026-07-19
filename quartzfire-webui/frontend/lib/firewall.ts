@@ -32,6 +32,8 @@ import { vyosApi } from "./api";
 import type { VyosCommand, VyosResponse } from "./interfaces";
 import { guardedCommitAndSave } from "./guard";
 import { showText } from "./vyos";
+import { remapFlowAttribution } from "./flows";
+import type { AttributionMove } from "./flows";
 
 /// A bad firewall change can sever the management session, so firewall writes
 /// commit under commit-confirm: live immediately, auto-reverted unless the
@@ -1957,6 +1959,16 @@ export function reorderCommands(orderedRules: FirewallRule[]): VyosCommand[] {
   return [...deletes, ...sets];
 }
 
+/// Per-scope (chain, old number) → new number moves of a reorder, in the shape
+/// the Traffic Flow attribution remap takes. Exported for tests.
+export function attributionMoves(orderedRules: FirewallRule[]): AttributionMove[] {
+  const out: AttributionMove[] = [];
+  for (const { rule, target } of renumberTargets(orderedRules)) {
+    for (const s of rule.scopes) out.push({ chain: s.chain, from: rule.rule, to: target });
+  }
+  return out;
+}
+
 /// Apply a new rule order. `extraCommands` ride the same commit — used by the
 /// reorder cascade to repoint security-feature config at the new rule numbers
 /// atomically with the renumber. Returns the number of rules renumbered.
@@ -1968,7 +1980,13 @@ export async function applyRuleOrder(
   // user, however many pairs it spans.
   const renumbered = renumberedCount(orderedRules);
   const commands = [...reorderCommands(orderedRules), ...extraCommands];
-  if (commands.length > 0) await commitAndSave(commands);
+  if (commands.length > 0) {
+    await commitAndSave(commands);
+    // Re-point the Traffic Flow attribution cache at the new numbers.
+    // Best-effort: attribution is a display concern; a failure here must not
+    // read as a failed reorder (the config commit already succeeded).
+    remapFlowAttribution(attributionMoves(orderedRules)).catch(() => {});
+  }
   return renumbered;
 }
 

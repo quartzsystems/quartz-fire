@@ -153,6 +153,53 @@ impl Attribution {
         let key: AttrKey = (proto.to_string(), src.to_string(), dst.to_string(), dport);
         self.map.lock().unwrap().get(&key).cloned()
     }
+
+    /// Re-point cached entries after a rule renumber (WebUI drag-reorder).
+    ///
+    /// The nftables log prefix carries only chain + rule NUMBER, and rule logs
+    /// fire once per connection — so after a reorder, a long-lived flow's
+    /// cached number resolves to whichever rule holds that number NOW, i.e. the
+    /// wrong one. The reorder is the only place the old→new mapping exists, so
+    /// the frontend posts it here in the same breath as the commit.
+    ///
+    /// Single pass over the map, each entry matched against its ORIGINAL
+    /// (chain, rule) — two rules swapping numbers in one batch can't chain.
+    /// Returns how many entries were re-pointed.
+    pub fn renumber(&self, moves: &[RenumberMove]) -> usize {
+        let mut map = self.map.lock().unwrap();
+        let mut n = 0;
+        for attr in map.values_mut() {
+            let Some(rule) = attr.rule else { continue };
+            if let Some(m) = moves.iter().find(|m| m.chain == attr.chain && m.from == rule) {
+                attr.rule = Some(m.to);
+                n += 1;
+            }
+        }
+        n
+    }
+}
+
+/// One rule move of a reorder: (chain, old number) → new number. `chain` uses
+/// the same scope strings the log parser produces ("forward", "input",
+/// "output", or "name:<ruleset>" for a zone pair's ruleset).
+#[derive(Debug, Deserialize)]
+pub struct RenumberMove {
+    pub chain: String,
+    pub from: u32,
+    pub to: u32,
+}
+
+/// POST /api/monitoring/flows/renumber — apply a reorder's old→new rule-number
+/// mapping to the attribution cache (see Attribution::renumber).
+pub async fn renumber(
+    State(state): State<Arc<AppState>>,
+    Json(moves): Json<Vec<RenumberMove>>,
+) -> Result<Json<serde_json::Value>> {
+    if moves.len() > 10_000 {
+        return Err(AppError::BadRequest("too many renumber entries".into()));
+    }
+    let remapped = state.flow_attr.renumber(&moves);
+    Ok(Json(serde_json::json!({ "remapped": remapped })))
 }
 
 /// Drop the oldest half of the cache by sighting time. O(n log n) at the cap,
@@ -566,6 +613,42 @@ mod tests {
             .collect::<std::result::Result<_, _>>()
             .unwrap();
         assert_eq!(names, vec![("10.0.0.5".into(), "laptop".into())]);
+    }
+
+    #[test]
+    fn renumber_repoints_by_original_number_so_swaps_cannot_chain() {
+        let attr = Attribution::default();
+        attr.record(&entry("tcp", "10.0.0.5", "1.1.1.1", Some(443), Some(10), 1));
+        attr.record(&entry("tcp", "10.0.0.5", "2.2.2.2", Some(443), Some(20), 1));
+        attr.record(&entry("udp", "10.0.0.5", "3.3.3.3", Some(53), Some(30), 1));
+
+        // Rules 10 and 20 swap in one reorder batch. Chained application would
+        // collapse both onto one number; original-value matching must not.
+        let n = attr.renumber(&[
+            RenumberMove { chain: "forward".into(), from: 10, to: 20 },
+            RenumberMove { chain: "forward".into(), from: 20, to: 10 },
+        ]);
+        assert_eq!(n, 2);
+        assert_eq!(attr.lookup("tcp", "10.0.0.5", "1.1.1.1", 443).unwrap().rule, Some(20));
+        assert_eq!(attr.lookup("tcp", "10.0.0.5", "2.2.2.2", 443).unwrap().rule, Some(10));
+        // Untouched rule keeps its number.
+        assert_eq!(attr.lookup("udp", "10.0.0.5", "3.3.3.3", 53).unwrap().rule, Some(30));
+    }
+
+    #[test]
+    fn renumber_is_chain_scoped_and_skips_default_actions() {
+        let attr = Attribution::default();
+        // Same number in a different chain must not be caught by the move.
+        let mut e = entry("tcp", "10.0.0.5", "1.1.1.1", Some(443), Some(10), 1);
+        e.chain = "input".into();
+        attr.record(&e);
+        // Default-action attribution has no number to move.
+        attr.record(&entry("tcp", "10.0.0.5", "4.4.4.4", Some(80), None, 1));
+
+        let n = attr.renumber(&[RenumberMove { chain: "forward".into(), from: 10, to: 20 }]);
+        assert_eq!(n, 0);
+        assert_eq!(attr.lookup("tcp", "10.0.0.5", "1.1.1.1", 443).unwrap().rule, Some(10));
+        assert_eq!(attr.lookup("tcp", "10.0.0.5", "4.4.4.4", 80).unwrap().rule, None);
     }
 
     #[test]

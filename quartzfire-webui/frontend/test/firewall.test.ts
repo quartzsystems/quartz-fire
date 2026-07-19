@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 
 import {
   aliasUsage,
+  attributionMoves,
   diffRule,
   diffZone,
   emptyFirewallConfig,
@@ -727,6 +728,23 @@ test("interface-alias usage counts the rules referencing the group", () => {
     baseRule({ rule: 20 }),
   ];
   assert.deepEqual(aliasUsage(rules, [], ifaceAlias()), [10]);
+});
+
+test("a reorder's attribution moves cover every scope of a moved rule", () => {
+  // The Traffic Flow cache keys rules by (chain, number) from the log prefix,
+  // so a reorder must re-point one entry per SCOPE — a multi-zone rule at one
+  // number spans several rulesets, each with its own log lines.
+  const moved = zoneRule([["LAN", "WAN"], ["DMZ", "WAN"]], { rule: 30 });
+  const stays = baseRule({ rule: 10 });
+  // Display order: [stays, moved] → moved renumbers 30 → 20; stays keeps 10.
+  const moves = attributionMoves([stays, moved]);
+  assert.deepEqual(
+    moves.map((m) => `${m.chain} ${m.from}->${m.to}`).sort(),
+    [
+      `${zoneRuleChain(pairRuleset("DMZ", "WAN"))} 30->20`,
+      `${zoneRuleChain(pairRuleset("LAN", "WAN"))} 30->20`,
+    ],
+  );
 });
 
 test("an interface alias expands into its member interfaces for App Control", () => {
