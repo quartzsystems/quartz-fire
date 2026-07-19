@@ -1,16 +1,19 @@
 mod appcontrol;
 mod auth;
+mod bgp;
 mod config;
 mod config_sync;
 mod content_filtering;
 mod dashboard;
 mod error;
+mod frr;
 mod geolocation;
 mod guard;
 mod image;
 mod ips;
 mod monitor;
 mod monitoring;
+mod mpls;
 mod phy;
 mod proxy;
 mod ssl_inspection;
@@ -103,6 +106,15 @@ async fn main() -> Result<()> {
         )
         .route("/api/monitoring/devices/:mac/ping", post(monitoring::ping))
         .route("/api/monitoring/devices/:mac/ping/stream", get(monitoring::ping_stream))
+        // Live BGP session status (Routing → BGP → Status). Read-only FRR
+        // queries via vtysh; config still flows through the /api proxy. See bgp.rs.
+        .route("/api/bgp/summary", get(bgp::summary))
+        .route("/api/bgp/neighbor/:id", get(bgp::neighbor))
+        // Live MPLS / LDP status (Routing → MPLS → Status). Read-only FRR
+        // queries via vtysh; config flows through the /api proxy. See mpls.rs.
+        .route("/api/mpls/status", get(mpls::status))
+        .route("/api/mpls/bindings", get(mpls::bindings))
+        .route("/api/mpls/table", get(mpls::table))
         .route("/api/ips/status", get(ips::status))
         .route("/api/ips/settings", put(ips::put_settings))
         .route("/api/ips/update", post(ips::request_update))

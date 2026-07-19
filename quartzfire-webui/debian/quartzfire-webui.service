@@ -13,9 +13,10 @@ Environment=QUARTZFIRE_WEBUI_CONFIG=/etc/quartzfire/webui.toml
 Restart=on-failure
 RestartSec=2
 # Hardening — the backend only needs to read its config/key, talk localhost,
-# and follow the kernel journal (systemd-journal) for the Traffic Monitor.
+# follow the kernel journal (systemd-journal) for the Traffic Monitor, and reach
+# the FRR VTY sockets (frrvty) for read-only BGP/MPLS status via vtysh.
 DynamicUser=yes
-SupplementaryGroups=quartzfire systemd-journal
+SupplementaryGroups=quartzfire systemd-journal frrvty
 NoNewPrivileges=yes
 # The Devices → ping tool shells out to `ping`, which must open an ICMP socket.
 # NoNewPrivileges makes the kernel ignore ping's file capability, and the

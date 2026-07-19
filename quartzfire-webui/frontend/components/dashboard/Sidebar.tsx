@@ -67,6 +67,7 @@ const ITEMS: NavItem[] = [
     children: [
       { id: "static", label: "Static", href: "/routing/static", icon: Milestone },
       { id: "bgp",    label: "BGP",    href: "/routing/bgp",    icon: Share2 },
+      { id: "mpls",   label: "MPLS",   href: "/routing/mpls",   icon: Waypoints },
       { id: "policy", label: "Policy", href: "/routing/policy", icon: Filter },
     ],
   },

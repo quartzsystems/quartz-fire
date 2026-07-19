@@ -18,9 +18,10 @@ import { fetchInterfaceStats } from "@/lib/vyos";
 import { fetchRouteMapNames } from "@/lib/routing-policy";
 import { useDashboard } from "@/lib/DashboardContext";
 import { BgpGlobalPanel } from "./BgpGlobalPanel";
+import { BgpStatusPanel } from "./BgpStatusPanel";
 import { PeerFormModal } from "./PeerFormModal";
 
-type Section = "global" | "neighbors" | "peer-groups";
+type Section = "global" | "neighbors" | "peer-groups" | "status";
 
 const AF_SHORT: Record<AddressFamily, string> = {
   "ipv4-unicast": "v4",
@@ -144,6 +145,7 @@ export default function BgpPage() {
     ["global", "Global", null],
     ["neighbors", "Neighbors", cfg?.neighbors.length ?? 0],
     ["peer-groups", "Peer Groups", cfg?.peerGroups.length ?? 0],
+    ["status", "Status", null],
   ];
 
   return (
@@ -195,6 +197,8 @@ export default function BgpPage() {
             {section === "global" && (
               <BgpGlobalPanel live={cfg.global} onSaved={(msg) => { setToast(msg); load("refresh"); }} />
             )}
+
+            {section === "status" && <BgpStatusPanel />}
 
             {section === "neighbors" && (
               <DataTable

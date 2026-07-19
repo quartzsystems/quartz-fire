@@ -31,6 +31,7 @@ const ACTIONS: PaletteAction[] = [
   { id: "nav-routing",    section: "Go to", label: "Routing",    kbd: "G R", href: "/routing" },
   { id: "nav-rt-static",   section: "Go to", label: "Routing › Static", kbd: "", href: "/routing/static" },
   { id: "nav-rt-bgp",      section: "Go to", label: "Routing › BGP",    kbd: "", href: "/routing/bgp" },
+  { id: "nav-rt-mpls",     section: "Go to", label: "Routing › MPLS",   kbd: "", href: "/routing/mpls" },
   { id: "nav-rt-policy",   section: "Go to", label: "Routing › Policy", kbd: "", href: "/routing/policy" },
   { id: "nav-vpn",        section: "Go to", label: "VPN", kbd: "", href: "/vpn" },
   { id: "nav-services",   section: "Go to", label: "Services",   kbd: "G V", href: "/services" },
