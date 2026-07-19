@@ -1,0 +1,22 @@
+Source: qfagent
+Section: net
+Priority: optional
+Maintainer: QuartzFire <cwellman@quartz.systems>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/zagdrath/quartz-fire
+
+Package: qfagent
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         python3
+Description: QuartzFire cloud management agent (QuartzCommand client)
+ Device identity (Ed25519, host-fingerprint clone protection), enrollment
+ against the QuartzCommand cloud controller (token-triggered via
+ `set system quartz-command enroll-token`), and the persistent outbound
+ mTLS control channel with automatic certificate renewal.
+ .
+ Ships the `system quartz-command` config nodes, the `show quartz-command
+ status` op-mode command, and the `qf` operator CLI (status, identity
+ regenerate, prepare-template).

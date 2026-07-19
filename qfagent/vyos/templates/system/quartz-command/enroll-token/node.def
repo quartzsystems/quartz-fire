@@ -1,0 +1,2 @@
+type: txt
+help: One-shot enrollment token (QC1|...); consumed at commit, then removed from the config automatically

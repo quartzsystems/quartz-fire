@@ -1,0 +1,53 @@
+[Unit]
+Description=QuartzFire cloud management agent (QuartzCommand client)
+Documentation=file:/usr/share/doc/qfagent/design.md
+# Outbound-only daemon: wants the network actually up. /config is a late bind
+# mount on VyOS (vyos-router is Type=simple, so After= cannot wait for it);
+# the daemon polls for it itself before touching the identity store.
+Wants=network-online.target
+After=network-online.target vyos-router.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=/usr/libexec/quartzfire/qfagent run
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=15
+# Covers the bounded /config mount wait (120 s) plus startup headroom.
+TimeoutStartSec=180
+
+# Root: the device private key is root-owned 0600 and the DMI product UUID
+# (/sys/class/dmi/id/product_uuid) is root-only. Sandboxed as far as a root
+# daemon can be.
+# status.json in /run/qfagent is world-readable for the WebUI backend and the
+# op-mode CLI. RuntimeDirectoryPreserve: the conf-mode owner bumps
+# /run/qfagent/scrub-request and then try-restarts this unit — without
+# preserve, the stop would wipe the pending trigger before the path unit's
+# service consumed it.
+RuntimeDirectory=qfagent
+RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
+ReadWritePaths=-/config/quartzfire
+
+# Sandboxing.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# Outbound TLS + DNS resolution.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+SyslogIdentifier=qfagent
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,7 @@
+/target
+/debian/cargo
+/debian/qfagent
+/debian/.debhelper
+/debian/files
+/debian/*.substvars
+/debian/debhelper-build-stamp

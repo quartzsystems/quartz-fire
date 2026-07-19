@@ -1,0 +1,29 @@
+// mTLS-authenticated device service. The caller's identity (device_id, org,
+// public key) comes from the presented client certificate, never from the
+// request body.
+//
+// Vendored verbatim from the QuartzCommand repo
+// (backend/proto/quartzcommand/device/v1/device.proto); the server side is
+// authoritative.
+syntax = "proto3";
+
+package quartzcommand.device.v1;
+
+service DeviceService {
+  // Issue a fresh client certificate for the presented identity. The CSR must
+  // carry the same Ed25519 public key and CN=device_id as the current cert.
+  // Devices are expected to renew at 2/3 of cert lifetime (see
+  // renew_after_unix in the response).
+  rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
+}
+
+message RenewCertificateRequest {
+  bytes csr_der = 1;
+}
+
+message RenewCertificateResponse {
+  bytes client_cert_der = 1;
+  repeated bytes ca_chain_der = 2;
+  int64 not_after_unix = 3;    // expiry of the new cert
+  int64 renew_after_unix = 4;  // 2/3 of lifetime — renew at/after this time
+}

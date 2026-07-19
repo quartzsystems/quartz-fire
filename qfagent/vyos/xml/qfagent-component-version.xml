@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!--
+QuartzCommand (qfagent) component version, registered in the system
+component-version set so config.boot footers carry it and the boot-time
+migrator can bring older configs forward (see quartzfire-ssl-inspection's
+xml-component-version.xml for the full mechanism; this file has its own
+name because every package's version file shares the one
+/usr/share/quartzfire/xml directory and dpkg forbids path collisions).
+
+Bump the version whenever the `system quartz-command` CLI grammar changes
+incompatibly, and ship a matching migration script under
+config-migrate/migrate/quartzfire-qfagent/.
+
+History:
+  1  initial grammar (gateway / port / ca-certificate / enroll-token).
+-->
+<interfaceDefinition>
+  <syntaxVersion component="quartzfire-qfagent" version="1"/>
+</interfaceDefinition>

@@ -1,0 +1,4 @@
+type: u32
+help: QuartzCommand gateway port
+default: 443
+syntax:expression: $VAR(@) >= 1 && $VAR(@) <= 65535 ; "port must be 1-65535"

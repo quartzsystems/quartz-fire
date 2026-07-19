@@ -1,0 +1,11 @@
+[Unit]
+Description=Remove consumed QuartzCommand enroll-token from the config
+
+[Service]
+Type=oneshot
+# Root, unsandboxed: drives a real config session (cli-shell-api
+# setupSession + my_delete/my_set/my_commit + boot-config save), which needs
+# the vyatta unionfs machinery. Retries internally while the triggering
+# commit still holds the commit lock.
+ExecStart=/usr/libexec/quartzfire/qfagent scrub
+SyslogIdentifier=qfagent-scrub

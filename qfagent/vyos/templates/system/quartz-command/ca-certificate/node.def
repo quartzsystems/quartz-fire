@@ -1,0 +1,3 @@
+type: txt
+help: PKI certificate name trusted for the gateway TLS (self-hosted controllers without WebPKI certificates)
+allowed: cli-shell-api listActiveNodes pki certificate | tr -d "'"

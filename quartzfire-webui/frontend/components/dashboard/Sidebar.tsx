@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, Settings, Search, LogOut, Network, Route, ArrowLeftRight, Shield, Server, LucideIcon, ChevronDown, ChevronRight, Cable, Tags, Repeat, Combine, Waypoints, Shuffle, ListOrdered, Boxes, BookMarked, Milestone, Router, Forward, Globe, Activity, ScrollText, ShieldAlert, SlidersHorizontal, Users, KeyRound, Wrench, AppWindow, Earth, Lock, ShieldCheck, HeartPulse, FolderSync, Filter, MonitorSmartphone, Spline, Share2 } from "lucide-react";
+import { Gauge, Settings, Search, LogOut, Network, Route, ArrowLeftRight, Shield, Server, LucideIcon, ChevronDown, ChevronRight, Cable, Tags, Repeat, Combine, Waypoints, Shuffle, ListOrdered, Boxes, BookMarked, Milestone, Router, Forward, Globe, Activity, ScrollText, ShieldAlert, SlidersHorizontal, Users, KeyRound, Wrench, AppWindow, Earth, Lock, ShieldCheck, HeartPulse, FolderSync, Filter, MonitorSmartphone, Spline, Share2, Cloud } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -130,6 +130,7 @@ const ITEMS: NavItem[] = [
     href: "/system",
     children: [
       { id: "general",     label: "General",     href: "/system/general",     icon: SlidersHorizontal },
+      { id: "management",  label: "Management",  href: "/system/management",  icon: Cloud },
       { id: "users",       label: "Users",       href: "/system/users",       icon: Users },
       { id: "ssh",         label: "SSH",         href: "/system/ssh",         icon: KeyRound },
       { id: "maintenance", label: "Maintenance", href: "/system/maintenance", icon: Wrench },

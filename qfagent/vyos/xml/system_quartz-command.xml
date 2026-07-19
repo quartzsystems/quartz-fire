@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+<!--
+QuartzCommand cloud management: vyos-1x XML interface definition.
+
+This does NOT generate the CLI grammar - the hand-written cstore templates
+under vyos/templates/ do that, and this file must be kept in sync with them.
+It exists because vyos-configd resolves every commit diff path through the
+vyos.xml_ref reference cache: a path missing from the cache raises inside
+get_commit_scripts(), configd dies, and the committing vyshim hangs forever
+waiting for a reply (see quartzfire-geoip's identical file for the war
+story). postinst feeds this file to vyos-1x's xml_ref/generate_cache.py +
+update_cache.py so `system quartz-command` is a known path.
+
+The owner must match the node.def `end:` script and MUST end in .py:
+configd parses the script path with a regex hard-requiring the suffix
+(process_node_data), and crashes on anything else.
+-->
+<interfaceDefinition>
+  <node name="system">
+    <children>
+      <node name="quartz-command" owner="${vyos_conf_scripts_dir}/system_quartz-command.py">
+        <properties>
+          <help>QuartzCommand cloud management</help>
+          <priority>995</priority>
+        </properties>
+        <children>
+          <leafNode name="gateway">
+            <properties>
+              <help>QuartzCommand gateway hostname or address</help>
+            </properties>
+          </leafNode>
+          <leafNode name="port">
+            <properties>
+              <help>QuartzCommand gateway port</help>
+            </properties>
+          </leafNode>
+          <leafNode name="ca-certificate">
+            <properties>
+              <help>PKI certificate name trusted for the gateway TLS</help>
+            </properties>
+          </leafNode>
+          <leafNode name="enroll-token">
+            <properties>
+              <help>One-shot enrollment token (consumed at commit)</help>
+            </properties>
+          </leafNode>
+        </children>
+      </node>
+    </children>
+  </node>
+</interfaceDefinition>

@@ -1,0 +1,3 @@
+type: txt
+help: QuartzCommand gateway hostname or address (a token's gateway overrides this at enrollment)
+syntax:expression: pattern $VAR(@) "^[A-Za-z0-9.:_\[\]-]+$" ; "gateway must be a hostname or IP address"

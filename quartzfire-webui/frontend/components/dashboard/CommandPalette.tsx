@@ -50,6 +50,7 @@ const ACTIONS: PaletteAction[] = [
   { id: "nav-ha-vrrp",        section: "Go to", label: "High Availability › VRRP",        kbd: "", href: "/high-availability/vrrp" },
   { id: "nav-system",     section: "Go to", label: "System",     kbd: "G S", href: "/system" },
   { id: "nav-sys-general",     section: "Go to", label: "System › General",     kbd: "", href: "/system/general" },
+  { id: "nav-sys-management",  section: "Go to", label: "System › Management",  kbd: "", href: "/system/management" },
   { id: "nav-sys-users",       section: "Go to", label: "System › Users",       kbd: "", href: "/system/users" },
   { id: "nav-sys-ssh",         section: "Go to", label: "System › SSH",         kbd: "", href: "/system/ssh" },
   { id: "nav-sys-maintenance", section: "Go to", label: "System › Maintenance", kbd: "", href: "/system/maintenance" },

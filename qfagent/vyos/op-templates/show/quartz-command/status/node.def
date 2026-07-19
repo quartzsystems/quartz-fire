@@ -1,0 +1,2 @@
+help: Show enrollment and control channel status
+run: /usr/bin/qf status

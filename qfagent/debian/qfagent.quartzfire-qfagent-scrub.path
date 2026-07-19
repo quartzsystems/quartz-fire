@@ -1,0 +1,13 @@
+[Unit]
+Description=Watch for QuartzCommand enroll-token scrub requests
+
+[Path]
+# Bumped (temp + rename) by the conf-mode owner after a token is consumed:
+# the scrub service then deletes the token from the active config and
+# persists the token's gateway, in its own config session (a commit cannot
+# modify the very session it is validating).
+PathChanged=/run/qfagent/scrub-request
+MakeDirectory=yes
+
+[Install]
+WantedBy=multi-user.target

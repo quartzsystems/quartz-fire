@@ -178,6 +178,18 @@ pub struct Config {
     #[serde(default = "default_devices_online_timeout_secs")]
     pub devices_online_timeout_secs: u64,
 
+    // ── QuartzCommand cloud management (qfagent) ────────────────────────────
+    /// qfagent's live status (enrollment, control channel, cert expiry) for
+    /// System → Management. Null-tolerant — absent until qfagent runs.
+    #[serde(default = "default_qfagent_status_file")]
+    pub qfagent_status_file: PathBuf,
+
+    /// qfagent's durable enrollment state (device ID, org, gateways). Written
+    /// root-owned by the conf-mode owner/daemon; world-readable, no secrets
+    /// (keys/certs live in the adjacent identity/ dir, which stays private).
+    #[serde(default = "default_qfagent_state_file")]
+    pub qfagent_state_file: PathBuf,
+
     /// "Factory reset" trigger file watched by quartzfire-factory-reset.path.
     /// Lives under /config/quartzfire (writable for us) like the other
     /// desired-state files. The backend only writes it; the root
@@ -245,6 +257,12 @@ fn default_appcontrol_events_file() -> PathBuf {
 }
 fn default_appcontrol_apply_file() -> PathBuf {
     PathBuf::from("/run/qfappd/apply.json")
+}
+fn default_qfagent_status_file() -> PathBuf {
+    PathBuf::from("/run/qfagent/status.json")
+}
+fn default_qfagent_state_file() -> PathBuf {
+    PathBuf::from("/config/quartzfire/qfagent/state.json")
 }
 fn default_geoip_status_file() -> PathBuf {
     PathBuf::from("/run/quartzfire-geoip/status.json")

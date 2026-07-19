@@ -1,0 +1,36 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        if [ -d /config ]; then
+            mkdir -p /config/quartzfire
+        fi
+
+        # Register `system quartz-command` with the vyos-1x Python XML
+        # reference cache. The cstore templates alone are NOT enough:
+        # vyos-configd resolves every commit diff path through vyos.xml_ref
+        # and dies on paths missing from the cache, hanging the commit (see
+        # quartzfire-geoip's postinst for the mechanism).
+        XML_REF=/usr/lib/python3/dist-packages/vyos/xml_ref
+        if [ -f "$XML_REF/generate_cache.py" ]; then
+            vyconf_tmp=$(mktemp)
+            if (cd "$XML_REF" && \
+                python3 generate_cache.py \
+                    --xml-dir /usr/share/quartzfire/xml \
+                    --package-name quartzfire-qfagent \
+                    --internal-cache "$vyconf_tmp" >/dev/null && \
+                python3 update_cache.py); then
+                systemctl try-restart vyos-configd 2>/dev/null || true
+            else
+                echo "qfagent: WARNING: xml_ref cache registration failed —" \
+                     "committing quartz-command config will hang vyos-configd" >&2
+            fi
+            rm -f "$vyconf_tmp"
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

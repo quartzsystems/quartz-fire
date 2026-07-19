@@ -1,0 +1,20 @@
+qfagent (0.1.0) unstable; urgency=medium
+
+  * Initial release: QuartzCommand cloud enrollment for QuartzFire.
+    - Ed25519 device identity under /config/quartzfire/qfagent/identity/
+      (device ID QF-XXXX-XXXX-XXXX-XXXX derived from the public key), with
+      machine-id + DMI host fingerprinting for clone protection and a
+      reserved TPM keying seam.
+    - `system quartz-command` config nodes (gateway, port, ca-certificate,
+      one-shot enroll-token); committing a token enrolls synchronously and a
+      root one-shot then scrubs the token from the config and persists the
+      token's gateway.
+    - Enrollment TLS trust: WebPKI first, token CA-fingerprint pinning as
+      fallback; the pinned CA is persisted for the control channel.
+    - Persistent mTLS control channel (exponential backoff with jitter,
+      25 s HTTP/2 keepalive) and certificate renewal at 2/3 lifetime with a
+      <7-day alarm.
+    - `show quartz-command status` op-mode command and the `qf` CLI
+      (status / identity regenerate / prepare-template).
+
+ -- QuartzFire <cwellman@quartz.systems>  Sat, 19 Jul 2026 00:00:00 +0000

@@ -26,6 +26,10 @@ mod ips;
 #[path = "services/ssl_inspection.rs"]
 mod ssl_inspection;
 
+// System-level integrations.
+#[path = "system/quartz_command.rs"]
+mod quartz_command;
+
 // Monitoring / telemetry read paths.
 #[path = "monitoring/dashboard.rs"]
 mod dashboard;
@@ -223,6 +227,9 @@ async fn main() -> Result<()> {
         // auto-revert; the root quartzfire-factory-reset units do the privileged
         // work. See guard::factory_reset.
         .route("/api/system/factory-reset", post(guard::factory_reset))
+        // QuartzCommand cloud management status (System → Management); the
+        // config side (incl. enrollment) goes through the VyOS proxy.
+        .route("/api/quartz-command/status", get(quartz_command::status))
         // Pending `reboot at`/`reboot in` schedule, read from systemd's
         // /run/systemd/shutdown/scheduled (scheduling/cancel go through the
         // VyOS op-mode API: `reboot at HH:MM date DD/MM/YYYY`, `reboot cancel`).

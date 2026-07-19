@@ -1,0 +1,60 @@
+#!/usr/bin/make -f
+# qfagent Debian packaging. Pure-Rust build; the protos compile with protox
+# (no protoc needed, unlike qfappd).
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export CARGO_HOME = $(CURDIR)/debian/cargo
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	cargo build --release --locked
+
+override_dh_auto_test:
+	cargo test --release --locked
+
+override_dh_auto_clean:
+	cargo clean || true
+	rm -rf debian/cargo
+
+override_dh_auto_install:
+	# One multi-call binary; the conf-mode owner and the qf CLI are symlinks
+	# dispatched on argv[0] (see src/main.rs).
+	install -D -m0755 target/release/qfagent \
+		debian/qfagent/usr/libexec/quartzfire/qfagent
+	# Operator CLI (also the op-mode `show quartz-command status` runner).
+	install -d debian/qfagent/usr/bin
+	ln -s ../libexec/quartzfire/qfagent debian/qfagent/usr/bin/qf
+	# The .py suffix is mandatory even though the target is an ELF binary:
+	# vyos-configd regex-parses the committing script path and crashes the
+	# daemon (hanging the commit) on any conf_mode script not ending in .py.
+	install -d debian/qfagent/usr/libexec/vyos/conf_mode
+	ln -s /usr/libexec/quartzfire/qfagent \
+		debian/qfagent/usr/libexec/vyos/conf_mode/system_quartz-command.py
+	# VyOS cstore command templates (the CLI grammar) + op-mode templates.
+	mkdir -p debian/qfagent/opt/vyatta/share/vyatta-cfg/templates/system
+	cp -r vyos/templates/system/quartz-command \
+		debian/qfagent/opt/vyatta/share/vyatta-cfg/templates/system/
+	mkdir -p debian/qfagent/opt/vyatta/share/vyatta-op/templates/show
+	cp -r vyos/op-templates/show/quartz-command \
+		debian/qfagent/opt/vyatta/share/vyatta-op/templates/show/
+	find debian/qfagent/opt/vyatta -type f -exec chmod 0644 {} +
+	find debian/qfagent/opt/vyatta -type d -exec chmod 0755 {} +
+	# XML interface definition + component version; postinst registers them
+	# with the vyos-1x xml_ref cache so configd knows the path.
+	install -D -m0644 vyos/xml/system_quartz-command.xml \
+		debian/qfagent/usr/share/quartzfire/xml/system_quartz-command.xml
+	install -D -m0644 vyos/xml/qfagent-component-version.xml \
+		debian/qfagent/usr/share/quartzfire/xml/qfagent-component-version.xml
+	# Docs.
+	install -D -m0644 docs/design.md \
+		debian/qfagent/usr/share/doc/qfagent/design.md
+
+# debian/qfagent.service is auto-processed; the scrub path/service pair is
+# named debian/qfagent.<unit>.<type> and must be installed by name or
+# dh_installsystemd silently drops it.
+override_dh_installsystemd:
+	dh_installsystemd
+	# --no-start: the scrub service is path-triggered only.
+	dh_installsystemd --no-start --name=quartzfire-qfagent-scrub

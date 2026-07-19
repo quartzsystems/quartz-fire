@@ -1,0 +1,322 @@
+//! TLS for the QuartzCommand gateway connections.
+//!
+//! tonic's own `tls` feature is deliberately unused: the enrollment trust
+//! model needs a custom rustls verifier (WebPKI first, then the token's CA
+//! fingerprint as a pinning fallback), so we build the rustls `ClientConfig`
+//! ourselves and hand tonic a ready TLS stream via
+//! `Endpoint::connect_with_connector`.
+//!
+//! Verification policy ([`QfVerifier`]):
+//! 1. Try normal WebPKI validation against the root store (Mozilla roots
+//!    plus any configured `ca-certificate` and any previously pinned CA).
+//! 2. If that fails AND a token CA fingerprint is available: find the
+//!    presented cert whose SHA-256 (over DER) matches the pin. A matching
+//!    intermediate becomes the sole trust anchor for a full re-validation
+//!    (signature chain, validity window, hostname). If the match is the
+//!    end-entity certificate itself (self-signed controller), the exact-cert
+//!    pin is accepted directly — the fingerprint IS the identity statement.
+//! 3. A chain matching neither is rejected.
+//!
+//! Which path validated is recorded so enrollment can log it and persist the
+//! pinned CA for future connections.
+
+use std::sync::{Arc, Mutex};
+
+use anyhow::{anyhow, Context, Result};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::client::WebPkiServerVerifier;
+use rustls::crypto::CryptoProvider;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer, ServerName, UnixTime};
+use rustls::{ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme};
+use sha2::{Digest, Sha256};
+use tokio::net::TcpStream;
+use tokio_rustls::TlsConnector;
+use tonic::transport::{Channel, Endpoint, Uri};
+
+/// Which trust path a handshake validated through.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VerifiedVia {
+    WebPki,
+    /// The DER of the CA (or exact end-entity cert) that matched the pin —
+    /// persisted as `pinned-ca.crt` after successful enrollment.
+    Pinned(Vec<u8>),
+}
+
+/// Shared cell the verifier records its outcome into (one handshake at a
+/// time per connect attempt; the last handshake wins, which is the one the
+/// established channel used).
+pub type VerifyOutcome = Arc<Mutex<Option<VerifiedVia>>>;
+
+#[derive(Debug)]
+pub struct QfVerifier {
+    webpki: Option<Arc<WebPkiServerVerifier>>,
+    pin: Option<[u8; 32]>,
+    provider: Arc<CryptoProvider>,
+    outcome: VerifyOutcome,
+}
+
+impl QfVerifier {
+    /// `roots` may be empty (tests exercising the pure pinning path);
+    /// `pin` may be None (post-enrollment WebPKI-only connections).
+    pub fn new(roots: RootCertStore, pin: Option<[u8; 32]>) -> Result<(Arc<Self>, VerifyOutcome)> {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let webpki = if roots.is_empty() {
+            None
+        } else {
+            Some(
+                WebPkiServerVerifier::builder_with_provider(Arc::new(roots), provider.clone())
+                    .build()
+                    .context("build WebPKI verifier")?,
+            )
+        };
+        let outcome: VerifyOutcome = Arc::new(Mutex::new(None));
+        let verifier = Arc::new(QfVerifier { webpki, pin, provider, outcome: outcome.clone() });
+        Ok((verifier, outcome))
+    }
+
+    fn record(&self, via: VerifiedVia) {
+        *self.outcome.lock().unwrap() = Some(via);
+    }
+}
+
+impl ServerCertVerifier for QfVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        intermediates: &[CertificateDer<'_>],
+        server_name: &ServerName<'_>,
+        ocsp_response: &[u8],
+        now: UnixTime,
+    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+        let webpki_err = match &self.webpki {
+            Some(w) => {
+                match w.verify_server_cert(end_entity, intermediates, server_name, ocsp_response, now)
+                {
+                    Ok(ok) => {
+                        self.record(VerifiedVia::WebPki);
+                        return Ok(ok);
+                    }
+                    Err(e) => Some(e),
+                }
+            }
+            None => None,
+        };
+
+        if let Some(pin) = self.pin {
+            let mut pin_err: Option<String> = None;
+            // Intermediates first (the proper "issuing CA" pin, fully
+            // re-validated), the end entity last (self-signed controller —
+            // exact-cert pin).
+            for cand in intermediates.iter().chain(std::iter::once(end_entity)) {
+                if <[u8; 32]>::from(Sha256::digest(cand.as_ref())) != pin {
+                    continue;
+                }
+                if cand.as_ref() == end_entity.as_ref() {
+                    self.record(VerifiedVia::Pinned(cand.as_ref().to_vec()));
+                    return Ok(ServerCertVerified::assertion());
+                }
+                // Re-run full verification with the pinned CA as the sole
+                // trust anchor: signature chain, validity, hostname.
+                let mut roots = RootCertStore::empty();
+                if let Err(e) = roots.add(cand.clone().into_owned()) {
+                    pin_err = Some(format!("pinned cert is not usable as a trust anchor: {e}"));
+                    continue;
+                }
+                match WebPkiServerVerifier::builder_with_provider(
+                    Arc::new(roots),
+                    self.provider.clone(),
+                )
+                .build()
+                {
+                    Ok(v) => match v.verify_server_cert(
+                        end_entity,
+                        intermediates,
+                        server_name,
+                        ocsp_response,
+                        now,
+                    ) {
+                        Ok(ok) => {
+                            self.record(VerifiedVia::Pinned(cand.as_ref().to_vec()));
+                            return Ok(ok);
+                        }
+                        Err(e) => pin_err = Some(e.to_string()),
+                    },
+                    Err(e) => pin_err = Some(e.to_string()),
+                }
+            }
+            let detail = match (webpki_err, pin_err) {
+                (_, Some(p)) => format!("CA fingerprint matched but chain validation failed: {p}"),
+                (Some(w), None) => {
+                    format!("WebPKI validation failed ({w}) and no presented certificate matches the token's CA fingerprint")
+                }
+                (None, None) => {
+                    "no presented certificate matches the token's CA fingerprint".to_string()
+                }
+            };
+            return Err(rustls::Error::General(format!(
+                "server certificate chain matches neither WebPKI nor the token's CA fingerprint: {detail}"
+            )));
+        }
+
+        Err(webpki_err.unwrap_or_else(|| {
+            rustls::Error::General("no trust anchors available for server verification".into())
+        }))
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.provider.signature_verification_algorithms.supported_schemes()
+    }
+}
+
+// ── config builders ───────────────────────────────────────────────────────────
+
+/// Mozilla WebPKI roots plus any extra PEM anchors (configured
+/// `ca-certificate`, previously pinned CA).
+pub fn web_roots(extra_pems: &[&str]) -> Result<RootCertStore> {
+    let mut roots = RootCertStore::empty();
+    roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
+    add_pem_roots(&mut roots, extra_pems)?;
+    Ok(roots)
+}
+
+/// Only the given PEM anchors (the post-enrollment pinned-CA trust mode).
+pub fn pinned_roots(pems: &[&str]) -> Result<RootCertStore> {
+    let mut roots = RootCertStore::empty();
+    add_pem_roots(&mut roots, pems)?;
+    if roots.is_empty() {
+        return Err(anyhow!("no usable certificates in the pinned CA store"));
+    }
+    Ok(roots)
+}
+
+fn add_pem_roots(roots: &mut RootCertStore, pems: &[&str]) -> Result<()> {
+    for pem_text in pems {
+        for der in rustls_pemfile::certs(&mut pem_text.as_bytes()) {
+            let der = der.context("parse CA certificate PEM")?;
+            roots
+                .add(der)
+                .context("add CA certificate to the trust store")?;
+        }
+    }
+    Ok(())
+}
+
+/// Client config with the QuartzFire verifier and optional mTLS identity.
+pub fn client_config(
+    roots: RootCertStore,
+    pin: Option<[u8; 32]>,
+    client_identity: Option<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>)>,
+) -> Result<(ClientConfig, VerifyOutcome)> {
+    let (verifier, outcome) = QfVerifier::new(roots, pin)?;
+    let builder = ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .context("TLS protocol versions")?
+    .dangerous()
+    .with_custom_certificate_verifier(verifier);
+    let mut config = match client_identity {
+        Some((chain, key)) => builder
+            .with_client_auth_cert(chain, key)
+            .context("load mTLS client identity")?,
+        None => builder.with_no_client_auth(),
+    };
+    config.alpn_protocols = vec![b"h2".to_vec()];
+    Ok((config, outcome))
+}
+
+// ── tonic channel over our TLS ────────────────────────────────────────────────
+
+/// Establish a gRPC channel to `host:port` using `tls`. HTTP/2 keepalive
+/// pings every 25 s hold the control channel open and detect a dead peer.
+pub async fn grpc_channel(
+    host: &str,
+    port: u16,
+    tls: ClientConfig,
+    connect_timeout: std::time::Duration,
+) -> Result<Channel> {
+    let server_name = ServerName::try_from(host.to_string())
+        .map_err(|_| anyhow!("'{host}' is not a valid TLS server name"))?;
+    let connector = TlsConnector::from(Arc::new(tls));
+    let addr = format!("{host}:{port}");
+    let uri: Uri = format!("https://{addr}")
+        .parse()
+        .with_context(|| format!("gateway address '{addr}' does not form a valid URL"))?;
+
+    let channel = Endpoint::from(uri)
+        .connect_timeout(connect_timeout)
+        .tcp_nodelay(true)
+        .http2_keep_alive_interval(std::time::Duration::from_secs(25))
+        .keep_alive_timeout(std::time::Duration::from_secs(10))
+        .keep_alive_while_idle(true)
+        .connect_with_connector(tower::service_fn(move |_: Uri| {
+            let connector = connector.clone();
+            let server_name = server_name.clone();
+            let addr = addr.clone();
+            async move {
+                let tcp = TcpStream::connect(&addr).await?;
+                connector.connect(server_name, tcp).await
+            }
+        }))
+        .await?;
+    Ok(channel)
+}
+
+pub fn sha256_fingerprint(der: &[u8]) -> [u8; 32] {
+    Sha256::digest(der).into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_ca_pem() -> String {
+        let key = rcgen::KeyPair::generate().unwrap();
+        let mut params = rcgen::CertificateParams::new(Vec::<String>::new()).unwrap();
+        params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
+        params.self_signed(&key).unwrap().pem()
+    }
+
+    #[test]
+    fn root_store_builders() {
+        let ca = test_ca_pem();
+        // Mozilla roots plus the extra anchor.
+        let web = web_roots(&[&ca]).unwrap();
+        assert!(web.len() > 1);
+        // Pinned store: exactly the given anchors; empty input is an error
+        // (a control channel with no trust anchors must not silently
+        // connect-and-fail-open).
+        let pinned = pinned_roots(&[&ca]).unwrap();
+        assert_eq!(pinned.len(), 1);
+        assert!(pinned_roots(&[]).is_err());
+        assert!(pinned_roots(&["not a pem"]).is_err());
+    }
+}
