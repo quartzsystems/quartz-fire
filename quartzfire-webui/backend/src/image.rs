@@ -36,6 +36,15 @@ pub async fn upload(State(state): State<Arc<AppState>>, body: Body) -> Result<Js
     // we don't create it here — doing so as the backend user would stamp it
     // with the wrong ownership and make later writes fail. A create error below
     // therefore means a genuine provisioning problem, not a first-run race.
+    //
+    // Unlink any stale staging file first. `File::create` opens O_TRUNC, which
+    // needs write permission on the *existing* file; a leftover owned by another
+    // uid (e.g. root, the pre-static-user DynamicUser build, or a partial from
+    // an interrupted upload) would otherwise make every retry EACCES forever.
+    // We hold write on the directory (group quartzfire, mode 2775), so unlink
+    // succeeds regardless of the file's owner, and the create then makes a fresh
+    // file owned by this service user.
+    let _ = tokio::fs::remove_file(&path).await;
     let mut file = tokio::fs::File::create(&path).await.map_err(|e| {
         AppError::Internal(anyhow::anyhow!("creating {}: {e}", path.display()))
     })?;
