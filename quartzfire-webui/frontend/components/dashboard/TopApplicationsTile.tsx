@@ -69,10 +69,11 @@ export function TopApplicationsTile() {
       {empty ? (
         <div className="flex-1 grid place-items-center text-[12px] text-[var(--qz-fg-4)]">{empty}</div>
       ) : (
-        // Stretch the donut to the tile's full remaining height (the donut
-        // scales to its box); without this it collapses to its min size.
+        // Stretch the donut + legend to the tile's full remaining space: the
+        // donut fills the height as a square pinned left, the legend runs to the
+        // right edge (see TopAppsDonut `fill`).
         <div className="flex-1 min-h-0 flex flex-col [&>*]:flex-1 [&>*]:min-h-0">
-          <TopAppsDonut apps={apps} totalBytes={totalBytes} />
+          <TopAppsDonut apps={apps} totalBytes={totalBytes} fill />
         </div>
       )}
     </div>

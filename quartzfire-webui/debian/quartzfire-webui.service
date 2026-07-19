@@ -14,9 +14,16 @@ Restart=on-failure
 RestartSec=2
 # Hardening — the backend only needs to read its config/key, talk localhost,
 # follow the kernel journal (systemd-journal) for the Traffic Monitor, and reach
-# the FRR VTY sockets (frrvty) for read-only BGP/MPLS status via vtysh.
-DynamicUser=yes
-SupplementaryGroups=quartzfire systemd-journal frrvty
+# the FRR VTY sockets for read-only BGP/MPLS status via vtysh.
+#
+# This runs as a dedicated static system user (created in postinst) rather than
+# a DynamicUser: FRR's vtysh calls getpwuid() on the running UID and reads
+# /etc/frr/*.conf, so it needs a UID that resolves via NSS *and* membership in
+# the `frr` (config-file read) and `frrvty` (VTY socket) groups. A transient
+# DynamicUser UID satisfies neither. All other hardening below is retained.
+User=quartzfire-webui
+Group=quartzfire-webui
+SupplementaryGroups=quartzfire systemd-journal frrvty frr
 NoNewPrivileges=yes
 # The Devices → ping tool shells out to `ping`, which must open an ICMP socket.
 # NoNewPrivileges makes the kernel ignore ping's file capability, and the

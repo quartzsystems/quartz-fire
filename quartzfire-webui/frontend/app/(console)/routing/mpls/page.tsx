@@ -33,7 +33,7 @@ export default function MplsPage() {
   }, [load]);
 
   const tabs: [Section, string][] = [
-    ["config", "Configuration"],
+    ["config", "Global"],
     ["status", "Status"],
   ];
 

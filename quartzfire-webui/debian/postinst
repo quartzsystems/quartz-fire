@@ -3,9 +3,23 @@ set -e
 
 case "$1" in
     configure)
-        # Group used to hand the API key to the DynamicUser backend service.
+        # Group used to hand the API key to the backend service.
         if ! getent group quartzfire >/dev/null; then
             addgroup --system quartzfire
+        fi
+
+        # Dedicated system user for the backend service. It used to run as a
+        # systemd DynamicUser, but FRR's vtysh needs a UID that resolves via
+        # getpwuid() and membership in the `frr`/`frrvty` groups to read
+        # /etc/frr/*.conf and reach the VTY sockets for read-only BGP/MPLS
+        # status — a transient DynamicUser UID satisfies neither. The `frr`,
+        # `frrvty`, quartzfire and systemd-journal groups are granted at
+        # runtime via SupplementaryGroups= in the unit, so they need not exist
+        # yet here.
+        if ! getent passwd quartzfire-webui >/dev/null; then
+            adduser --system --group --no-create-home \
+                --home /var/lib/quartzfire-webui \
+                --gecos "QuartzFire WebUI" quartzfire-webui
         fi
 
         # The API key is generated per device on FIRST BOOT and registered with

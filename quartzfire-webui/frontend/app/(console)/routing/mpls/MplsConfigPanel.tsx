@@ -172,7 +172,12 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-[760px]">
+    <div className="flex flex-col gap-4 max-w-[1100px]">
+      {/* The section stack is long, so on wide screens flow it into two balanced
+          columns (single column below xl). Each section is kept intact across
+          the column break; the per-section bottom margin is the inter-section
+          gap the flex `gap-4` gives in single-column mode. */}
+      <div className="columns-1 xl:columns-2 [column-gap:16px] [&>*]:mb-4 [&>*]:break-inside-avoid">
       <Section title="MPLS Forwarding" subtitle="Interfaces that push/pop MPLS labels, and label-header parameters.">
         <ListEditor
           label="MPLS interfaces"
@@ -279,6 +284,7 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
 
       <TargetedSection af="IPv4" value={t4} onChange={setT4} placeholder="192.0.2.9" />
       <TargetedSection af="IPv6" value={t6} onChange={setT6} placeholder="2001:db8::9" />
+      </div>
 
       {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
 

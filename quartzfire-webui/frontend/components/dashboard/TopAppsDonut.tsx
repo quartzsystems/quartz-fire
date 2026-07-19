@@ -142,6 +142,7 @@ export function TopAppsDonut({
   centerSub = "classified",
   minDonut = 130,
   maxDonut = 168,
+  fill = false,
 }: {
   apps: AppSliceInput[];
   /** Authoritative total (e.g. App Control's `total_app_bytes`); defaults to
@@ -156,6 +157,12 @@ export function TopAppsDonut({
    *  sidebar, ballooned (with the legend stranded far right) in a device's
    *  full-width detail panel. Capping it keeps every instance the same size. */
   maxDonut?: number;
+  /** Fill mode: the donut grows to a square as tall as the container and hugs
+   *  the left; the legend fills the rest and hugs the right (no width caps).
+   *  Used by the dashboard's Top Applications tile, which owns a whole card and
+   *  wants both halves to expand into it. Off elsewhere so the capped, centered
+   *  layout above is preserved. */
+  fill?: boolean;
 }) {
   const [hover, setHover] = useState<string | null>(null);
   const slots = useRef(new Map<string, number>());
@@ -185,33 +192,57 @@ export function TopAppsDonut({
 
   if (slices.length === 0) return null;
 
+  const donut = <Donut slices={slices} totalBytes={total} centerSub={centerSub} hover={hover} onHover={setHover} />;
+
+  const legend = (
+    <div
+      className={[
+        "flex flex-col justify-center gap-[6px] overflow-y-auto",
+        fill ? "flex-1 min-w-0" : "flex-1 min-w-[160px] max-w-[300px]",
+      ].join(" ")}
+    >
+      {slices.map((s) => (
+        <div
+          key={s.key}
+          className="flex items-center gap-[7px] text-[12px] rounded-md px-1"
+          style={{ background: hover === s.key ? "color-mix(in oklab, white 5%, transparent)" : undefined }}
+          onMouseEnter={() => setHover(s.key)}
+          onMouseLeave={() => setHover(null)}
+        >
+          <span className="flex-shrink-0" style={{ width: 8, height: 8, borderRadius: 999, background: s.color }} />
+          <span className="text-[var(--qz-fg-2)] truncate flex-1" title={s.flows != null ? `${s.name} — ${s.flows} flows` : s.name}>
+            {s.name}
+          </span>
+          <span className="text-[var(--qz-fg-1)] font-semibold flex-shrink-0" style={{ fontFamily: "var(--qz-font-mono)" }}>
+            {s.pct.toFixed(1)}%
+          </span>
+          <span className="text-[var(--qz-fg-4)] flex-shrink-0 w-[70px] text-right whitespace-nowrap" style={{ fontFamily: "var(--qz-font-mono)" }}>
+            {formatBytes(s.bytes)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+
+  // Fill mode (dashboard tile): donut is a square as tall as the card, pinned
+  // left; the legend takes all remaining width and runs to the right edge.
+  if (fill) {
+    return (
+      <div className="flex items-stretch gap-5 h-full min-h-0">
+        <div className="h-full flex-shrink-0" style={{ aspectRatio: "1 / 1", minWidth: minDonut }}>
+          {donut}
+        </div>
+        {legend}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-wrap items-stretch gap-4 min-h-0">
       <div className="flex-1" style={{ minWidth: minDonut, minHeight: minDonut, maxWidth: maxDonut, maxHeight: maxDonut }}>
-        <Donut slices={slices} totalBytes={total} centerSub={centerSub} hover={hover} onHover={setHover} />
+        {donut}
       </div>
-      <div className="flex-1 min-w-[160px] max-w-[300px] flex flex-col justify-center gap-[6px] overflow-y-auto">
-        {slices.map((s) => (
-          <div
-            key={s.key}
-            className="flex items-center gap-[7px] text-[12px] rounded-md px-1"
-            style={{ background: hover === s.key ? "color-mix(in oklab, white 5%, transparent)" : undefined }}
-            onMouseEnter={() => setHover(s.key)}
-            onMouseLeave={() => setHover(null)}
-          >
-            <span className="flex-shrink-0" style={{ width: 8, height: 8, borderRadius: 999, background: s.color }} />
-            <span className="text-[var(--qz-fg-2)] truncate flex-1" title={s.flows != null ? `${s.name} — ${s.flows} flows` : s.name}>
-              {s.name}
-            </span>
-            <span className="text-[var(--qz-fg-1)] font-semibold flex-shrink-0" style={{ fontFamily: "var(--qz-font-mono)" }}>
-              {s.pct.toFixed(1)}%
-            </span>
-            <span className="text-[var(--qz-fg-4)] flex-shrink-0 w-[70px] text-right whitespace-nowrap" style={{ fontFamily: "var(--qz-font-mono)" }}>
-              {formatBytes(s.bytes)}
-            </span>
-          </div>
-        ))}
-      </div>
+      {legend}
     </div>
   );
 }
