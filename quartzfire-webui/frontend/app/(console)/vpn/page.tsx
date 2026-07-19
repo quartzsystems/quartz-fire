@@ -1,10 +1,24 @@
 "use client";
 
-import { ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { Globe, Lock, Spline, Waypoints, ChevronRight, LucideIcon } from "lucide-react";
 
-/// Placeholder — VPN configuration is not implemented yet. The nav entry and
-/// route exist so the section is reachable; the body is intentionally an empty
-/// state until the feature lands.
+/// VPN section overview. The real configuration lives on the four protocol
+/// pages; this landing page just routes there with a one-line description each.
+interface Entry {
+  href: string;
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+}
+
+const ENTRIES: Entry[] = [
+  { href: "/vpn/wireguard", icon: Spline, title: "WireGuard", desc: "Fast, modern point-to-point tunnels keyed by public/private key pairs." },
+  { href: "/vpn/openvpn", icon: Globe, title: "OpenVPN", desc: "TLS tunnels — site-to-site links, remote-access servers, and clients." },
+  { href: "/vpn/ipsec", icon: Lock, title: "IPsec", desc: "Site-to-site IPsec with IKE/ESP proposals and policy- or route-based tunnels." },
+  { href: "/vpn/l2tp", icon: Waypoints, title: "L2TP", desc: "L2TP/IPsec remote-access server for roaming dial-in clients." },
+];
+
 export default function VpnPage() {
   return (
     <div className="flex flex-col h-full">
@@ -18,15 +32,26 @@ export default function VpnPage() {
       </div>
 
       <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        <div
-          className="flex flex-col items-center justify-center gap-3 rounded-lg py-16 text-center"
-          style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-        >
-          <ShieldCheck size={28} className="text-[var(--qz-fg-4)]" />
-          <div className="text-[15px] font-semibold text-[var(--qz-fg-2)]">Coming soon</div>
-          <p className="text-[13px] text-[var(--qz-fg-4)] max-w-[420px] m-0">
-            VPN configuration isn&apos;t available yet. This section is reserved for it.
-          </p>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+          {ENTRIES.map(({ href, icon: Icon, title, desc }) => (
+            <Link
+              key={href}
+              href={href}
+              className="group flex items-start gap-4 rounded-lg p-5 no-underline transition-colors"
+              style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}
+            >
+              <div className="w-10 h-10 rounded-md grid place-items-center flex-shrink-0" style={{ background: "var(--qz-accent-soft)", color: "var(--qz-accent)" }}>
+                <Icon size={20} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1 text-[15px] font-semibold text-[var(--qz-fg-1)]">
+                  {title}
+                  <ChevronRight size={16} className="text-[var(--qz-fg-4)] group-hover:text-[var(--qz-accent)] transition-colors" />
+                </div>
+                <p className="text-[12.5px] text-[var(--qz-fg-4)] m-0 mt-1 leading-snug">{desc}</p>
+              </div>
+            </Link>
+          ))}
         </div>
       </div>
     </div>

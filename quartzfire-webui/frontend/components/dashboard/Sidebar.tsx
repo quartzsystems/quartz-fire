@@ -73,7 +73,18 @@ const ITEMS: NavItem[] = [
       { id: "policy", label: "Policy", href: "/routing/policy", icon: Filter },
     ],
   },
-  { id: "vpn", label: "VPN", icon: ShieldCheck, href: "/vpn" },
+  {
+    id: "vpn",
+    label: "VPN",
+    icon: ShieldCheck,
+    href: "/vpn",
+    children: [
+      { id: "wireguard", label: "WireGuard", href: "/vpn/wireguard", icon: Spline },
+      { id: "openvpn",   label: "OpenVPN",   href: "/vpn/openvpn",   icon: Globe },
+      { id: "ipsec",     label: "IPsec",     href: "/vpn/ipsec",     icon: Lock },
+      { id: "l2tp",      label: "L2TP",      href: "/vpn/l2tp",      icon: Waypoints },
+    ],
+  },
   {
     id: "services",
     label: "Services",
