@@ -57,6 +57,10 @@ DROPIN_FILE = DROPIN_DIR + "/quartzfire.conf"
 # (/etc/logrotate.d/quartzfire-webui, shipped with the package).
 ALERTS_DIR = "/var/log/quartzfire"
 ALERTS_FILE = ALERTS_DIR + "/ips-alerts.json"
+# Periodic EVE `stats` snapshots (one cumulative object per interval). qfagent
+# reads the last line for the packets-scanned counter it reports to Quartz
+# Command; same directory/permissions/rotation as the alert log.
+STATS_FILE = ALERTS_DIR + "/ips-stats.json"
 
 LEVELS = ["critical", "high", "medium", "low", "information"]
 
@@ -145,6 +149,24 @@ outputs:
       filename: {alerts_file}
       types:
         - alert
+  # Engine stats to a separate persistent file: one cumulative snapshot per
+  # `stats.interval` seconds. qfagent tails the last line for the
+  # packets-scanned counter (decoder.pkts) it reports to Quartz Command. Kept
+  # out of the alert file/stream so the WebUI alert history stays alert-only.
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: {stats_file}
+      types:
+        - stats
+
+# Emit engine counters (feeds the stats eve-log above). 30 s trades disk churn
+# against the agent's 60 s telemetry cadence. deltas:no keeps every snapshot
+# cumulative-since-start, which is the counter semantics the agent reports.
+stats:
+  enabled: yes
+  interval: 30
+  deltas: no
 
 stream:
   # Fast Scan stops inspecting flows past the reassembly depth.
@@ -457,10 +479,11 @@ def ensure_alerts_dir():
     # would leave the WebUI's history endpoint permission-denied). logrotate
     # recreates rotated files with the same owner/mode (`create` directive in
     # /etc/logrotate.d/quartzfire-webui).
-    if not os.path.isfile(ALERTS_FILE):
-        os.close(os.open(ALERTS_FILE, os.O_CREAT | os.O_WRONLY, 0o640))
-    os.chown(ALERTS_FILE, 0, gid)
-    os.chmod(ALERTS_FILE, 0o640)
+    for path in (ALERTS_FILE, STATS_FILE):
+        if not os.path.isfile(path):
+            os.close(os.open(path, os.O_CREAT | os.O_WRONLY, 0o640))
+        os.chown(path, 0, gid)
+        os.chmod(path, 0o640)
 
 
 def render_configs(settings):
@@ -474,6 +497,7 @@ def render_configs(settings):
         rules_dir=RULES_DIR,
         classification_file=classification,
         alerts_file=ALERTS_FILE,
+        stats_file=STATS_FILE,
         stream_bypass="yes" if fast else "no",
         tls_handling="bypass" if fast else "default",
     )

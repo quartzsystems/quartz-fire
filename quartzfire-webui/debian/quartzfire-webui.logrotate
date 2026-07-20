@@ -1,8 +1,12 @@
-# Persistent IPS alert log (EVE format), written by Suricata under
-# quartzfire-ips management. Size-based: alert volume varies wildly between
-# quiet sites and ones under active scan, and the flash-backed /var/log
-# shouldn't grow unbounded either way.
-/var/log/quartzfire/ips-alerts.json {
+# Persistent IPS logs (EVE format), written by Suricata under quartzfire-ips
+# management: the alert history and the periodic engine-stats snapshots (the
+# latter feeds qfagent's packets-scanned telemetry). Size-based: alert volume
+# varies wildly between quiet sites and ones under active scan, and the
+# flash-backed /var/log shouldn't grow unbounded either way. The stats file
+# grows steadily (one snapshot per stats interval); qfagent only needs the last
+# line, so rotation is transparent to it.
+/var/log/quartzfire/ips-alerts.json
+/var/log/quartzfire/ips-stats.json {
     size 10M
     rotate 3
     compress

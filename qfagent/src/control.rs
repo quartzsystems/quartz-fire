@@ -198,6 +198,15 @@ impl ControlChannel {
             .into_inner();
         let local = Arc::new(LocalApi::load());
 
+        // Push a security-telemetry snapshot up the same stream on a fixed
+        // cadence. The first tick fires immediately, so the controller gets a
+        // fresh snapshot right after the DeviceHello; thereafter every
+        // `telemetry::INTERVAL`. Collection is offloaded to a blocking task
+        // (it reads on-disk counters/logs) and the send is best-effort — a
+        // closed channel (stream gone) just drops the snapshot, and the stream
+        // arms below detect the disconnect.
+        let mut telemetry_tick = tokio::time::interval(crate::telemetry::INTERVAL);
+
         loop {
             let now = state::now_unix();
             let renew_at = st.renew_after_unix.unwrap_or(now);
@@ -212,6 +221,23 @@ impl ControlChannel {
                 let wait = ((renew_at - now).min(3600)).max(1) as u64;
                 tokio::select! {
                     _ = tokio::time::sleep(Duration::from_secs(wait)) => {}
+                    _ = telemetry_tick.tick() => {
+                        let tx = tx.clone();
+                        tokio::spawn(async move {
+                            match tokio::task::spawn_blocking(crate::telemetry::collect).await {
+                                Ok(snapshot) => {
+                                    let _ = tx
+                                        .send(DeviceMessage {
+                                            msg: Some(device_message::Msg::SecurityTelemetry(
+                                                snapshot,
+                                            )),
+                                        })
+                                        .await;
+                                }
+                                Err(e) => tracing::warn!("telemetry collection task failed: {e}"),
+                            }
+                        });
+                    }
                     msg = inbound.message() => match msg {
                         Ok(Some(m)) => {
                             if let Some(controller_message::Msg::ProxyRequest(req)) = m.msg {
