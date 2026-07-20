@@ -221,6 +221,21 @@ mod tests {
     }
 
     #[test]
+    fn bump_trigger_replaces_stray_directory() {
+        // qfagent ≤0.1.0's path unit (MakeDirectory=yes) left a DIRECTORY at
+        // the trigger path; bumping must replace it with the trigger file.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("scrub-request");
+        std::fs::create_dir(&path).unwrap();
+        bump_trigger(&path).unwrap();
+        assert!(path.is_file());
+
+        // And a plain re-bump still works.
+        bump_trigger(&path).unwrap();
+        assert!(path.is_file());
+    }
+
+    #[test]
     fn status_doc_writes_readable_json() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("status.json");
@@ -259,6 +274,13 @@ pub fn now_unix() -> i64 {
 pub fn bump_trigger(path: &Path) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
+    }
+    // Self-heal: qfagent ≤0.1.0 shipped the scrub path unit with
+    // MakeDirectory=yes, which mkdir'd the trigger path itself — a directory
+    // there makes the rename below fail EISDIR until reboot clears /run.
+    if path.is_dir() {
+        std::fs::remove_dir_all(path)
+            .with_context(|| format!("remove stray directory at {}", path.display()))?;
     }
     atomic_write(path, format!("{}\n", now_unix()).as_bytes())
 }

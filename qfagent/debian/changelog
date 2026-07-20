@@ -1,3 +1,18 @@
+qfagent (0.1.1) unstable; urgency=medium
+
+  * Fix enrollment failing at the final step with "rename into
+    /run/qfagent/scrub-request: Is a directory": the scrub path unit's
+    MakeDirectory=yes created the watched trigger path ITSELF as a
+    directory at boot, so the conf-mode owner's temp+rename bump failed,
+    enrollment state was never persisted and the control channel never
+    started (device adopted controller-side but shown offline / "Not
+    enrolled" locally). Dropped MakeDirectory= (qfagent.service's
+    RuntimeDirectory= already creates /run/qfagent) and made the trigger
+    bump remove a stray directory left by 0.1.0 so upgraded boxes recover
+    without a reboot.
+
+ -- QuartzFire <cwellman@quartz.systems>  Sun, 19 Jul 2026 12:00:00 +0000
+
 qfagent (0.1.0) unstable; urgency=medium
 
   * Initial release: QuartzCommand cloud enrollment for QuartzFire.
@@ -17,4 +32,4 @@ qfagent (0.1.0) unstable; urgency=medium
     - `show quartz-command status` op-mode command and the `qf` CLI
       (status / identity regenerate / prepare-template).
 
- -- QuartzFire <cwellman@quartz.systems>  Sat, 19 Jul 2026 00:00:00 +0000
+ -- QuartzFire <cwellman@quartz.systems>  Sun, 19 Jul 2026 00:00:00 +0000

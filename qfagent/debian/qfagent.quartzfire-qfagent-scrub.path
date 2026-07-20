@@ -6,8 +6,11 @@ Description=Watch for QuartzCommand enroll-token scrub requests
 # the scrub service then deletes the token from the active config and
 # persists the token's gateway, in its own config session (a commit cannot
 # modify the very session it is validating).
+# No MakeDirectory= here: it would mkdir the WATCHED PATH itself, leaving a
+# directory where the trigger FILE must land (rename then fails EISDIR).
+# systemd watches the nearest existing ancestor until the file appears, and
+# qfagent.service's RuntimeDirectory= creates /run/qfagent.
 PathChanged=/run/qfagent/scrub-request
-MakeDirectory=yes
 
 [Install]
 WantedBy=multi-user.target
