@@ -127,7 +127,7 @@ export default function ManagementPage() {
       setCaCert(cfg.ca_certificate ?? "");
       setPhase("ready");
     } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "Failed to load QuartzCommand state.");
+      setErrorMsg(e instanceof Error ? e.message : "Failed to load Quartz Command state.");
       setPhase("error");
     }
   }, []);
@@ -160,7 +160,7 @@ export default function ManagementPage() {
         port: portNum,
         ca_certificate: caCert.trim() || null,
       });
-      setToast(n === 0 ? "No changes to save." : "QuartzCommand settings saved.");
+      setToast(n === 0 ? "No changes to save." : "Quartz Command settings saved.");
       await load();
     } catch (e) {
       setToast(e instanceof Error ? e.message : "Saving settings failed.");
@@ -184,7 +184,7 @@ export default function ManagementPage() {
       // ~90 s device-side). Errors here ARE the enrollment errors.
       await enrollQuartzCommand(trimmed);
       setToken("");
-      setToast(`Enrolled with QuartzCommand (org ${check.token.orgId}).`);
+      setToast(`Enrolled with Quartz Command (org ${check.token.orgId}).`);
       await load();
     } catch (e) {
       setEnrollError(e instanceof Error ? e.message : "Enrollment failed.");
@@ -201,7 +201,7 @@ export default function ManagementPage() {
           Management
         </h1>
         <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
-          QuartzCommand cloud management — enrollment and the control channel
+          Quartz Command cloud management — enrollment and the control channel
         </p>
       </div>
 
@@ -301,7 +301,7 @@ export default function ManagementPage() {
             {!enrolled && (
               <Section title="Enroll">
                 <p className="text-[13px] text-[var(--qz-fg-4)] mt-1 mb-3">
-                  Paste an enrollment token issued by your QuartzCommand controller
+                  Paste an enrollment token issued by your Quartz Command controller
                   (QC1|…). Enrollment runs as a config commit: the token is consumed
                   once and removed from the configuration automatically.
                 </p>

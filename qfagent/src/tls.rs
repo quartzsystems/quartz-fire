@@ -271,6 +271,7 @@ pub async fn grpc_channel(
         .parse()
         .with_context(|| format!("gateway address '{addr}' does not form a valid URL"))?;
 
+    let host_owned = host.to_string();
     let channel = Endpoint::from(uri)
         .connect_timeout(connect_timeout)
         .tcp_nodelay(true)
@@ -281,9 +282,39 @@ pub async fn grpc_channel(
             let connector = connector.clone();
             let server_name = server_name.clone();
             let addr = addr.clone();
+            let host = host_owned.clone();
             async move {
-                let tcp = TcpStream::connect(&addr).await?;
-                connector.connect(server_name, tcp).await
+                // Resolve, connect and handshake as separate steps so a
+                // failure names its stage — getaddrinfo in particular can
+                // surface raw errnos (EAI_SYSTEM) that are meaningless
+                // without the "this was DNS" context.
+                let addrs: Vec<std::net::SocketAddr> = tokio::net::lookup_host(&addr)
+                    .await
+                    .map_err(|e| {
+                        std::io::Error::new(
+                            e.kind(),
+                            format!("resolving gateway host '{host}' failed: {e}"),
+                        )
+                    })?
+                    .collect();
+                if addrs.is_empty() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::NotFound,
+                        format!("gateway host '{host}' resolved to no addresses"),
+                    ));
+                }
+                let tcp = TcpStream::connect(&addrs[..]).await.map_err(|e| {
+                    std::io::Error::new(
+                        e.kind(),
+                        format!("TCP connect to {host} ({addrs:?}) failed: {e}"),
+                    )
+                })?;
+                connector.connect(server_name, tcp).await.map_err(|e| {
+                    std::io::Error::new(
+                        e.kind(),
+                        format!("TLS handshake with '{host}' failed: {e}"),
+                    )
+                })
             }
         }))
         .await?;

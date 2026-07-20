@@ -199,9 +199,12 @@ fn map_connect_error(e: anyhow::Error, token: &EnrollToken) -> anyhow::Error {
              certificates look expired or not yet valid."
         );
     }
-    if text.contains("dns error") || text.contains("failed to lookup") {
+    if text.contains("dns error")
+        || text.contains("failed to lookup")
+        || text.contains("resolving gateway host")
+    {
         return anyhow::anyhow!(
-            "cannot resolve gateway host '{}' — check DNS and the token's gateway segment",
+            "cannot resolve gateway host '{}' ({text}) — check DNS and the token's gateway segment",
             token.gateway_host
         );
     }

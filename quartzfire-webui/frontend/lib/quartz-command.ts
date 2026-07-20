@@ -92,7 +92,7 @@ export async function fetchQuartzCommandConfig(): Promise<QuartzCommandConfig> {
   let cfg: Cfg = {};
   if (resp.success) cfg = resp.data ?? {};
   else if (!(resp.error ?? "").toLowerCase().includes("empty")) {
-    throw new Error(resp.error || "Device returned an error reading QuartzCommand configuration.");
+    throw new Error(resp.error || "Device returned an error reading Quartz Command configuration.");
   }
   const portRaw = childStr(cfg, "port");
   const port = portRaw === null ? null : Number(portRaw);
