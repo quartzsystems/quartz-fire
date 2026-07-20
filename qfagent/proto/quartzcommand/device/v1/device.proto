@@ -1,10 +1,6 @@
 // mTLS-authenticated device service. The caller's identity (device_id, org,
 // public key) comes from the presented client certificate, never from the
 // request body.
-//
-// Vendored verbatim from the QuartzCommand repo
-// (backend/proto/quartzcommand/device/v1/device.proto); the server side is
-// authoritative.
 syntax = "proto3";
 
 package quartzcommand.device.v1;
@@ -15,6 +11,13 @@ service DeviceService {
   // Devices are expected to renew at 2/3 of cert lifetime (see
   // renew_after_unix in the response).
   rpc RenewCertificate(RenewCertificateRequest) returns (RenewCertificateResponse);
+
+  // Device-initiated command channel. The device opens the stream after
+  // connecting, announces itself with DeviceHello, and then answers the
+  // controller's ProxyRequests (local VyOS HTTP API calls) with
+  // ProxyResponses, matched by request_id. The controller closes the stream
+  // when the device should reconnect (e.g. gateway drain).
+  rpc ControlStream(stream DeviceMessage) returns (stream ControllerMessage);
 }
 
 message RenewCertificateRequest {
@@ -26,4 +29,45 @@ message RenewCertificateResponse {
   repeated bytes ca_chain_der = 2;
   int64 not_after_unix = 3;    // expiry of the new cert
   int64 renew_after_unix = 4;  // 2/3 of lifetime — renew at/after this time
+}
+
+// ── Control stream ──────────────────────────────────────────────────────────
+
+message DeviceMessage {
+  oneof msg {
+    DeviceHello hello = 1;
+    ProxyResponse proxy_response = 2;
+  }
+}
+
+message ControllerMessage {
+  oneof msg {
+    ProxyRequest proxy_request = 1;
+  }
+}
+
+// First message on the stream: current facts for the inventory record.
+message DeviceHello {
+  string hostname = 1;
+  string qf_version = 2;
+}
+
+// One HTTP call against the device's local management API (the
+// quartzfire-webui backend, which fronts the VyOS HTTP API and the device's
+// own endpoints). The device authenticates the call locally; the path is
+// always under /api/.
+message ProxyRequest {
+  string request_id = 1;
+  string method = 2;        // GET | POST | PUT | DELETE
+  string path = 3;          // path + optional query, e.g. "/api/retrieve"
+  string content_type = 4;  // request body content type ("" = no body)
+  bytes body = 5;
+}
+
+message ProxyResponse {
+  string request_id = 1;
+  uint32 http_status = 2;   // status from the local API (0 when unreachable)
+  string content_type = 3;
+  bytes body = 4;
+  string error = 5;         // non-empty when the local call itself failed
 }

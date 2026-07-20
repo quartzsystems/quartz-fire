@@ -547,7 +547,7 @@ fn restart_daemon() {
     systemctl(&["try-restart", "qfagent.service"]);
 }
 
-fn read_hostname() -> String {
+pub(crate) fn read_hostname() -> String {
     std::fs::read_to_string("/proc/sys/kernel/hostname")
         .or_else(|_| std::fs::read_to_string("/etc/hostname"))
         .map(|s| s.trim().to_string())
@@ -558,7 +558,7 @@ fn read_hostname() -> String {
 
 /// Firmware version string sent with enrollment (informational): the VyOS
 /// image version when available, else the agent crate version.
-fn qf_version() -> String {
+pub(crate) fn qf_version() -> String {
     if let Ok(text) = std::fs::read_to_string("/usr/share/vyos/version.json") {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) {
             if let Some(ver) = v.get("version").and_then(|x| x.as_str()) {

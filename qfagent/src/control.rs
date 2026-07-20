@@ -1,17 +1,12 @@
-//! The persistent control channel to the assigned QuartzCommand gateway,
-//! plus certificate renewal.
+//! The persistent control channel to the assigned QuartzCommand gateway:
+//! certificate renewal plus the ControlStream command channel.
 //!
-//! quartzcommand.device.v1 currently defines only RenewCertificate — there
-//! is no command-stream RPC yet, and no server redirect message. So the
-//! "channel" today is: establish the mTLS HTTP/2 connection eagerly, hold it
-//! open with 25 s keepalive pings, and drive renewal over it; connect
-//! failures back off exponentially with jitter (1 s → 5 min cap).
-//!
-//! TODO(quartzcommand.device.v1): when the device service grows a command
-//! stream (and/or a redirect message), attach it inside `connected_wait()` —
-//! the reconnect loop, backoff, TLS identity plumbing, and status reporting
-//! are already in place; a redirect just replaces `gateway` and continues
-//! the loop.
+//! The connection is established eagerly with 25 s keepalive pings; connect
+//! failures back off exponentially with jitter (1 s → 5 min cap). Once up,
+//! `connected_wait()` opens the bidirectional ControlStream, announces the
+//! device with a DeviceHello, and then serves the controller's ProxyRequests
+//! (local VyOS HTTP API calls, see `vyosproxy`) while also driving renewal —
+//! a completed renewal returns so the caller reconnects with the new cert.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,11 +14,16 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::sync::Mutex;
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::enroll;
 use crate::identity::{Identity, IdentityStore};
 use crate::proto::device::device_service_client::DeviceServiceClient;
-use crate::proto::device::RenewCertificateRequest;
+use crate::proto::device::{
+    controller_message, device_message, DeviceHello, DeviceMessage, ProxyResponse,
+    RenewCertificateRequest,
+};
+use crate::localapi::LocalApi;
 use crate::state::{self, ControlState, EnrollmentState, StatusDoc, TrustPath};
 
 /// Shared, serialized view of the live status; every mutation is written
@@ -166,14 +166,38 @@ impl ControlChannel {
         crate::tls::grpc_channel(host, port, tls, Duration::from_secs(15)).await
     }
 
-    /// Sleep until certificate renewal is due, run it, persist, and return
-    /// Ok(()) so the caller reconnects with the fresh cert.
+    /// Hold the connection doing useful work: serve the controller's
+    /// ProxyRequests over the ControlStream, and when certificate renewal is
+    /// due, run it, persist, and return Ok(()) so the caller reconnects with
+    /// the fresh cert. Any stream failure is a lost channel (Err → backoff).
     async fn connected_wait(
         &self,
         channel: tonic::transport::Channel,
         identity: &Identity,
         st: &mut EnrollmentState,
     ) -> Result<()> {
+        // Open the command channel and announce ourselves. The mpsc sender is
+        // cloned into each in-flight request handler; the stream ends when
+        // every sender is dropped or the server closes its half.
+        let mut client = DeviceServiceClient::new(channel.clone());
+        let (tx, rx) = tokio::sync::mpsc::channel::<DeviceMessage>(16);
+        tx.send(DeviceMessage {
+            msg: Some(device_message::Msg::Hello(DeviceHello {
+                hostname: crate::commands::read_hostname(),
+                qf_version: crate::commands::qf_version(),
+            })),
+        })
+        .await
+        .ok();
+        let mut inbound = client
+            .control_stream(ReceiverStream::new(rx))
+            .await
+            .map_err(|s| {
+                anyhow::anyhow!("ControlStream failed ({:?}): {}", s.code(), s.message())
+            })?
+            .into_inner();
+        let local = Arc::new(LocalApi::load());
+
         loop {
             let now = state::now_unix();
             let renew_at = st.renew_after_unix.unwrap_or(now);
@@ -183,9 +207,49 @@ impl ControlChannel {
             self.status.update(|d| d.cert_renewal_alarm = alarm && now >= renew_at).await;
 
             if now < renew_at {
-                // Re-evaluate at least hourly so the alarm flag stays fresh.
+                // Serve the stream until the next renewal re-check (at least
+                // hourly so the alarm flag stays fresh).
                 let wait = ((renew_at - now).min(3600)).max(1) as u64;
-                tokio::time::sleep(Duration::from_secs(wait)).await;
+                tokio::select! {
+                    _ = tokio::time::sleep(Duration::from_secs(wait)) => {}
+                    msg = inbound.message() => match msg {
+                        Ok(Some(m)) => {
+                            if let Some(controller_message::Msg::ProxyRequest(req)) = m.msg {
+                                let local = local.clone();
+                                let tx = tx.clone();
+                                tokio::spawn(async move {
+                                    let (http_status, content_type, body, error) = local
+                                        .call(
+                                            &req.method,
+                                            &req.path,
+                                            &req.content_type,
+                                            req.body,
+                                        )
+                                        .await;
+                                    let _ = tx
+                                        .send(DeviceMessage {
+                                            msg: Some(device_message::Msg::ProxyResponse(
+                                                ProxyResponse {
+                                                    request_id: req.request_id,
+                                                    http_status,
+                                                    content_type,
+                                                    body,
+                                                    error,
+                                                },
+                                            )),
+                                        })
+                                        .await;
+                                });
+                            }
+                        }
+                        Ok(None) => anyhow::bail!("control stream closed by the controller"),
+                        Err(s) => anyhow::bail!(
+                            "control stream error ({:?}): {}",
+                            s.code(),
+                            s.message()
+                        ),
+                    },
+                }
                 continue;
             }
 

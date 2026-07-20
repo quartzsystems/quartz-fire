@@ -29,6 +29,7 @@ mod state;
 mod tls;
 mod token;
 mod vyoscfg;
+mod localapi;
 
 #[cfg(target_os = "linux")]
 mod daemon;
