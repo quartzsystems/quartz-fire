@@ -147,6 +147,9 @@ async fn main() -> Result<()> {
         )
         // Static routes win over the `/api/*rest` proxy wildcard.
         .route("/api/monitor/firewall-log", get(monitor::firewall_log))
+        // Pollable, cursor-paged sibling of the SSE stream above — Quartz Command
+        // can't carry SSE, so the cloud Monitor tails the log through this.
+        .route("/api/monitor/firewall-log/recent", get(monitor::firewall_log_recent))
         .route("/api/monitor/system-log", get(monitor::system_log))
         // Device/client monitoring (Monitoring → Devices): the read side of the
         // shared inventory qfdevd maintains, plus the user-owned description.

@@ -21,6 +21,7 @@
 //! this via `SupplementaryGroups=systemd-journal`.
 
 use axum::{
+    extract::Query,
     http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -28,8 +29,8 @@ use axum::{
     },
     Json,
 };
-use serde::Serialize;
-use std::{convert::Infallible, process::Stdio};
+use serde::{Deserialize, Serialize};
+use std::{collections::VecDeque, convert::Infallible, process::Stdio};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
@@ -115,6 +116,130 @@ pub async fn firewall_log() -> Response {
     Sse::new(stream).keep_alive(KeepAlive::default()).into_response()
 }
 
+/// Query params for the pollable recent-entries endpoint.
+#[derive(Debug, Deserialize)]
+pub struct RecentQuery {
+    /// Opaque journal cursor from a previous poll's `cursor`. When present, only
+    /// entries strictly after it are returned, so repeated polls never duplicate
+    /// rows. Absent on the first poll — the newest `limit` entries come back as
+    /// a backfill. The value must be URL-encoded by the caller (journal cursors
+    /// contain `;` and `=`).
+    #[serde(default)]
+    since: Option<String>,
+    /// Maximum entries to return. Default 200, clamped to 1..=1000.
+    #[serde(default)]
+    limit: Option<usize>,
+}
+
+/// JSON body of GET /api/monitor/firewall-log/recent.
+#[derive(Serialize)]
+pub struct RecentLog {
+    /// Parsed entries in chronological order (oldest first) — the same shape the
+    /// SSE stream emits, in the same order the SSE would have delivered them.
+    entries: Vec<LogEntry>,
+    /// Opaque cursor to pass back as `since` on the next poll. It advances to the
+    /// newest entry returned; when a poll adds nothing it echoes the incoming
+    /// `since` so the caller stays anchored. Null only when there is no history
+    /// at all and the caller sent no cursor.
+    cursor: Option<String>,
+}
+
+/// GET /api/monitor/firewall-log/recent — a pollable, cursor-paged view of the
+/// same parsed firewall log the SSE endpoint streams. Quartz Command can't carry
+/// SSE over its request/response control stream, so the cloud Monitor tails the
+/// log by polling this instead. History lives in the kernel journal (the source
+/// the SSE handler also follows), and journalctl's own cursors give dedup-free
+/// paging: `--after-cursor` returns strictly-later entries, so no row is repeated
+/// or skipped across polls.
+pub async fn firewall_log_recent(Query(q): Query<RecentQuery>) -> Response {
+    let limit = q.limit.unwrap_or(200).clamp(1, 1000);
+    let after = q.since.as_deref().filter(|c| !c.is_empty());
+
+    let mut cmd = Command::new("journalctl");
+    cmd.args(["-k", "-o", "json", "--no-pager"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    match after {
+        Some(cursor) => {
+            // Everything after the cursor, oldest-first; we bound the read below
+            // by stopping once we've filled `limit` rather than with `-n` (which
+            // would tail the newest of the matched set and skip the middle).
+            cmd.arg(format!("--after-cursor={cursor}"));
+        }
+        None => {
+            // First poll: cap the backfill scan. Rule logging dominates the
+            // kernel log, so over-fetch to leave room to fill `limit`; when
+            // logging is sparse the caller simply gets what history exists.
+            let fetch = limit.saturating_mul(4).clamp(limit, 4000);
+            cmd.arg("-n").arg(fetch.to_string());
+        }
+    }
+
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("cannot start journalctl: {e}");
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "cannot read the system journal on this device",
+            )
+                .into_response();
+        }
+    };
+    let Some(stdout) = child.stdout.take() else {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "journalctl produced no output").into_response();
+    };
+    let mut lines = BufReader::new(stdout).lines();
+
+    let mut entries: Vec<LogEntry> = Vec::new();
+    let mut cursor: Option<String> = None;
+
+    if after.is_some() {
+        // First `limit` entries after the cursor, then stop — the next poll
+        // resumes from the cursor we hand back, so an unbounded backlog is read
+        // `limit` rows at a time instead of all at once. Dropping the child here
+        // (kill_on_drop) reaps journalctl even though we didn't drain its output.
+        while entries.len() < limit {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    if let Some((e, c)) = parse_firewall_line_with_cursor(&line) {
+                        cursor = Some(c);
+                        entries.push(e);
+                    }
+                }
+                Ok(None) | Err(_) => break,
+            }
+        }
+    } else {
+        // Newest `limit` of the bounded window: keep only a trailing buffer as we
+        // stream to EOF, so memory stays at `limit` regardless of the window.
+        let mut buf: VecDeque<(LogEntry, String)> = VecDeque::with_capacity(limit);
+        loop {
+            match lines.next_line().await {
+                Ok(Some(line)) => {
+                    if let Some(pair) = parse_firewall_line_with_cursor(&line) {
+                        if buf.len() == limit {
+                            buf.pop_front();
+                        }
+                        buf.push_back(pair);
+                    }
+                }
+                Ok(None) | Err(_) => break,
+            }
+        }
+        cursor = buf.back().map(|(_, c)| c.clone());
+        entries = buf.into_iter().map(|(e, _)| e).collect();
+    }
+
+    // Added nothing this poll? Keep the caller anchored where it already was.
+    if cursor.is_none() {
+        cursor = after.map(|c| c.to_string());
+    }
+
+    Json(RecentLog { entries, cursor }).into_response()
+}
+
 /// Parse one `journalctl -o json` line into a firewall log entry; None for
 /// anything that isn't a base-chain firewall log message.
 pub(crate) fn parse_journal_line(line: &str) -> Option<LogEntry> {
@@ -122,6 +247,16 @@ pub(crate) fn parse_journal_line(line: &str) -> Option<LogEntry> {
     // Non-UTF8 messages come through as byte arrays — as_str skips those.
     let msg = v.get("MESSAGE")?.as_str()?;
     parse_message(msg, journal_ts(&v))
+}
+
+/// Like `parse_journal_line`, but also returns the entry's opaque journal cursor
+/// so the pollable endpoint can page without duplicating rows.
+fn parse_firewall_line_with_cursor(line: &str) -> Option<(LogEntry, String)> {
+    let v: serde_json::Value = serde_json::from_str(line).ok()?;
+    let msg = v.get("MESSAGE")?.as_str()?;
+    let entry = parse_message(msg, journal_ts(&v))?;
+    let cursor = v.get("__CURSOR")?.as_str()?.to_string();
+    Some((entry, cursor))
 }
 
 /// Journal receive time, milliseconds since the epoch (0 when absent).
@@ -346,6 +481,22 @@ mod tests {
         assert_eq!(e.rule, None);
         assert_eq!(e.action, "drop");
         assert_eq!(e.out_if, None);
+    }
+
+    #[test]
+    fn line_with_cursor_extracts_both() {
+        let line = r#"{"__CURSOR":"s=abc;i=2a;b=def;m=1;t=2;x=3","__REALTIME_TIMESTAMP":"1700000000000000","MESSAGE":"[ipv4-FWD-filter-10-A]IN=eth1 OUT=eth0 SRC=10.0.0.5 DST=1.1.1.1 PROTO=TCP SPT=5 DPT=443"}"#;
+        let (e, cursor) = parse_firewall_line_with_cursor(line).expect("should parse");
+        assert_eq!(e.chain, "forward");
+        assert_eq!(e.dpt, Some(443));
+        assert_eq!(e.ts, 1_700_000_000_000);
+        assert_eq!(cursor, "s=abc;i=2a;b=def;m=1;t=2;x=3");
+    }
+
+    #[test]
+    fn non_firewall_line_yields_no_cursor() {
+        let line = r#"{"__CURSOR":"s=abc;i=1","MESSAGE":"usb 1-1: new high-speed USB device"}"#;
+        assert!(parse_firewall_line_with_cursor(line).is_none());
     }
 
     #[test]

@@ -193,6 +193,10 @@ fn outbound_ip_via(dest: &str) -> Option<String> {
 /// tallies the per-rule counters in VyOS's `vyos_filter` table. Empty when nft
 /// is unavailable, the table has no counted rules, or parsing fails.
 fn top_policies() -> Vec<PolicyStat> {
+    // nft reaches the kernel netfilter subsystem over a netlink socket, so the
+    // qfagent unit must allow AF_NETLINK in RestrictAddressFamilies (that
+    // seccomp filter is inherited by this child) — otherwise nft's socket() is
+    // blocked, it exits non-zero, and every snapshot reports no policies.
     let output = std::process::Command::new("nft")
         .args(["-j", "list", "ruleset"])
         .output();
@@ -396,6 +400,76 @@ mod tests {
     fn parse_policies_tolerates_missing_or_empty() {
         assert!(parse_policies(&serde_json::json!({})).is_empty());
         assert!(parse_policies(&serde_json::json!({ "nftables": [] })).is_empty());
+    }
+
+    /// Pins the parser to the real on-device shape: a verbatim fragment of
+    /// `nft -j list chain ip vyos_filter VYOS_FORWARD_filter` captured from a
+    /// live firewall (QS-HQ-FW1, nftables 1.0.9). Confirms `vyos_filter` rules
+    /// carry an inline `{"counter": {...}}`, are named from the `ipv4-FWD-…`
+    /// comment, and that a bare chain-dispatch rule (a `jump` with no counter)
+    /// is dropped. The empty-list bug was the sandbox blocking nft's netlink
+    /// socket, not this parse — this guards the shape the fix relies on.
+    #[test]
+    fn parse_policies_reads_real_vyos_forward_chain() {
+        let doc = serde_json::json!({
+            "nftables": [
+                { "metainfo": { "version": "1.0.9", "release_name": "Old Doc Yak #3", "json_schema_version": 1 } },
+                { "chain": {
+                    "family": "ip", "table": "vyos_filter", "name": "VYOS_FORWARD_filter",
+                    "handle": 1, "type": "filter", "hook": "forward", "prio": 0, "policy": "accept"
+                }},
+                // Chain-dispatch jump: no counter → excluded.
+                { "rule": {
+                    "family": "ip", "table": "vyos_filter", "chain": "VYOS_FORWARD_filter", "handle": 13,
+                    "expr": [ { "jump": { "target": "VYOS_STATE_POLICY_FORWARD" } } ]
+                }},
+                // IPS baseline (ct mark 81 → queue), counted.
+                { "rule": {
+                    "family": "ip", "table": "vyos_filter", "chain": "VYOS_FORWARD_filter", "handle": 14,
+                    "comment": "ipv4-FWD-filter-1",
+                    "expr": [
+                        { "match": { "op": "==", "left": { "ct": { "key": "mark" } }, "right": 81 } },
+                        { "counter": { "packets": 934, "bytes": 106594 } },
+                        { "queue": { "num": 0, "flags": "bypass" } }
+                    ]
+                }},
+                // A logged drop rule — the log node precedes the counter in expr.
+                { "rule": {
+                    "family": "ip", "table": "vyos_filter", "chain": "VYOS_FORWARD_filter", "handle": 17,
+                    "comment": "ipv4-FWD-filter-10",
+                    "expr": [
+                        { "match": { "op": "==", "left": { "payload": { "protocol": "udp", "field": "dport" } }, "right": "@P_QUIC" } },
+                        { "match": { "op": "==", "left": { "meta": { "key": "oifname" } }, "right": "eth1" } },
+                        { "log": { "prefix": "[ipv4-FWD-filter-10-D]" } },
+                        { "counter": { "packets": 415, "bytes": 476704 } },
+                        { "drop": null }
+                    ]
+                }},
+                // The chain's default-action rule: counted, unconventional comment.
+                { "rule": {
+                    "family": "ip", "table": "vyos_filter", "chain": "VYOS_FORWARD_filter", "handle": 24,
+                    "comment": "FWD-filter default-action drop",
+                    "expr": [
+                        { "counter": { "packets": 0, "bytes": 0 } },
+                        { "log": { "prefix": "[ipv4-FWD-filter-default-D]" } },
+                        { "drop": null }
+                    ]
+                }},
+            ]
+        });
+        let policies = parse_policies(&doc);
+        // The metainfo, chain object, and the counterless jump rule are all skipped.
+        assert_eq!(policies.len(), 3, "three counted vyos_filter rules");
+        // Ranked by bytes: rule 10 (476704) > rule 1 (106594) > default (0).
+        assert_eq!(policies[0].bytes, 476704);
+        assert_eq!(policies[0].hits, 415);
+        assert_eq!(policies[0].name, "Forward rule 10");
+        assert_eq!(policies[1].bytes, 106594);
+        assert_eq!(policies[1].hits, 934);
+        assert_eq!(policies[1].name, "Forward rule 1");
+        // Unconventional comment (no ipv4/ipv6 prefix) passes through verbatim.
+        assert_eq!(policies[2].bytes, 0);
+        assert_eq!(policies[2].name, "FWD-filter default-action drop");
     }
 
     /// Compile-time guard for the wrapping `control.rs` uses to put a snapshot
