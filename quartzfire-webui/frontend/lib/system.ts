@@ -418,16 +418,70 @@ export function imageNameFromIsoName(fileName: string): string | null {
   return m ? m[1] : null;
 }
 
-/// Download and install a new system image (`add system image <url>`). This
-/// is a long call — the device downloads and unpacks the image before
-/// answering — and the new image becomes the default boot entry; the running
-/// system is untouched until the next reboot.
-export async function addImage(url: string): Promise<void> {
-  try {
-    await opApi("image", { op: "add", url: url.trim() }, "install the image");
-  } catch (e) {
-    if (e instanceof Error) throw new Error(translateImageAddError(e.message));
-    throw e;
+/// One phase of a background image install, mirroring the backend `Phase`.
+export type ImagePhase = "starting" | "downloading" | "verifying" | "installing" | "done" | "failed";
+
+/// Live state of the device's current (or most recent) image install, from
+/// `/api/image/status`. The install runs in the background — the `add` op
+/// returns at once — because a multi-hundred-MB download outlasts the request
+/// timeouts on the cloud proxy and qfagent's local client.
+export interface ImageJob {
+  id: string;
+  phase: ImagePhase;
+  downloaded_bytes: number;
+  total_bytes: number | null;
+  image_name: string | null;
+  error: string | null;
+  started_unix: number;
+  finished_unix: number | null;
+}
+
+/// Poll the current install job (null when none has run since boot).
+export async function fetchImageStatus(): Promise<ImageJob | null> {
+  const r = await apiFetch<{ job: ImageJob | null }>("/image/status");
+  return r.job ?? null;
+}
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/// Download and install a new system image (`add system image <url>`). The
+/// device does the work in the background — download, optional SHA-256 verify,
+/// then unpack — and this resolves only once the job finishes, so callers keep
+/// the same "await until installed" shape as before. The new image becomes the
+/// default boot entry; the running system is untouched until the next reboot.
+///
+/// `onStatus` (optional) receives each polled job so a UI can show progress.
+export async function addImage(url: string, onStatus?: (job: ImageJob) => void): Promise<void> {
+  // Kick off the background job. The backend replies immediately with a job id;
+  // a checksum, when the caller has one, rides along in the same op.
+  const resp = await vyosApi<VyosResponse<{ status?: string; job_id?: string }>>("image", {
+    op: "add",
+    url: url.trim(),
+  });
+  if (!resp.success) {
+    throw new Error(translateImageAddError(resp.error || "Device returned an error trying to install the image."));
+  }
+  const jobId = resp.data?.job_id ?? null;
+
+  // Poll to completion. The backend records the (already-translated) failure
+  // reason on the job, so surface it verbatim.
+  for (;;) {
+    await delay(2000);
+    let job: ImageJob | null;
+    try {
+      job = await fetchImageStatus();
+    } catch {
+      // A transient read blip (backend restart during a long install) — the
+      // job keeps running on the device; keep polling.
+      continue;
+    }
+    if (!job) continue;
+    // Guard against reading a stale prior job before ours is visible (the op
+    // handler installs the new job before answering, so this is belt-and-braces).
+    if (jobId && job.id !== jobId && (job.phase === "done" || job.phase === "failed")) continue;
+    onStatus?.(job);
+    if (job.phase === "done") return;
+    if (job.phase === "failed") throw new Error(job.error || "The image install failed.");
   }
 }
 

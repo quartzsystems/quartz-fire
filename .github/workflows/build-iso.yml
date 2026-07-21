@@ -189,6 +189,16 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+      # Publishes a PUBLIC (non-draft) Release with the ISO attached as
+      # `<version>-<arch>.iso` (e.g. quartzfire-0.4.7-amd64.iso). Quartz Command's
+      # one-click firmware update depends on this exact asset name: it builds the
+      # release-asset URL from the version + arch and hands it to the device's
+      # `/image` add op, and reads the adjacent `.sha256` sidecar (sha256sum
+      # format: `<hex>  <filename>`) for the integrity check. Renaming either
+      # asset silently breaks cloud updates — keep the names in lockstep with
+      # what `add system image` derives (frontend imageNameFromIsoName / backend
+      # image_name_from_url). Draft/prerelease are left at the action defaults
+      # (both false) so the assets are immediately downloadable without auth.
       - name: Attach ISO to GitHub Release
         if: ${{ github.ref_type == 'tag' }}
         uses: softprops/action-gh-release@v2

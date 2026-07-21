@@ -24,6 +24,10 @@ tower-http = { version = "0.6", features = ["fs", "trace"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Verifies the optional SHA-256 the cloud sends with a firmware-update job
+# against the ISO the device downloads (see infra/image.rs).
+sha2 = "0.10"
+hex = "0.4"
 toml = "0.8"
 anyhow = "1"
 thiserror = "1"

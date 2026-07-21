@@ -24,6 +24,8 @@ import {
   factoryReset,
   fetchImages,
   fetchShutdownSchedule,
+  type ImageJob,
+  type ImagePhase,
   imageNameFromIsoName,
   rebootSystem,
   restoreConfigBackup,
@@ -244,8 +246,20 @@ function AddImageModal({
   const [dragOver, setDragOver] = useState(false);
   const [phase, setPhase] = useState<"idle" | "uploading" | "installing">("idle");
   const [progress, setProgress] = useState(0);
+  // Live phase + download fraction of the device-side background install, fed by
+  // addImage's status polling (null download fraction = size unknown / N/A).
+  const [jobPhase, setJobPhase] = useState<ImagePhase | null>(null);
+  const [dlFraction, setDlFraction] = useState<number | null>(null);
   const [error, setError] = useState("");
   const isoInput = useRef<HTMLInputElement>(null);
+
+  // Reflect the device's background install progress in the modal.
+  const onJobStatus = (job: ImageJob) => {
+    setJobPhase(job.phase);
+    setDlFraction(
+      job.phase === "downloading" && job.total_bytes ? job.downloaded_bytes / job.total_bytes : null,
+    );
+  };
 
   const working = phase !== "idle";
 
@@ -291,8 +305,9 @@ function AddImageModal({
       try {
         const path = await uploadImageFile(file, setProgress);
         setPhase("installing");
+        setJobPhase(null);
         try {
-          await addImage(path);
+          await addImage(path, onJobStatus);
         } finally {
           // The staged ISO is dead weight either way once the install ends.
           await cleanupImageUpload();
@@ -316,8 +331,9 @@ function AddImageModal({
       return;
     }
     setPhase("installing");
+    setJobPhase(null);
     try {
-      await addImage(u);
+      await addImage(u, onJobStatus);
       onSaved("Image installed. It becomes the default boot image — reboot to run it.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to install the image.");
@@ -427,10 +443,28 @@ function AddImageModal({
           </div>
         )}
         {phase === "installing" && (
-          <p className="text-[12px] m-0 text-[var(--qz-fg-3)]">
-            {file ? "Installing the uploaded image…" : "Downloading and installing…"} this can take
-            several minutes. Keep this page open.
-          </p>
+          <div className="flex flex-col gap-1">
+            {jobPhase === "downloading" && dlFraction !== null && (
+              <div className="h-[6px] rounded-full overflow-hidden" style={{ background: "var(--qz-border)" }}>
+                <div
+                  className="h-full rounded-full transition-[width]"
+                  style={{ width: `${Math.round(dlFraction * 100)}%`, background: "var(--qz-accent)" }}
+                />
+              </div>
+            )}
+            <p className="text-[12px] m-0 text-[var(--qz-fg-3)]">
+              {jobPhase === "downloading"
+                ? `Downloading the image${dlFraction !== null ? ` — ${Math.round(dlFraction * 100)}%` : "…"}`
+                : jobPhase === "verifying"
+                  ? "Verifying the download…"
+                  : jobPhase === "installing"
+                    ? "Unpacking and installing the image…"
+                    : file
+                      ? "Installing the uploaded image…"
+                      : "Downloading and installing…"}{" "}
+              this can take several minutes. Keep this page open.
+            </p>
+          </div>
         )}
         {error && (
           <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>

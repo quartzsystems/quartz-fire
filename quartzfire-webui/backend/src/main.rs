@@ -98,6 +98,11 @@ pub struct AppState {
     /// Service-tuple → firewall-rule attribution cache for the Traffic Flow
     /// page. Its journal follower starts lazily on the first flows request.
     pub flow_attr: Arc<flows::Attribution>,
+    /// The most recent (at most one at a time) background image-install job:
+    /// download → optional SHA-256 verify → `add system image`. The `/image`
+    /// add op returns immediately and the console polls `/api/image/status`;
+    /// see image.rs.
+    pub image_job: std::sync::Mutex<Option<image::ImageJob>>,
 }
 
 #[tokio::main]
@@ -130,6 +135,7 @@ async fn main() -> Result<()> {
         dashboard_lock: std::sync::Mutex::new(()),
         geoip_cc: std::sync::Mutex::new(std::collections::HashMap::new()),
         flow_attr: Arc::new(flows::Attribution::default()),
+        image_job: std::sync::Mutex::new(None),
     });
 
     // Start the Traffic Flow rule-attribution follower now, not on first page
@@ -258,6 +264,14 @@ async fn main() -> Result<()> {
                 .delete(image::cleanup)
                 .layer(axum::extract::DefaultBodyLimit::disable()),
         )
+        // The VyOS-style `/image` op endpoint. We intercept it (this exact route
+        // wins over the `/api/*rest` proxy wildcard) so `op: add` can run the
+        // download+install in the background — the cloud proxy and qfagent both
+        // time out around 110–120 s, far short of a multi-hundred-MB ISO — and
+        // verify an optional SHA-256 first. All other ops fall through to VyOS
+        // unchanged. Progress/result is polled via /api/image/status.
+        .route("/api/image", post(image::op))
+        .route("/api/image/status", get(image::status))
         .route("/api", any(proxy::handler))
         .route("/api/*rest", any(proxy::handler))
         .layer(middleware::from_fn_with_state(
