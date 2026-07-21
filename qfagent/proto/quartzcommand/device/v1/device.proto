@@ -165,6 +165,15 @@ message DeviceStats {
   int64  uptime_secs = 6;    // seconds since boot
   string public_ip = 7;      // WAN/public IP as the device sees itself ("" if unknown)
   repeated PolicyStat top_policies = 8; // sorted desc by bytes, capped ~8
+  // Absolute memory/disk figures behind the gauges above, matching the local
+  // WebUI's Memory/Disk cards (mem used = MemTotal-MemAvailable; disk = root
+  // filesystem, df semantics). 0 when the source is unreadable. Free is
+  // total-used. mem_used_bytes/mem_total_bytes agree with mem_pct exactly;
+  // disk_pct stays df's used/(used+avail), so it need not equal used/total.
+  uint64 mem_used_bytes = 9;
+  uint64 mem_total_bytes = 10;
+  uint64 disk_used_bytes = 11;
+  uint64 disk_total_bytes = 12;
 }
 
 message PolicyStat {
