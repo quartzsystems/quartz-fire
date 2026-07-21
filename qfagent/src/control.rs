@@ -206,6 +206,11 @@ impl ControlChannel {
         // closed channel (stream gone) just drops the snapshot, and the stream
         // arms below detect the disconnect.
         let mut telemetry_tick = tokio::time::interval(crate::telemetry::INTERVAL);
+        // Device health & traffic snapshot on its own (~30 s) cadence, same
+        // fire-and-forget contract. Independent of the security telemetry tick
+        // above (its collection samples CPU + shells out to nft, so it is
+        // likewise offloaded to a blocking task).
+        let mut stats_tick = tokio::time::interval(crate::stats::INTERVAL);
 
         loop {
             let now = state::now_unix();
@@ -235,6 +240,21 @@ impl ControlChannel {
                                         .await;
                                 }
                                 Err(e) => tracing::warn!("telemetry collection task failed: {e}"),
+                            }
+                        });
+                    }
+                    _ = stats_tick.tick() => {
+                        let tx = tx.clone();
+                        tokio::spawn(async move {
+                            match tokio::task::spawn_blocking(crate::stats::collect).await {
+                                Ok(snapshot) => {
+                                    let _ = tx
+                                        .send(DeviceMessage {
+                                            msg: Some(device_message::Msg::DeviceStats(snapshot)),
+                                        })
+                                        .await;
+                                }
+                                Err(e) => tracing::warn!("device-stats collection task failed: {e}"),
                             }
                         });
                     }

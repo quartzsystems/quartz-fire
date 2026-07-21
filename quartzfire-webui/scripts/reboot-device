@@ -1,0 +1,41 @@
+#!/bin/bash
+# QuartzFire reboot root helper.
+#
+# Triggered by quartzfire-reboot.path when the WebUI backend drops the request
+# file (/config/quartzfire/reboot-request). The backend runs as an unprivileged
+# sandboxed user (NoNewPrivileges) and cannot reboot the box, so it only writes
+# the request; this script does the privileged work as root:
+#
+#   1. verify the request carries the confirmation token (so a stray or empty
+#      file can never trip a reboot);
+#   2. wait a couple of seconds so the HTTP ack — and the control-stream
+#      response the cloud is waiting on — lands before the box goes down;
+#   3. reboot.
+#
+# Unlike factory-reset this leaves all config untouched: it is just a reboot.
+set -euo pipefail
+
+REQ=/config/quartzfire/reboot-request
+
+log() { echo "quartzfire-reboot: $*" >&2; }
+
+# No request → nothing to do (e.g. the .path re-armed on an unrelated change).
+[ -f "$REQ" ] || exit 0
+
+# Require the confirmation token the backend writes. Consume the request FIRST,
+# unconditionally, so a malformed file can never wedge us into a reboot loop.
+content="$(cat "$REQ" 2>/dev/null || true)"
+rm -f "$REQ"
+if ! printf '%s' "$content" | grep -q '"confirm":[[:space:]]*"reboot"'; then
+  log "request file missing the confirmation token; ignoring"
+  exit 0
+fi
+
+# Give the backend's ack (and the cloud's control-stream response) time to flush
+# before we sever every connection.
+sleep 2
+log "reboot requested; rebooting"
+
+# Prefer systemctl; fall back to reboot(8) if PID 1 isn't reachable for some
+# reason. Either way this severs the WebUI session — that is expected.
+systemctl reboot || reboot

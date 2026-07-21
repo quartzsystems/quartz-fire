@@ -1,0 +1,12 @@
+[Unit]
+Description=Reboot the QuartzFire device on request
+# Triggered only by quartzfire-reboot.path when the WebUI drops the request
+# file. NOT wanted by any target — there is no boot run: a reboot must never
+# fire on its own at startup, only on an explicit request.
+After=vyos-router.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/quartzfire/reboot-device
+# The helper reboots on success, so this unit "succeeding" means the request
+# was ignored (missing token). Do not restart.

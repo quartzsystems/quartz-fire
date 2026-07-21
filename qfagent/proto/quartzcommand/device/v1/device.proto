@@ -43,6 +43,11 @@ message DeviceMessage {
     // unknown field — the device keeps reporting harmlessly until ingest
     // lands. field 3 is reserved for this message fleet-wide.
     SecurityTelemetry security_telemetry = 3;
+    // Periodic device health & traffic snapshot (see DeviceStats). Sent
+    // unsolicited on its own fixed interval (~30 s) after the DeviceHello,
+    // independent of the security telemetry cadence. field 4 is reserved for
+    // this message fleet-wide.
+    DeviceStats device_stats = 4;
   }
 }
 
@@ -142,4 +147,28 @@ message ContentFilterCounters {
   uint64 blocked = 2;        // requests denied
   uint64 allowed = 3;        // requests allowed
   uint64 total_requests = 4; // blocked + allowed
+}
+
+// ── Device health & traffic ──────────────────────────────────────────────────
+//
+// A snapshot of device health & traffic, pushed on a fixed interval (~30 s).
+// Utilization gauges are instantaneous point-in-time readings already
+// averaged by the agent over its sample window. top_policies counters are
+// cumulative (Prometheus-counter semantics). Fields the agent can't
+// determine are sent as their zero value ("" for public_ip).
+message DeviceStats {
+  int64  time_unix = 1;      // device wall-clock, UTC epoch seconds
+  uint32 interval_secs = 2;  // nominal cadence, e.g. 30 (informational)
+  double cpu_pct = 3;        // 0–100, averaged over the sample window
+  double mem_pct = 4;        // 0–100
+  double disk_pct = 5;       // 0–100 (root/data filesystem)
+  int64  uptime_secs = 6;    // seconds since boot
+  string public_ip = 7;      // WAN/public IP as the device sees itself ("" if unknown)
+  repeated PolicyStat top_policies = 8; // sorted desc by bytes, capped ~8
+}
+
+message PolicyStat {
+  string name = 1;   // human-readable firewall rule/policy name
+  uint64 bytes = 2;  // cumulative bytes matched
+  uint64 hits = 3;   // cumulative packets/hits matched
 }

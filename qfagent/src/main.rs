@@ -26,6 +26,7 @@ mod enroll;
 mod enroll_mock_tests;
 mod identity;
 mod state;
+mod stats;
 mod telemetry;
 mod tls;
 mod token;

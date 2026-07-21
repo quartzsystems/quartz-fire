@@ -30,11 +30,18 @@ via prost-build's `skip_protoc_run` + descriptor-set path.
   pinned by fixed test vectors cross-checked against an independent
   implementation (src/deviceid.rs).
 * Host fingerprint (clone protection): machine-id + DMI product UUID are
-  recorded at identity creation; on every start (and at enrollment) a
-  recorded-and-readable-but-different fact refuses the control channel,
-  logs loudly, and sets the status flag
-  `identity/host mismatch — run 'qf identity regenerate'`. A fact missing on
-  either side is inconclusive, never a mismatch.
+  recorded at identity creation, but only the **DMI product UUID** gates —
+  on every start (and at enrollment) a recorded-and-readable-but-different
+  DMI UUID refuses the control channel, logs loudly, and sets the status
+  flag `identity/host mismatch — run 'qf identity regenerate'`. A fact
+  missing on either side is inconclusive, never a mismatch.
+  `/etc/machine-id` is recorded for diagnostics but deliberately does NOT
+  gate: on VyOS each installed image regenerates its own machine-id, while
+  the identity persists in `/config` across images, so gating on it would
+  refuse the control channel on the same hardware after every
+  `add system image` upgrade (and force a needless `qf identity
+  regenerate`). The DMI product UUID is the true hardware anchor and is
+  stable across image upgrades.
 * TPM: `/dev/tpmrm0` presence is logged; keying stays file-based. The
   `KeyBackend` trait (`identity::TpmKeyBackend` stub) is the seam for TPM
   keys — enrollment, renewal, and the control channel only use the trait.
@@ -87,14 +94,27 @@ the control channel then trusts pinned-CA-only or WebPKI accordingly.
 
 ## Control channel + renewal
 
-`quartzcommand.device.v1` has no command-stream RPC yet, so the channel is:
-eager mTLS HTTP/2 connect to `assigned_gateway` (fallback: token gateway),
+Eager mTLS HTTP/2 connect to `assigned_gateway` (fallback: token gateway),
 25 s keepalive pings, reconnect with exponential backoff + jitter
 (1 s → 5 min cap). The renewal loop wakes at `renew_after` (server-supplied,
 else 2/3 lifetime), sends a fresh CSR (same key), persists the new cert, and
 reconnects; `<7 days to expiry without successful renewal` raises
-`cert_renewal_alarm`. A future command stream/redirect handler slots into
-`control::connected_wait` (see the TODO there).
+`cert_renewal_alarm`.
+
+The `ControlStream` (bidirectional) is opened after connect: the device
+announces itself with a `DeviceHello`, then serves the controller's
+`ProxyRequest`s — authenticated local management-API calls replayed against
+the WebUI backend (`localapi`) — and pushes two unsolicited, fire-and-forget
+telemetry streams on independent tickers (both offloaded to blocking tasks,
+both first-tick-immediate so the controller has data right after the hello):
+
+* `SecurityTelemetry` every ~60 s (`telemetry`) — per-service security
+  counters read from each subsystem's on-disk artifacts.
+* `DeviceStats` every ~30 s (`stats`) — device health + traffic: CPU / memory
+  / disk gauges (clamped 0–100, CPU sampled over a short in-call window),
+  uptime, the outbound (WAN) source address, and the busiest firewall rules
+  by bytes from the nftables `vyos_filter` counters. Any unavailable source
+  degrades to a zero/empty field, never a dropped message.
 
 ## Processes and files
 
@@ -126,6 +146,11 @@ reconnects; `<7 days to expiry without successful renewal` raises
   errors are the commit errors), connection settings via the VyOS proxy
   (direct commit path, like L2TP), CLI pointers for the destructive
   lifecycle commands. Backend: `GET /api/quartz-command/status`.
+* Cloud "Reboot Device" → `POST /api/system/reboot` on the WebUI backend
+  (reached over the ControlStream proxy; the cloud gates it to org
+  owner/admin). The sandboxed backend can't reboot itself, so it arms the
+  root `quartzfire-reboot.path` trigger (same seam as factory reset) and acks
+  immediately — the box reboots a couple seconds later, after the ack lands.
 
 ## Build / ship / test
 

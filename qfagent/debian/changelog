@@ -1,3 +1,30 @@
+qfagent (0.1.3) unstable; urgency=medium
+
+  * Push periodic DeviceStats up the existing ControlStream (~30 s, alongside
+    SecurityTelemetry): CPU / memory / disk utilization gauges, uptime, the
+    device's outbound (WAN) address, and the busiest firewall rules by bytes
+    from the nftables vyos_filter counters. Fire-and-forget, like the security
+    telemetry; any unavailable source degrades to a zero/empty field rather
+    than dropping the whole snapshot. Adds DeviceStats/PolicyStat (field 4) to
+    the device.proto contract.
+
+ -- QuartzFire <cwellman@quartz.systems>  Mon, 20 Jul 2026 15:00:00 +0000
+
+qfagent (0.1.2) unstable; urgency=medium
+
+  * Fix the QuartzCommand control channel being refused after every image
+    upgrade ("identity/host mismatch — run 'qf identity regenerate'").
+    Clone-detection recorded /etc/machine-id as a host fact and treated any
+    change as a cloned image. But on VyOS each installed image regenerates
+    its own machine-id (systemd, first boot) while the device identity
+    persists in the cross-image `/config` — so `add system image` + reboot
+    tripped the gate on the SAME hardware and forced a needless identity
+    regenerate + re-enroll. machine-id is now recorded for diagnostics only;
+    clone detection gates solely on the DMI product UUID, the real
+    hardware anchor that is stable across image upgrades.
+
+ -- QuartzFire <cwellman@quartz.systems>  Mon, 20 Jul 2026 12:00:00 +0000
+
 qfagent (0.1.1) unstable; urgency=medium
 
   * Fix enrollment failing at the final step with "rename into

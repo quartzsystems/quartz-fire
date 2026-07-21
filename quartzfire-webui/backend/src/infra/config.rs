@@ -199,6 +199,15 @@ pub struct Config {
     #[serde(default = "default_factory_reset_request_file")]
     pub factory_reset_request_file: PathBuf,
 
+    /// "Reboot device" trigger file watched by quartzfire-reboot.path. Lives
+    /// under /config/quartzfire (writable for us) like the other trigger files.
+    /// The backend only writes it; the root quartzfire-reboot helper does the
+    /// actual `systemctl reboot`. We can't reboot ourselves (sandboxed static
+    /// user, NoNewPrivileges), so this is the seam — same shape as
+    /// `factory_reset_request_file`, minus the config overwrite.
+    #[serde(default = "default_reboot_request_file")]
+    pub reboot_request_file: PathBuf,
+
     /// Per-user dashboard tile layouts (a WebUI preference), keyed by username.
     /// Lives under /config so a saved layout survives image upgrades, and is
     /// writable for us via the unit's ReadWritePaths — same contract as the
@@ -320,6 +329,9 @@ fn default_dashboard_layouts_file() -> PathBuf {
 }
 fn default_factory_reset_request_file() -> PathBuf {
     PathBuf::from("/config/quartzfire/factory-reset-request")
+}
+fn default_reboot_request_file() -> PathBuf {
+    PathBuf::from("/config/quartzfire/reboot-request")
 }
 fn default_devices_db_file() -> PathBuf {
     PathBuf::from("/config/quartzfire/devices.db")

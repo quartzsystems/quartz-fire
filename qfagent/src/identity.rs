@@ -88,6 +88,11 @@ pub fn tpm_present() -> bool {
 /// Facts tying an identity to the machine it was generated on. Either field
 /// may be unavailable (VMs without DMI, containers without machine-id); a
 /// missing fact at creation time is never later treated as a mismatch.
+///
+/// Only `dmi_product_uuid` is a *hardware* anchor and thus the only fact that
+/// gates clone detection (see [`HostFacts::mismatches`]). `machine_id` is
+/// recorded for diagnostics only — it is an OS-install artifact, not a
+/// hardware fact, and legitimately changes on the same box (see below).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct HostFacts {
     pub machine_id: Option<String>,
@@ -110,17 +115,23 @@ impl HostFacts {
         HostFacts { machine_id: read(machine_id), dmi_product_uuid: read(product_uuid) }
     }
 
-    /// Clone detection: a mismatch is a fact that was recorded at identity
-    /// creation AND is readable now AND differs. A fact missing on either
-    /// side is inconclusive, not a mismatch (hardware without DMI, first
-    /// boot ordering) — the machine-id alone is enough to catch a clone.
+    /// Clone detection: a mismatch is a *hardware-bound* fact that was
+    /// recorded at identity creation AND is readable now AND differs. A fact
+    /// missing on either side is inconclusive, not a mismatch (VMs/containers
+    /// without DMI, first-boot ordering).
+    ///
+    /// Only the DMI product UUID counts. `/etc/machine-id` is deliberately NOT
+    /// a clone-detection fact: on VyOS every installed image carries its own
+    /// machine-id (systemd regenerates it on the new image's first boot),
+    /// while the identity lives in the cross-image-persistent `/config`. So
+    /// `add system image` + reboot would otherwise trip this gate and refuse
+    /// the control channel on the *same* hardware — the exact false positive
+    /// that forced operators to `qf identity regenerate` after every upgrade.
+    /// The device key surviving in `/config` is the whole point; the machine
+    /// it runs on has not changed. machine-id is still recorded in host.json
+    /// for diagnostics, it just never gates.
     pub fn mismatches(recorded: &HostFacts, current: &HostFacts) -> Vec<String> {
         let mut out = Vec::new();
-        if let (Some(a), Some(b)) = (&recorded.machine_id, &current.machine_id) {
-            if a != b {
-                out.push(format!("machine-id changed ({a} → {b})"));
-            }
-        }
         if let (Some(a), Some(b)) = (&recorded.dmi_product_uuid, &current.dmi_product_uuid) {
             if a != b {
                 out.push(format!("DMI product UUID changed ({a} → {b})"));
@@ -343,20 +354,29 @@ mod tests {
         // Identical → no mismatch.
         assert!(HostFacts::mismatches(&recorded, &recorded).is_empty());
 
-        // Changed machine-id → mismatch (the clone case).
-        let cloned = HostFacts { machine_id: Some("bbb".into()), ..recorded.clone() };
+        // machine-id changed but DMI product UUID stable → NO mismatch. This
+        // is the VyOS image-upgrade case: the new image regenerates
+        // /etc/machine-id but the box (and its DMI UUID) is the same, so the
+        // control channel must NOT be refused.
+        let upgraded = HostFacts { machine_id: Some("bbb".into()), ..recorded.clone() };
+        assert!(HostFacts::mismatches(&recorded, &upgraded).is_empty());
+
+        // Changed DMI product UUID → mismatch (the clone case: identity moved
+        // to different hardware).
+        let cloned = HostFacts { dmi_product_uuid: Some("uuid-2".into()), ..recorded.clone() };
         let m = HostFacts::mismatches(&recorded, &cloned);
         assert_eq!(m.len(), 1);
-        assert!(m[0].contains("machine-id"));
+        assert!(m[0].contains("DMI product UUID"));
 
-        // Both changed → both reported.
+        // machine-id AND DMI both changed → still exactly one mismatch (only
+        // the hardware fact is reported).
         let cloned2 = HostFacts {
             machine_id: Some("bbb".into()),
             dmi_product_uuid: Some("uuid-2".into()),
         };
-        assert_eq!(HostFacts::mismatches(&recorded, &cloned2).len(), 2);
+        assert_eq!(HostFacts::mismatches(&recorded, &cloned2).len(), 1);
 
-        // Missing on either side is inconclusive, not a mismatch.
+        // Missing DMI on either side is inconclusive, not a mismatch.
         let no_dmi = HostFacts { machine_id: Some("aaa".into()), dmi_product_uuid: None };
         assert!(HostFacts::mismatches(&recorded, &no_dmi).is_empty());
         assert!(HostFacts::mismatches(&no_dmi, &recorded).is_empty());

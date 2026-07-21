@@ -29,6 +29,8 @@ mod ssl_inspection;
 // System-level integrations.
 #[path = "system/quartz_command.rs"]
 mod quartz_command;
+#[path = "system/reboot.rs"]
+mod reboot;
 
 // Monitoring / telemetry read paths.
 #[path = "monitoring/dashboard.rs"]
@@ -227,6 +229,11 @@ async fn main() -> Result<()> {
         // auto-revert; the root quartzfire-factory-reset units do the privileged
         // work. See guard::factory_reset.
         .route("/api/system/factory-reset", post(guard::factory_reset))
+        // Reboot the device. Like factory-reset, the sandboxed backend can't
+        // reboot itself, so this only arms a root path-unit trigger; the cloud
+        // "Reboot Device" button reaches it over the control stream. See
+        // reboot.rs.
+        .route("/api/system/reboot", post(reboot::reboot))
         // QuartzCommand cloud management status (System → Management); the
         // config side (incl. enrollment) goes through the VyOS proxy.
         .route("/api/quartz-command/status", get(quartz_command::status))

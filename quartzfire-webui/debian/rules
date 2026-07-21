@@ -30,6 +30,9 @@ override_dh_installsystemd:
 	# never at boot — and does nothing without a valid request, so a start at
 	# install time is harmless.
 	dh_installsystemd --name=quartzfire-factory-reset
+	# Device reboot: same trigger-file seam as factory reset — arm the .path
+	# watcher; the oneshot .service has no [Install] and fires only on request.
+	dh_installsystemd --name=quartzfire-reboot
 
 override_dh_auto_install:
 	install -D -m0755 backend/target/release/quartzfire-webui \
@@ -40,6 +43,8 @@ override_dh_auto_install:
 		debian/quartzfire-webui/usr/libexec/quartzfire/ips-apply
 	install -D -m0755 scripts/factory-reset \
 		debian/quartzfire-webui/usr/libexec/quartzfire/factory-reset
+	install -D -m0755 scripts/reboot-device \
+		debian/quartzfire-webui/usr/libexec/quartzfire/reboot-device
 	mkdir -p debian/quartzfire-webui/usr/share/quartzfire-webui/www
 	# Frontend export is optional at package time; warn but do not fail.
 	if [ -d backend/www ]; then \

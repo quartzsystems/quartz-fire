@@ -1361,12 +1361,13 @@ dependencies = [
 
 [[package]]
 name = "qfagent"
-version = "0.1.1"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "clap",
  "ed25519-dalek",
  "jsonwebtoken",
+ "libc",
  "pem",
  "prost",
  "prost-build",
