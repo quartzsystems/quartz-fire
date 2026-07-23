@@ -45,11 +45,13 @@ MemoryDenyWriteExecute=yes
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 # AF_UNIX/AF_INET/AF_INET6: outbound TLS + DNS resolution. AF_NETLINK: the
-# DeviceStats collector shells out to `nft -j list ruleset` for top_policies,
-# and nft talks to the kernel netfilter subsystem over a netlink socket —
-# without this family the child's socket() is blocked and top_policies is
-# always empty (see stats::top_policies). RestrictAddressFamilies is a seccomp
-# filter inherited by children, so it gates nft, not just the daemon itself.
+# DeviceStats collector shells out to `nft -j list ruleset` for top_policies
+# and to `ip -j route show default` for the WAN-throughput fallback, and both
+# talk to the kernel over a netlink socket — without this family the child's
+# socket() is blocked and those fields are always empty (see
+# stats::top_policies / stats::default_route_interfaces).
+# RestrictAddressFamilies is a seccomp filter inherited by children, so it
+# gates nft/ip, not just the daemon itself.
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 
 SyslogIdentifier=qfagent

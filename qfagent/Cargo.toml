@@ -1,7 +1,7 @@
 [package]
 name = "qfagent"
 description = "QuartzFire cloud management agent: device identity, QuartzCommand enrollment, and the persistent mTLS control channel."
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 license = "GPL-2.0-or-later"
 authors = ["QuartzFire <cwellman@quartz.systems>"]

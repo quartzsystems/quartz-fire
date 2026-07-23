@@ -112,9 +112,13 @@ both first-tick-immediate so the controller has data right after the hello):
   counters read from each subsystem's on-disk artifacts.
 * `DeviceStats` every ~30 s (`stats`) — device health + traffic: CPU / memory
   / disk gauges (clamped 0–100, CPU sampled over a short in-call window),
-  uptime, the outbound (WAN) source address, and the busiest firewall rules
-  by bytes from the nftables `vyos_filter` counters. Any unavailable source
-  degrades to a zero/empty field, never a dropped message.
+  uptime, the outbound (WAN) source address, WAN throughput in bits/sec
+  (rx/tx byte-counter deltas between snapshots, summed across the WAN-facing
+  interfaces — the firewall's "WAN" zone or interface-group alias, falling
+  back to the default-route interface; 0/0 on the first snapshot = "not
+  measured"), and the busiest firewall rules by bytes from the nftables
+  `vyos_filter` counters. Any unavailable source degrades to a zero/empty
+  field, never a dropped message.
 
 ## Processes and files
 

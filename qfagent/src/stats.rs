@@ -22,8 +22,19 @@
 //!                as the operator sees it on the Rules page (the configured
 //!                rule description / `[dn:…]` display name) via the running
 //!                VyOS config, falling back to the raw chain+rule label.
+//!   rx/tx_bps  — WAN throughput in bits/sec: per-interface rx_bytes/tx_bytes
+//!                deltas (/sys/class/net/<if>/statistics) between consecutive
+//!                snapshots, summed across the WAN-facing interfaces. Which
+//!                interfaces are WAN comes from the firewall's own config —
+//!                the "WAN" zone's members, else the "WAN" interface-group
+//!                alias — falling back to the kernel's default-route
+//!                interface(s). 0/0 on the first snapshot after start ("not
+//!                measured"); a counter wrap/reset clamps that interface's
+//!                delta to zero.
 
-use std::time::Duration;
+use std::collections::HashMap;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
@@ -46,6 +57,7 @@ pub fn collect() -> DeviceStats {
     // figures come from the same sample so they can't disagree.
     let mem = read_mem();
     let disk = read_disk("/");
+    let (rx_bps, tx_bps) = wan_throughput();
     DeviceStats {
         time_unix: crate::state::now_unix(),
         interval_secs: INTERVAL.as_secs() as u32,
@@ -59,6 +71,8 @@ pub fn collect() -> DeviceStats {
         mem_total_bytes: mem.map(|m| m.total_bytes).unwrap_or(0),
         disk_used_bytes: disk.map(|d| d.used_bytes).unwrap_or(0),
         disk_total_bytes: disk.map(|d| d.total_bytes).unwrap_or(0),
+        rx_bps,
+        tx_bps,
     }
 }
 
@@ -240,6 +254,180 @@ fn outbound_ip_via(dest: &str) -> Option<String> {
     Some(ip.to_string())
 }
 
+// ── WAN throughput ────────────────────────────────────────────────────────────
+
+/// The previous snapshot's WAN byte counters, kept across ticks (and across
+/// stream reconnects — the process is the measurement boundary, not the
+/// connection). None until the first snapshot has been taken.
+static WAN_PREV: Mutex<Option<WanSample>> = Mutex::new(None);
+
+struct WanSample {
+    taken: Instant,
+    /// interface → (rx_bytes, tx_bytes) cumulative kernel counters.
+    counters: HashMap<String, (u64, u64)>,
+}
+
+/// WAN throughput in bits/sec (rx, tx) averaged since the previous snapshot.
+/// (0, 0) when there is no previous sample yet (first tick — the controller
+/// reads 0/0 as "not measured"), no WAN interface could be determined, or the
+/// WAN set changed so much that no interface overlaps the previous sample.
+fn wan_throughput() -> (u64, u64) {
+    let counters: HashMap<String, (u64, u64)> = wan_interfaces(&CliShellApi::active())
+        .into_iter()
+        .filter_map(|name| read_if_bytes(&name).map(|c| (name, c)))
+        .collect();
+    let now = Instant::now();
+    // A poisoned lock only means a previous collector panicked mid-update;
+    // the sample inside is still the last complete one.
+    let mut slot = WAN_PREV.lock().unwrap_or_else(|p| p.into_inner());
+    let rates = match slot.as_ref() {
+        Some(prev) => rates_between(
+            &prev.counters,
+            &counters,
+            now.duration_since(prev.taken).as_secs_f64(),
+        ),
+        None => (0, 0),
+    };
+    *slot = Some(WanSample { taken: now, counters });
+    rates
+}
+
+/// Pure half of `wan_throughput`: summed per-interface deltas × 8 / elapsed.
+/// Only interfaces present in BOTH samples contribute (a newly-appeared WAN
+/// interface has no baseline yet); a counter that went backwards (wrap, driver
+/// reset, interface re-creation) clamps that interface's delta to zero.
+fn rates_between(
+    prev: &HashMap<String, (u64, u64)>,
+    cur: &HashMap<String, (u64, u64)>,
+    elapsed_secs: f64,
+) -> (u64, u64) {
+    if elapsed_secs <= 0.0 {
+        return (0, 0);
+    }
+    let mut rx_delta: u64 = 0;
+    let mut tx_delta: u64 = 0;
+    for (name, (cur_rx, cur_tx)) in cur {
+        let Some((prev_rx, prev_tx)) = prev.get(name) else { continue };
+        rx_delta = rx_delta.saturating_add(cur_rx.saturating_sub(*prev_rx));
+        tx_delta = tx_delta.saturating_add(cur_tx.saturating_sub(*prev_tx));
+    }
+    let bps = |bytes: u64| (bytes as f64 * 8.0 / elapsed_secs).round() as u64;
+    (bps(rx_delta), bps(tx_delta))
+}
+
+/// Cumulative (rx_bytes, tx_bytes) for one interface from
+/// /sys/class/net/<name>/statistics. None when the interface doesn't exist
+/// (it then simply doesn't contribute to the sums).
+fn read_if_bytes(name: &str) -> Option<(u64, u64)> {
+    let stats_dir = std::path::Path::new("/sys/class/net").join(name).join("statistics");
+    let read = |file: &str| -> Option<u64> {
+        std::fs::read_to_string(stats_dir.join(file)).ok()?.trim().parse().ok()
+    };
+    Some((read("rx_bytes")?, read("tx_bytes")?))
+}
+
+/// The device's WAN-facing interfaces: the firewall's own interface-role
+/// config first, the kernel's routing table as the fallback.
+fn wan_interfaces(conf: &dyn ConfigRead) -> Vec<String> {
+    configured_wan_interfaces(conf).unwrap_or_else(default_route_interfaces)
+}
+
+/// WAN members from the firewall config, or None when it doesn't designate
+/// any: the members of the zone named (or `[dn:…]`-displayed) "WAN" when
+/// zone-based firewalling is in use, else the members of the "WAN"
+/// interface-group alias (the Aliases page's zone-less interface grouping).
+fn configured_wan_interfaces(conf: &dyn ConfigRead) -> Option<Vec<String>> {
+    let groups: [(&[&str], &str); 2] = [
+        (&["firewall", "zone"], "member"),
+        (&["firewall", "group", "interface-group"], ""),
+    ];
+    for (base, member_node) in groups {
+        for name in conf.list_nodes(base) {
+            if !is_named_wan(conf, base, &name) {
+                continue;
+            }
+            let mut path: Vec<&str> = base.to_vec();
+            path.push(&name);
+            if !member_node.is_empty() {
+                path.push(member_node);
+            }
+            path.push("interface");
+            let members = conf.return_values(&path);
+            if !members.is_empty() {
+                return Some(members);
+            }
+        }
+    }
+    None
+}
+
+/// Whether a config node designates the WAN role: its name is "WAN"
+/// (case-insensitive), or its description carries a `[dn:WAN]` display-name
+/// marker (the node may then be named anything the operator liked).
+fn is_named_wan(conf: &dyn ConfigRead, base: &[&str], name: &str) -> bool {
+    if name.eq_ignore_ascii_case("wan") {
+        return true;
+    }
+    let mut path: Vec<&str> = base.to_vec();
+    path.push(name);
+    path.push("description");
+    conf.return_value(&path)
+        .and_then(|d| dn_marker(&d))
+        .is_some_and(|display| display.eq_ignore_ascii_case("wan"))
+}
+
+/// The `[dn:<name>]` display-name marker at the start of a description, if any.
+fn dn_marker(desc: &str) -> Option<String> {
+    let rest = desc.strip_prefix("[dn:")?;
+    let inner = &rest[..rest.find(']')?];
+    (!inner.is_empty()).then(|| inner.to_string())
+}
+
+/// Interfaces carrying the kernel's default route (v4 and v6), for boxes whose
+/// config names no WAN — the same "as the device sees itself" notion as
+/// `outbound_ip`. Empty when there is no route out.
+fn default_route_interfaces() -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for family in ["-4", "-6"] {
+        let output = std::process::Command::new("ip")
+            .args(["-j", family, "route", "show", "default"])
+            .output();
+        let Ok(o) = output else { continue };
+        if !o.status.success() {
+            continue;
+        }
+        for dev in parse_default_route_devs(&String::from_utf8_lossy(&o.stdout)) {
+            if !out.contains(&dev) {
+                out.push(dev);
+            }
+        }
+    }
+    out
+}
+
+/// Pure half of `default_route_interfaces`: every `dev` in an
+/// `ip -j route show default` document, including multipath `nexthops`.
+fn parse_default_route_devs(json_text: &str) -> Vec<String> {
+    let Ok(doc) = serde_json::from_str::<Value>(json_text) else {
+        return Vec::new();
+    };
+    let mut out: Vec<String> = Vec::new();
+    let mut push = |dev: Option<&str>| {
+        if let Some(d) = dev {
+            if !out.iter().any(|o| o == d) {
+                out.push(d.to_string());
+            }
+        }
+    };
+    for route in doc.as_array().into_iter().flatten() {
+        push(route.get("dev").and_then(Value::as_str));
+        for hop in route.get("nexthops").and_then(Value::as_array).into_iter().flatten() {
+            push(hop.get("dev").and_then(Value::as_str));
+        }
+    }
+    out
+}
+
 // ── firewall rule counters ────────────────────────────────────────────────────
 
 /// The busiest firewall rules by bytes. Reads the nftables ruleset as JSON and
@@ -402,13 +590,8 @@ fn friendly_from_description(desc: &str) -> Option<String> {
     if desc.is_empty() || desc.starts_with("[qz-sys]") {
         return None;
     }
-    if let Some(rest) = desc.strip_prefix("[dn:") {
-        if let Some(end) = rest.find(']') {
-            let inner = &rest[..end];
-            if !inner.is_empty() {
-                return Some(inner.to_string());
-            }
-        }
+    if let Some(name) = dn_marker(desc) {
+        return Some(name);
     }
     Some(desc.to_string())
 }
@@ -767,6 +950,87 @@ mod tests {
         assert_eq!(policies[0].bytes, 5000);
         // The baseline rule keeps its raw label.
         assert_eq!(policies[1].name, "Forward rule 1");
+    }
+
+    // ── WAN throughput ────────────────────────────────────────────────────
+
+    fn counters(entries: &[(&str, u64, u64)]) -> HashMap<String, (u64, u64)> {
+        entries.iter().map(|(n, rx, tx)| (n.to_string(), (*rx, *tx))).collect()
+    }
+
+    #[test]
+    fn rates_sum_interface_deltas_as_bits_per_sec() {
+        let prev = counters(&[("eth0", 1_000, 500), ("pppoe0", 2_000, 100)]);
+        // eth0: +3000 rx / +750 tx; pppoe0: +1000 rx / +250 tx over 4 s.
+        let cur = counters(&[("eth0", 4_000, 1_250), ("pppoe0", 3_000, 350)]);
+        // (3000+1000)*8/4 = 8000 rx bps; (750+250)*8/4 = 2000 tx bps.
+        assert_eq!(rates_between(&prev, &cur, 4.0), (8_000, 2_000));
+    }
+
+    #[test]
+    fn rates_clamp_counter_resets_and_skip_new_interfaces() {
+        let prev = counters(&[("eth0", 9_000, 9_000)]);
+        // eth0's counters went backwards (reset) → its delta clamps to zero;
+        // eth9 is new (no baseline) → contributes nothing.
+        let cur = counters(&[("eth0", 100, 200), ("eth9", 5_000, 5_000)]);
+        assert_eq!(rates_between(&prev, &cur, 30.0), (0, 0));
+        // Zero / negative elapsed → nothing to average over.
+        assert_eq!(rates_between(&prev, &prev, 0.0), (0, 0));
+    }
+
+    #[test]
+    fn wan_interfaces_come_from_the_wan_zone() {
+        let mut cfg = FakeConfig::default();
+        cfg.set_multi("firewall zone WAN member interface", &["eth0", "eth3"]);
+        cfg.set_multi("firewall zone LAN member interface", &["eth1"]);
+        assert_eq!(configured_wan_interfaces(&cfg), Some(vec!["eth0".into(), "eth3".into()]));
+    }
+
+    #[test]
+    fn wan_zone_matches_case_insensitively_and_via_dn_marker() {
+        let mut cfg = FakeConfig::default();
+        cfg.set_multi("firewall zone wan member interface", &["eth0"]);
+        assert_eq!(configured_wan_interfaces(&cfg), Some(vec!["eth0".into()]));
+
+        // Zone named something else, but displayed "WAN" via the [dn:…] marker.
+        let mut cfg = FakeConfig::default();
+        cfg.set("firewall zone EXT description", "[dn:WAN] the uplink");
+        cfg.set_multi("firewall zone EXT member interface", &["pppoe0"]);
+        assert_eq!(configured_wan_interfaces(&cfg), Some(vec!["pppoe0".into()]));
+    }
+
+    #[test]
+    fn wan_interface_group_is_the_zoneless_fallback() {
+        // No zones — a "WAN" interface-group alias designates the role.
+        let mut cfg = FakeConfig::default();
+        cfg.set_multi("firewall group interface-group WAN interface", &["eth0"]);
+        assert_eq!(configured_wan_interfaces(&cfg), Some(vec!["eth0".into()]));
+        // Nothing named WAN anywhere → None (caller falls back to the
+        // default-route interfaces).
+        let mut cfg = FakeConfig::default();
+        cfg.set_multi("firewall zone DMZ member interface", &["eth2"]);
+        assert_eq!(configured_wan_interfaces(&cfg), None);
+    }
+
+    #[test]
+    fn default_route_devs_parse_plain_and_multipath() {
+        // Single default route.
+        let single = r#"[{"dst":"default","gateway":"203.0.113.1","dev":"eth0","protocol":"dhcp"}]"#;
+        assert_eq!(parse_default_route_devs(single), vec!["eth0"]);
+        // ECMP: devs live in nexthops, deduped against the top-level dev.
+        let multi = r#"[{"dst":"default","nexthops":[{"gateway":"203.0.113.1","dev":"eth0"},{"gateway":"198.51.100.1","dev":"eth3"}]}]"#;
+        assert_eq!(parse_default_route_devs(multi), vec!["eth0", "eth3"]);
+        // No route out / garbage → empty.
+        assert!(parse_default_route_devs("[]").is_empty());
+        assert!(parse_default_route_devs("not json").is_empty());
+    }
+
+    #[test]
+    fn dn_marker_extracts_only_wellformed_markers() {
+        assert_eq!(dn_marker("[dn:WAN] uplink").as_deref(), Some("WAN"));
+        assert_eq!(dn_marker("[dn:]"), None);
+        assert_eq!(dn_marker("[dn:oops"), None);
+        assert_eq!(dn_marker("plain words"), None);
     }
 
     /// Compile-time guard for the wrapping `control.rs` uses to put a snapshot

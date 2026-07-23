@@ -1,3 +1,16 @@
+qfagent (0.1.4) unstable; urgency=medium
+
+  * Report WAN throughput in DeviceStats (rx_bps/tx_bps, proto fields 13/14):
+    per-interface rx/tx byte-counter deltas between ~30 s snapshots, summed
+    across the WAN-facing interfaces and converted to bits/sec. WAN membership
+    comes from the firewall's own config — the "WAN" zone's members (name or
+    [dn:WAN] display name), else the "WAN" interface-group alias — falling
+    back to the kernel's default-route interface(s). First snapshot after
+    start sends 0/0 ("not measured" to the controller); counter wraps/resets
+    clamp to zero. Older controllers ignore the unknown fields.
+
+ -- QuartzFire <cwellman@quartz.systems>  Wed, 22 Jul 2026 12:00:00 +0000
+
 qfagent (0.1.3) unstable; urgency=medium
 
   * Push periodic DeviceStats up the existing ControlStream (~30 s, alongside

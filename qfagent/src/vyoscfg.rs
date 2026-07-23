@@ -16,6 +16,10 @@ pub const BASE: [&str; 2] = ["system", "quartz-command"];
 pub trait ConfigRead {
     fn exists(&self, path: &[&str]) -> bool;
     fn return_value(&self, path: &[&str]) -> Option<String>;
+    /// Child node names under a path (tag values / subnodes).
+    fn list_nodes(&self, path: &[&str]) -> Vec<String>;
+    /// Every value of a multi-value leaf.
+    fn return_values(&self, path: &[&str]) -> Vec<String>;
 }
 
 pub struct CliShellApi {
@@ -41,6 +45,28 @@ impl CliShellApi {
     }
 }
 
+/// cli-shell-api list output: whitespace-separated tokens, each single-quoted
+/// ('eth0' 'eth1'); values may contain spaces inside the quotes. (Same parse
+/// as quartzfire-geoip's config.rs.)
+fn parse_quoted_list(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    for ch in text.chars() {
+        match ch {
+            '\'' => {
+                if in_quotes {
+                    out.push(std::mem::take(&mut current));
+                }
+                in_quotes = !in_quotes;
+            }
+            _ if in_quotes => current.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
 impl ConfigRead for CliShellApi {
     fn exists(&self, path: &[&str]) -> bool {
         let verb = if self.active { "existsActive" } else { "exists" };
@@ -55,6 +81,16 @@ impl ConfigRead for CliShellApi {
         } else {
             Some(value)
         }
+    }
+
+    fn list_nodes(&self, path: &[&str]) -> Vec<String> {
+        let verb = if self.active { "listActiveNodes" } else { "listNodes" };
+        self.run(verb, path).map(|t| parse_quoted_list(&t)).unwrap_or_default()
+    }
+
+    fn return_values(&self, path: &[&str]) -> Vec<String> {
+        let verb = if self.active { "returnActiveValues" } else { "returnValues" };
+        self.run(verb, path).map(|t| parse_quoted_list(&t)).unwrap_or_default()
     }
 }
 
@@ -111,12 +147,18 @@ pub mod testutil {
     #[derive(Default)]
     pub struct FakeConfig {
         pub values: HashMap<String, String>,
+        pub multi: HashMap<String, Vec<String>>,
         pub nodes: Vec<String>,
     }
 
     impl FakeConfig {
         pub fn set(&mut self, path: &str, value: &str) {
             self.values.insert(path.to_string(), value.to_string());
+            self.nodes.push(path.to_string());
+        }
+        pub fn set_multi(&mut self, path: &str, values: &[&str]) {
+            self.multi
+                .insert(path.to_string(), values.iter().map(|v| v.to_string()).collect());
             self.nodes.push(path.to_string());
         }
         pub fn node(&mut self, path: &str) {
@@ -132,6 +174,21 @@ pub mod testutil {
         }
         fn return_value(&self, path: &[&str]) -> Option<String> {
             self.values.get(&path.join(" ")).cloned()
+        }
+        fn list_nodes(&self, path: &[&str]) -> Vec<String> {
+            let prefix = format!("{} ", path.join(" "));
+            let mut out: Vec<String> = Vec::new();
+            for key in self.nodes.iter() {
+                let Some(rest) = key.strip_prefix(&prefix) else { continue };
+                let Some(child) = rest.split_whitespace().next() else { continue };
+                if !out.iter().any(|c| c == child) {
+                    out.push(child.to_string());
+                }
+            }
+            out
+        }
+        fn return_values(&self, path: &[&str]) -> Vec<String> {
+            self.multi.get(&path.join(" ")).cloned().unwrap_or_default()
         }
     }
 }
@@ -158,6 +215,30 @@ mod tests {
     fn absent_tree() {
         let cfg = read_config(&FakeConfig::default());
         assert!(!cfg.present);
+    }
+
+    #[test]
+    fn quoted_list_parses() {
+        assert_eq!(parse_quoted_list("'eth0' 'eth1'"), vec!["eth0", "eth1"]);
+        assert_eq!(parse_quoted_list("'with space' 'b'"), vec!["with space", "b"]);
+        assert_eq!(parse_quoted_list(""), Vec::<String>::new());
+        assert_eq!(parse_quoted_list("'one'\n"), vec!["one"]);
+    }
+
+    #[test]
+    fn fake_lists_children_and_multi_values() {
+        let mut fake = FakeConfig::default();
+        fake.set("firewall zone WAN description", "uplink");
+        fake.set_multi("firewall zone WAN member interface", &["eth0", "eth3"]);
+        fake.node("firewall zone LAN");
+        let mut zones = fake.list_nodes(&["firewall", "zone"]);
+        zones.sort();
+        assert_eq!(zones, vec!["LAN", "WAN"]);
+        assert_eq!(
+            fake.return_values(&["firewall", "zone", "WAN", "member", "interface"]),
+            vec!["eth0", "eth3"]
+        );
+        assert!(fake.return_values(&["firewall", "zone", "LAN", "member", "interface"]).is_empty());
     }
 
     #[test]
