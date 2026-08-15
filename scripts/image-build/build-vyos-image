@@ -495,11 +495,17 @@ DOCUMENTATION_URL="{build_config['documentation_url']}"
             json.dump(version_data, f)
 
         # Generate the isolinux boot menu file
+        ## Flavors may override the menu title with a `boot_title` template
+        ## ({version} and {build_flavor} are expanded)
+        boot_title_format = build_config.get("boot_title") or "VyOS {version} ({build_flavor})"
+        boot_title = boot_title_format.format(
+            version=build_config['version'],
+            build_flavor=build_config['build_flavor'])
         boot_menu_data = f'''
 menu hshift 0
 menu width 82
 
-menu title VyOS {build_config['version']} ({build_config['build_flavor']})
+menu title {boot_title}
 include stdmenu.cfg
 include live.cfg
 

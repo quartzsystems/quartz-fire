@@ -34,6 +34,11 @@ packages = ["location", "squid-openssl", "e2guardian"]
 # makes it the default image name offered by the installer.
 iso_name = "{version}-{architecture}"
 
+# isolinux boot menu title: the version string already carries the
+# quartzfire- prefix, so the upstream default ("VyOS {version} ({build_flavor})")
+# would read "VyOS quartzfire-…"; use the bare version instead.
+boot_title = "{version}"
+
 # Default configuration: identical to the vyos-1x default except for the
 # host name. The default user stays "vyos" because the vyos-1x installer
 # (image_installer.py) hardcodes that user when asking for a password during
