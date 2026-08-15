@@ -244,7 +244,7 @@ function StatusCard({
           )}
           {item("Schedule", update?.schedule === "daily" ? "Daily (automatic)" : "Daily after first boot")}
           <div className="ml-auto flex items-center gap-2">
-            <Button kind="secondary" size="sm" icon="refresh" onClick={onRefresh}>
+            <Button kind="outline" size="sm" onClick={onRefresh}>
               Refresh
             </Button>
             <Button kind="primary" size="sm" onClick={updateNow} disabled={updating}>
@@ -339,7 +339,6 @@ function ActionsTab({
         <Button
           kind="primary"
           size="sm"
-          icon="plus"
           onClick={() => {
             setCreating(true);
             setEditing(null);
@@ -1036,9 +1035,8 @@ function AlertsTab() {
         <div className="ml-auto flex items-center gap-3">
           <ColumnsMenu vis={vis} />
           <Button
-            kind="secondary"
+            kind="outline"
             size="sm"
-            icon="refresh"
             onClick={() => {
               clear();
               setStream("connecting");
@@ -1154,8 +1152,7 @@ export default function GeolocationPage() {
       <div>
         <h2>Geolocation</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Block or allow traffic by country, per firewall rule — powered by the signed IPFire
-          location database
+          Country-based filtering attached to Allow rules — actions name the countries, policies attach them.
         </p>
       </div>
 

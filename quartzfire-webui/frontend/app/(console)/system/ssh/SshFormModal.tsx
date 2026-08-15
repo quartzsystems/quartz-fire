@@ -113,7 +113,7 @@ export function SshFormModal({
               />
             </Field>
 
-            <Field label="Listen Addresses" hint="One address per line. Empty = listen on all addresses.">
+            <Field label="Listen addresses" hint="One address per line. Empty = listen on all addresses.">
               <textarea
                 value={listenText}
                 onChange={(e) => setListenText(e.target.value)}

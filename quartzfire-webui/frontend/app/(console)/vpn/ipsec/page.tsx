@@ -53,7 +53,7 @@ function peerColumns(): Column<IpsecPeer>[] {
 function ikeColumns(): Column<IkeGroup>[] {
   return [
     { key: "name", header: "Name", value: (r) => r.name, mono: true, sortable: true, width: 180 },
-    { key: "ke", header: "Key Exchange", value: (r) => r.key_exchange ?? "", render: (r) => dash(r.key_exchange), mono: true, width: 140 },
+    { key: "ke", header: "Key exchange", value: (r) => r.key_exchange ?? "", render: (r) => dash(r.key_exchange), mono: true, width: 140 },
     { key: "lifetime", header: "Lifetime", value: (r) => r.lifetime ?? -1, render: (r) => (r.lifetime == null ? "—" : `${r.lifetime}s`), mono: true, width: 120 },
     {
       key: "proposals",
@@ -108,6 +108,28 @@ export default function IpsecPage() {
     load();
   }, [load]);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Header "Add" control follows the active tab (DC pattern: one primary
+  // button in the page-header row whose label tracks the tab).
+  const addAction: { label: string; onClick: () => void } | null =
+    tab === "peers"
+      ? { label: "Add Peer", onClick: () => setPeerModal({}) }
+      : tab === "ike"
+        ? { label: "Add IKE Group", onClick: () => setIkeModal({}) }
+        : tab === "esp"
+          ? { label: "Add ESP Group", onClick: () => setEspModal({}) }
+          : null;
+
   const saved = (msg: string) => {
     setPeerModal(null);
     setIkeModal(null);
@@ -146,11 +168,21 @@ export default function IpsecPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2>IPsec</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Site-to-site IPsec — IKE/ESP proposals, policy- or route-based (VTI) tunnels
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">IPsec</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Site-to-site IPsec — IKE/ESP proposals, policy- or route-based (VTI) tunnels.
+          </p>
+        </div>
+        {status === "ready" && (
+          <>
+            <Button kind="outline" onClick={refresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            {addAction && <Button kind="primary" onClick={addAction.onClick}>{addAction.label}</Button>}
+          </>
+        )}
       </div>
 
       {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading IPsec configuration…</div>}
@@ -187,9 +219,7 @@ export default function IpsecPage() {
               storageKey="vpn-ipsec-peers"
               searchPlaceholder="Search peers…"
               emptyMessage="No IPsec peers configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setPeerModal({ peer: row })}
-              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setPeerModal({})}>Add Peer</Button>}
               actions={(row) => <RowActions label={`peer ${row.name}`} onEdit={() => setPeerModal({ peer: row })} onDelete={() => removePeer(row)} />}
             />
           )}
@@ -202,9 +232,7 @@ export default function IpsecPage() {
               storageKey="vpn-ipsec-ike"
               searchPlaceholder="Search IKE groups…"
               emptyMessage="No IKE groups configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setIkeModal({ group: row })}
-              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setIkeModal({})}>Add IKE Group</Button>}
               actions={(row) => <RowActions label={`IKE group ${row.name}`} onEdit={() => setIkeModal({ group: row })} onDelete={() => removeIke(row)} />}
             />
           )}
@@ -217,9 +245,7 @@ export default function IpsecPage() {
               storageKey="vpn-ipsec-esp"
               searchPlaceholder="Search ESP groups…"
               emptyMessage="No ESP groups configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setEspModal({ group: row })}
-              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setEspModal({})}>Add ESP Group</Button>}
               actions={(row) => <RowActions label={`ESP group ${row.name}`} onEdit={() => setEspModal({ group: row })} onDelete={() => removeEsp(row)} />}
             />
           )}

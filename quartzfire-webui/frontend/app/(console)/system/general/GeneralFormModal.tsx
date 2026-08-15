@@ -127,7 +127,7 @@ export function GeneralFormModal({
               style={monoSt}
             />
           </Field>
-          <Field label="Domain Name" hint="Optional DNS domain of this device.">
+          <Field label="Domain name" hint="Optional DNS domain of this device.">
             <input
               value={domainName}
               onChange={(e) => setDomainName(e.target.value)}
@@ -139,7 +139,7 @@ export function GeneralFormModal({
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="DNS Servers" hint="One address per line — used by the firewall itself.">
+          <Field label="DNS servers" hint="One address per line — used by the firewall itself.">
             <textarea
               value={dnsText}
               onChange={(e) => setDnsText(e.target.value)}
@@ -149,7 +149,7 @@ export function GeneralFormModal({
               style={monoSt}
             />
           </Field>
-          <Field label="NTP Servers" hint="One server per line. Clearing the list disables NTP.">
+          <Field label="NTP servers" hint="One server per line. Clearing the list disables NTP.">
             <textarea
               value={ntpText}
               onChange={(e) => setNtpText(e.target.value)}
@@ -161,7 +161,7 @@ export function GeneralFormModal({
           </Field>
         </div>
 
-        <Field label="Time Zone" hint="IANA zone name, e.g. America/New_York. Defaults to UTC when empty.">
+        <Field label="Time zone" hint="IANA zone name, e.g. America/New_York. Defaults to UTC when empty.">
           <input
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}

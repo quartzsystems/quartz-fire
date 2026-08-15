@@ -114,7 +114,7 @@ export function SettingsFormModal({
 
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Listen Addresses" hint="One address per line the forwarder binds to.">
+          <Field label="Listen addresses" hint="One address per line the forwarder binds to.">
             <textarea
               value={listenText}
               onChange={(e) => setListenText(e.target.value)}
@@ -124,7 +124,7 @@ export function SettingsFormModal({
               style={mono}
             />
           </Field>
-          <Field label="Allow From" hint="One client network (CIDR) per line.">
+          <Field label="Allow from" hint="One client network (CIDR) per line.">
             <textarea
               value={allowText}
               onChange={(e) => setAllowText(e.target.value)}
@@ -136,7 +136,7 @@ export function SettingsFormModal({
           </Field>
         </div>
 
-        <Field label="Upstream Name Servers" hint="One address per line. Leave empty to recurse from the roots or use system servers.">
+        <Field label="Upstream name servers" hint="One address per line. Leave empty to recurse from the roots or use system servers.">
           <textarea
             value={serversText}
             onChange={(e) => setServersText(e.target.value)}
@@ -155,7 +155,7 @@ export function SettingsFormModal({
         </label>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Cache Size" hint="Entries; defaults to 10000 when unset.">
+          <Field label="Cache size" hint="Entries; defaults to 10000 when unset.">
             <input
               type="number"
               min={0}

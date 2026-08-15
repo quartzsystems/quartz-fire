@@ -118,15 +118,15 @@ export function InterfaceFormModal({ initial, existingNames, areas, interfaces, 
           <Field label="Priority" hint="DR election priority (0 = never DR).">
             <input value={priority} onChange={(e) => setPriority(e.target.value)} placeholder="1" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Hello Interval" hint="Seconds between hellos.">
+          <Field label="Hello interval" hint="Seconds between hellos.">
             <input value={hello} onChange={(e) => setHello(e.target.value)} placeholder="10" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Dead Interval" hint="Seconds before declaring a neighbor down.">
+          <Field label="Dead interval" hint="Seconds before declaring a neighbor down.">
             <input value={dead} onChange={(e) => setDead(e.target.value)} placeholder="40" className="clr-input" style={monoStyle} />
           </Field>
         </div>
 
-        <Field label="Network Type">
+        <Field label="Network type">
           <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
             <select value={networkType} onChange={(e) => setNetworkType(e.target.value as OspfNetworkType | "")} className="clr-select" style={{ ...inputStyle, fontFamily: "var(--qz-font-mono)" }}>
               <option value="">Default</option>
@@ -135,7 +135,7 @@ export function InterfaceFormModal({ initial, existingNames, areas, interfaces, 
           </div>
         </Field>
 
-        <Field label="Authentication Password" hint="Simple (plaintext) OSPF authentication — leave blank for none.">
+        <Field label="Authentication password" hint="Simple (plaintext) OSPF authentication — leave blank for none.">
           <input value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="secret" type="password" className="clr-input" style={inputStyle} />
         </Field>
 

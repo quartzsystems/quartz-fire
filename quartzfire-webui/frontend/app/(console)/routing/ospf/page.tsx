@@ -68,7 +68,7 @@ function interfaceColumns(): Column<OspfInterface>[] {
     { key: "name", header: "Interface", value: (r) => r.name, mono: true, sortable: true, width: 130 },
     { key: "area", header: "Area", value: (r) => r.area ?? "", render: (r) => dash(r.area), mono: true, sortable: true, width: 120 },
     { key: "cost", header: "Cost", value: (r) => r.cost ?? -1, render: (r) => (r.cost == null ? "—" : String(r.cost)), mono: true, width: 90 },
-    { key: "network", header: "Network Type", value: (r) => r.network_type ?? "", render: (r) => dash(r.network_type), mono: true, width: 160 },
+    { key: "network", header: "Network type", value: (r) => r.network_type ?? "", render: (r) => dash(r.network_type), mono: true, width: 160 },
     {
       key: "timers",
       header: "Hello / Dead",
@@ -160,7 +160,7 @@ export default function OspfPage() {
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
         <h2 style={{ margin: 0 }}>OSPF</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Open Shortest Path First (OSPFv2) — link-state IGP for the IPv4 underlay
+          Open Shortest Path First (OSPFv2) — link-state IGP for the IPv4 underlay.
         </p>
       </div>
 
@@ -202,7 +202,7 @@ export default function OspfPage() {
                 onRefresh={() => load("refresh")}
                 onRowOpen={(row) => setAreaModal({ area: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon="plus" onClick={() => setAreaModal({})}>
+                  <Button kind="primary" size="sm" onClick={() => setAreaModal({})}>
                     Add Area
                   </Button>
                 }
@@ -223,7 +223,7 @@ export default function OspfPage() {
                 onRefresh={() => load("refresh")}
                 onRowOpen={(row) => setIfaceModal({ iface: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon="plus" onClick={() => setIfaceModal({})}>
+                  <Button kind="primary" size="sm" onClick={() => setIfaceModal({})}>
                     Add Interface
                   </Button>
                 }

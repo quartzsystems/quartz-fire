@@ -134,7 +134,7 @@ export function StaticNatFormModal({
         </datalist>
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Rule Number" required>
+          <Field label="Rule number" required>
             <input
               type="number"
               min={1}
@@ -169,7 +169,7 @@ export function StaticNatFormModal({
         </Field>
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Internal Address" required hint="The private host (LAN side).">
+          <Field label="Internal address" required hint="The private host (LAN side).">
             <input
               value={internalAddress}
               onChange={(e) => setInternalAddress(e.target.value)}
@@ -178,7 +178,7 @@ export function StaticNatFormModal({
               style={wideMono}
             />
           </Field>
-          <Field label="External Address" required hint="The public address (WAN side).">
+          <Field label="External address" required hint="The public address (WAN side).">
             <input
               value={externalAddress}
               onChange={(e) => setExternalAddress(e.target.value)}

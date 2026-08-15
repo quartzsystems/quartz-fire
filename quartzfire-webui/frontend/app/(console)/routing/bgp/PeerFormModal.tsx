@@ -223,7 +223,7 @@ export function PeerFormModal({
         <datalist id="bgp-interfaces">{interfaces.map((n) => <option key={n} value={n} />)}</datalist>
 
         {isNeighbor && !isEdit && (
-          <Field label="Peer Type" hint="Unnumbered peers over an interface use IPv6 link-local + extended-nexthop.">
+          <Field label="Peer type" hint="Unnumbered peers over an interface use IPv6 link-local + extended-nexthop.">
             <Segmented
               items={[
                 { value: "ip", label: "IP address" },
@@ -236,7 +236,7 @@ export function PeerFormModal({
         )}
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label={isNeighbor ? (peer.is_interface ? "Interface" : "Neighbor Address") : "Peer-Group Name"}>
+          <Field label={isNeighbor ? (peer.is_interface ? "Interface" : "Neighbor address") : "Peer-group name"}>
             <input
               list={isNeighbor && peer.is_interface ? "bgp-interfaces" : undefined}
               value={peer.name}
@@ -260,14 +260,14 @@ export function PeerFormModal({
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           {isNeighbor && (
-            <Field label="Peer Group" hint="Inherit settings from a peer-group.">
+            <Field label="Peer group" hint="Inherit settings from a peer-group.">
               <input list="bgp-peer-groups" value={peer.peer_group ?? ""} onChange={(e) => set({ peer_group: e.target.value || null })} placeholder="fabric" className="clr-input" style={monoStyle} />
             </Field>
           )}
-          <Field label="Update Source" hint="Source address/interface for the session.">
+          <Field label="Update source" hint="Source address/interface for the session.">
             <input list="bgp-interfaces" value={peer.update_source ?? ""} onChange={(e) => set({ update_source: e.target.value || null })} placeholder="lo" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="eBGP Multihop" hint="Max hops to an eBGP peer (blank = directly connected).">
+          <Field label="eBGP multihop" hint="Max hops to an eBGP peer (blank = directly connected).">
             <input value={peer.ebgp_multihop ?? ""} onChange={(e) => set({ ebgp_multihop: e.target.value.trim() === "" ? null : Number(e.target.value) })} placeholder="2" className="clr-input" style={monoStyle} />
           </Field>
         </div>
@@ -292,7 +292,7 @@ export function PeerFormModal({
         </div>
 
         <div>
-          <label className="clr-control-label" style={{ marginBottom: 8 }}>Address Families</label>
+          <label className="clr-control-label" style={{ marginBottom: 8 }}>Address families</label>
           <div className="flex flex-col gap-2">
             {ADDRESS_FAMILIES.map((af) => (
               <AfBlock key={af} af={af} value={peer.afi[af] ?? emptyAf()} onChange={(v) => setAf(af, v)} routeMaps={routeMaps} />

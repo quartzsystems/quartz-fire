@@ -6,7 +6,6 @@
 // small hook that owns visibility state and persists it per table.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 
 export interface ColumnSpec {
@@ -100,9 +99,9 @@ export function ColumnsMenu({ vis }: { vis: ColumnVisibility }) {
 
   return (
     <div className="clr-dropdown" ref={ref}>
-      <Button kind="secondary" size="sm" icon="grid-view" onClick={() => setOpen((o) => !o)}>
+      <button type="button" className="btn" onClick={() => setOpen((o) => !o)}>
         Columns
-      </Button>
+      </button>
       {open && (
         <div className="dropdown-menu right" style={{ minWidth: 200 }}>
           <div className="dropdown-header">Show Columns</div>

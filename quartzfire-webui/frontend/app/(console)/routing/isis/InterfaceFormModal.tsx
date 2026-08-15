@@ -94,7 +94,7 @@ export function InterfaceFormModal({ initial, existingNames, interfaces, onClose
           <Field label="Interface">
             <input list="isis-if-interfaces" value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="eth1" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Circuit Type" hint="Which levels form adjacencies on this link.">
+          <Field label="Circuit type" hint="Which levels form adjacencies on this link.">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
               <select value={circuitType} onChange={(e) => setCircuitType(e.target.value as IsisCircuitType | "")} className="clr-select" style={inputStyle}>
                 <option value="">Default (level-1-2)</option>
@@ -110,10 +110,10 @@ export function InterfaceFormModal({ initial, existingNames, interfaces, onClose
           <Field label="Metric" hint="Wide metric (0–16777215).">
             <input value={metric} onChange={(e) => setMetric(e.target.value)} placeholder="10" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Hello Interval" hint="Seconds between hellos.">
+          <Field label="Hello interval" hint="Seconds between hellos.">
             <input value={hello} onChange={(e) => setHello(e.target.value)} placeholder="10" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Hello Multiplier" hint="Missed hellos before down.">
+          <Field label="Hello multiplier" hint="Missed hellos before down.">
             <input value={helloMult} onChange={(e) => setHelloMult(e.target.value)} placeholder="3" className="clr-input" style={monoStyle} />
           </Field>
         </div>

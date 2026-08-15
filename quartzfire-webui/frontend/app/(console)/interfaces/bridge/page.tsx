@@ -32,7 +32,7 @@ const columns: Column<BridgeInterface>[] = [
   },
   {
     key: "addresses",
-    header: "IP Address",
+    header: "IP address",
     value: (r) => r.addresses.join(", "),
     render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
     mono: true,
@@ -139,12 +139,18 @@ export default function BridgePage() {
     }
   };
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">Bridge</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Layer 2 bridges — VLAN-aware bridges can carry VLAN sub-interfaces and VXLAN VNI mappings.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
-      <div>
-        <h2>Bridge Interfaces</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>Layer 2 network bridges</p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && (
         <div className="clr-secondary">Loading bridge interfaces…</div>
@@ -171,8 +177,9 @@ export default function BridgePage() {
           emptyMessage="No bridge interfaces configured."
           onRefresh={() => load("refresh")}
           onRowOpen={(row) => openModal(row)}
+          headerLeft={headerBlock}
           toolbar={
-            <Button kind="primary" size="sm" icon="plus" onClick={() => openModal()}>
+            <Button kind="primary" onClick={() => openModal()}>
               Create Bridge
             </Button>
           }

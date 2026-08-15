@@ -136,7 +136,7 @@ export function EthernetFormModal({
       />
 
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <Field label="Physical Interface" required>
+        <Field label="Physical interface" required>
           {isEdit ? (
             <input value={name} disabled className="clr-input" style={wideMono} />
           ) : (
@@ -169,7 +169,7 @@ export function EthernetFormModal({
 
         <div className="clr-form-control" style={{ marginTop: 0 }}>
           <div className="flex items-center justify-between">
-            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP Addresses</label>
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP addresses</label>
             <button type="button" onClick={addAddr} className="btn btn-sm btn-link-neutral">
               <Icon shape="plus" size={12} /> Add Address
             </button>

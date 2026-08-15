@@ -124,7 +124,7 @@ export default function FirewallZonesPage() {
     },
     {
       key: "default_action",
-      header: "Unmatched Traffic",
+      header: "Unmatched traffic",
       value: (z) => z.default_action ?? "drop",
       render: (z) => <DefaultActionPill zone={z} />,
       sortable: true,
@@ -132,7 +132,7 @@ export default function FirewallZonesPage() {
     },
     {
       key: "intra_zone",
-      header: "Within Zone",
+      header: "Within zone",
       value: (z) => z.intra_zone ?? "accept",
       render: (z) => {
         if (z.local) return <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;
@@ -145,7 +145,7 @@ export default function FirewallZonesPage() {
     },
     {
       key: "used",
-      header: "In Use",
+      header: "In use",
       value: (z) => usedBy(z).length,
       render: (z) => {
         const n = usedBy(z).length;
@@ -172,15 +172,21 @@ export default function FirewallZonesPage() {
     },
   ];
 
+  // Title block — standalone while loading/errored, in the DataTable's
+  // header row (headerLeft) once the grid is up, per the DC reference.
+  const header = (
+    <div>
+      <h2>Zones</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Named groups of interfaces. Traffic between two zones is denied unless a rule allows it; traffic inside a
+        zone flows freely unless you say otherwise.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Zones</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Named groups of interfaces. Traffic between two zones is denied unless a rule allows it; traffic inside a
-          zone flows freely unless you say otherwise
-        </p>
-      </div>
+      {status !== "ready" && header}
 
       {status === "loading" && <div className="clr-secondary">Loading zones…</div>}
       {status === "error" && (
@@ -194,8 +200,33 @@ export default function FirewallZonesPage() {
       )}
       {status === "ready" && (
         <div className="flex flex-col gap-3">
+          <DataTable
+            rows={data.zones}
+            columns={columns}
+            rowId={(z) => z.name}
+            filters={filters}
+            storageKey="firewall-zones"
+            searchPlaceholder="Search zones…"
+            emptyMessage="No zones defined."
+            headerLeft={header}
+            onRefresh={() => load("refresh")}
+            onRowOpen={(z) => setModal({ zone: z })}
+            toolbar={
+              <Button kind="primary" onClick={() => setModal({})}>
+                Create Zone
+              </Button>
+            }
+            actions={(z) => (
+              <RowActions
+                label={`zone ${z.display}`}
+                onEdit={() => setModal({ zone: z })}
+                onDelete={() => remove(z)}
+              />
+            )}
+          />
           {/* A zone denies everything its pairs don't allow, so a zone with no
-              rules yet is a black hole — worth saying before it bites. */}
+              rules yet is a black hole — worth saying before it bites. (Below
+              the grid, per the DC's NAT44 convention for info alerts.) */}
           {data.zones.length > 0 && data.zone_pairs.length === 0 && (
             <div className="alert alert-info alert-sm">
               <Icon shape="info-circle" size={14} className="alert-icon" />
@@ -208,29 +239,6 @@ export default function FirewallZonesPage() {
               </div>
             </div>
           )}
-          <DataTable
-            rows={data.zones}
-            columns={columns}
-            rowId={(z) => z.name}
-            filters={filters}
-            storageKey="firewall-zones"
-            searchPlaceholder="Search zones…"
-            emptyMessage="No zones defined."
-            onRefresh={() => load("refresh")}
-            onRowOpen={(z) => setModal({ zone: z })}
-            toolbar={
-              <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
-                Create Zone
-              </Button>
-            }
-            actions={(z) => (
-              <RowActions
-                label={`zone ${z.display}`}
-                onEdit={() => setModal({ zone: z })}
-                onDelete={() => remove(z)}
-              />
-            )}
-          />
         </div>
       )}
 

@@ -83,9 +83,9 @@ const MONITOR_COLUMNS: MonCol[] = [
   { key: "action", header: "Action", width: 100 },
   { key: "rule", header: "Rule", ellipsis: true },
   { key: "src", header: "Source", className: "mono", ellipsis: true },
-  { key: "spt", header: "Src Port", width: 70, className: "mono" },
+  { key: "spt", header: "Src port", width: 70, className: "mono" },
   { key: "dst", header: "Destination", className: "mono", ellipsis: true },
-  { key: "dpt", header: "Dst Port", width: 70, className: "mono" },
+  { key: "dpt", header: "Dst port", width: 70, className: "mono" },
   { key: "proto", header: "Protocol", width: 90, className: "mono" },
   { key: "iface", header: "Interface", width: 140, className: "mono text-[var(--cds-alias-typography-color-300)]" },
 ];
@@ -383,7 +383,8 @@ export default function TrafficMonitorPage() {
       <div>
         <h2>Traffic Monitor</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Live traffic and the firewall rule each connection hit — one entry per new connection
+          Live traffic and the firewall rule each connection hit — one entry per new connection, streamed from the
+          kernel log.
         </p>
       </div>
 
@@ -407,21 +408,13 @@ export default function TrafficMonitorPage() {
 
         {/* Controls */}
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative">
-            <Icon
-              shape="search"
-              size={14}
-              className="absolute left-[9px] top-1/2 -translate-y-1/2"
-              style={{ color: "var(--cds-alias-typography-color-200)" }}
-            />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Filter traffic…"
-              className="clr-input"
-              style={{ paddingLeft: 30, width: 240, maxWidth: 240 }}
-            />
-          </div>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Filter traffic…"
+            className="clr-input"
+            style={{ width: 240, maxWidth: 240 }}
+          />
 
           <Segmented
             items={[
@@ -486,13 +479,13 @@ export default function TrafficMonitorPage() {
 
           <div className="ml-auto flex items-center gap-3">
             <ColumnsMenu vis={vis} />
-            <Button kind="secondary" size="sm" icon="refresh" onClick={refresh}>
+            <Button kind="outline" size="sm" onClick={refresh}>
               Refresh
             </Button>
-            <Button kind="secondary" size="sm" icon={paused ? "play" : "pause"} onClick={togglePause}>
+            <Button kind="outline" size="sm" onClick={togglePause}>
               {paused ? "Resume" : "Pause"}
             </Button>
-            <Button kind="secondary" size="sm" icon="eraser" onClick={clear}>
+            <Button kind="outline" size="sm" onClick={clear}>
               Clear
             </Button>
             <span

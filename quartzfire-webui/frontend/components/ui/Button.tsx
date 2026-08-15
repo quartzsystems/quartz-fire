@@ -2,7 +2,7 @@
 
 import { Icon } from "@/components/ui/Icon";
 
-type ButtonKind = "primary" | "secondary" | "ghost" | "danger";
+type ButtonKind = "primary" | "outline" | "secondary" | "ghost" | "danger";
 type ButtonSize = "sm" | "md";
 
 interface ButtonProps {
@@ -19,6 +19,7 @@ interface ButtonProps {
 
 const kindClass: Record<ButtonKind, string> = {
   primary: "btn btn-primary",
+  outline: "btn", // Clarity default: green action outline (DC toolbar buttons)
   secondary: "btn btn-neutral",
   ghost: "btn btn-link-neutral",
   danger: "btn btn-danger",

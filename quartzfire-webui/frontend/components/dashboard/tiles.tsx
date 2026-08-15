@@ -7,7 +7,8 @@ import { TopApplicationsTile } from "./TopApplicationsTile";
 import { TopBlockedCountriesTile } from "./TopBlockedCountriesTile";
 
 /// A type of tile that can be placed on the dashboard. Sizes are in grid units
-/// (columns wide × rows tall) on the 4-column dashboard grid.
+/// (columns wide × rows tall) on the 12-column dashboard grid; the default
+/// spans mirror the DC reference (4/8 top row, 4/4/4, then 6/6).
 export interface TileDef {
   type: string;
   title: string;
@@ -22,63 +23,63 @@ export const TILE_REGISTRY: Record<string, TileDef> = {
   "system-info": {
     type: "system-info",
     title: "System Information",
-    defaultW: 2,
+    defaultW: 4,
     defaultH: 6,
-    minW: 1,
+    minW: 3,
     minH: 4,
     render: () => <SystemInfoPod />,
   },
   "interface-stats": {
     type: "interface-stats",
     title: "Interface Statistics",
-    defaultW: 2,
+    defaultW: 4,
     defaultH: 5,
-    minW: 1,
+    minW: 3,
     minH: 3,
     render: () => <InterfaceStatsTile />,
   },
   "network-speed": {
     type: "network-speed",
     title: "Network Usage",
-    defaultW: 2,
+    defaultW: 8,
     defaultH: 5,
-    minW: 2,
+    minW: 4,
     minH: 4,
     render: () => <NetworkSpeedTile />,
   },
   "top-applications": {
     type: "top-applications",
     title: "Top Applications",
-    defaultW: 2,
+    defaultW: 4,
     defaultH: 5,
-    minW: 1,
+    minW: 3,
     minH: 4,
     render: () => <TopApplicationsTile />,
   },
   "ips-alerts": {
     type: "ips-alerts",
     title: "IPS Alerts",
-    defaultW: 2,
+    defaultW: 4,
     defaultH: 5,
-    minW: 1,
+    minW: 3,
     minH: 4,
     render: () => <RecentIpsAlertsTile />,
   },
   "top-blocked-countries": {
     type: "top-blocked-countries",
     title: "Top Blocked Countries",
-    defaultW: 2,
+    defaultW: 6,
     defaultH: 5,
-    minW: 1,
+    minW: 3,
     minH: 4,
     render: () => <TopBlockedCountriesTile />,
   },
   "geolocation-map": {
     type: "geolocation-map",
     title: "Geolocation Map",
-    defaultW: 1,
+    defaultW: 6,
     defaultH: 6,
-    minW: 1,
+    minW: 3,
     minH: 5,
     render: () => <GeolocationMapTile />,
   },

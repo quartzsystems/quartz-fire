@@ -15,7 +15,7 @@ export interface TileInstance {
   h: number;
 }
 
-export const GRID_COLS = 4;
+export const GRID_COLS = 12;
 const ROW_H = 76;
 const GAP = 20;
 const MAX_ROWS = 16;

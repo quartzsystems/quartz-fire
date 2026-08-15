@@ -70,6 +70,7 @@ export function AppHeader({ onOpenPalette }: { onOpenPalette: () => void }) {
             <span className="hd-label">Firewall</span>
             <span className="hd-value">{hostname ?? "…"}</span>
           </span>
+          <Icon shape="angle" dir="down" size={12} />
         </button>
       </div>
       <div className="header-actions" ref={menuRef}>

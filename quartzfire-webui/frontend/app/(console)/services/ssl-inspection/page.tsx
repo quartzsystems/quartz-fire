@@ -309,7 +309,7 @@ const SSL_RULE_COLS = [
   { key: "name", header: "Name" },
   { key: "fromto", header: "From → To", width: 150 },
   { key: "action", header: "Action", width: 90 },
-  { key: "ssl", header: "SSL Inspection", width: 200 },
+  { key: "ssl", header: "SSL inspection", width: 200 },
 ];
 
 function PoliciesTab({
@@ -653,7 +653,7 @@ export default function SslInspectionPage() {
         <div style={{ marginRight: "auto" }}>
           <h2>SSL Inspection</h2>
           <p className="clr-secondary" style={{ marginTop: 4 }}>
-            Decrypt, inspect, and re-encrypt outbound HTTPS on selected firewall rules (Squid ssl_bump)
+            Decrypt, inspect, and re-encrypt TLS on forward Allow rules that opt in.
           </p>
         </div>
         <span className="flex items-center gap-2 pt-1">
@@ -761,15 +761,15 @@ export default function SslInspectionPage() {
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="clr-form-control" style={{ marginTop: 0 }}>
-                    <label className="clr-control-label">ICAP Host</label>
+                    <label className="clr-control-label">ICAP host</label>
                     <input disabled value={draft.contentFilter?.icapHost ?? "127.0.0.1"} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
                   </div>
                   <div className="clr-form-control" style={{ marginTop: 0 }}>
-                    <label className="clr-control-label">ICAP Port</label>
+                    <label className="clr-control-label">ICAP port</label>
                     <input disabled value={draft.contentFilter?.icapPort ?? 1344} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
                   </div>
                   <div className="clr-form-control" style={{ marginTop: 0 }}>
-                    <label className="clr-control-label">Fail Mode</label>
+                    <label className="clr-control-label">Fail mode</label>
                     <input disabled value={draft.contentFilter?.failMode ?? "closed (fail closed)"} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
                   </div>
                 </div>

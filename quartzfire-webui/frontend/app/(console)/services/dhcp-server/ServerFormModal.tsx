@@ -210,7 +210,7 @@ export function ServerFormModal({
             </div>
 
             <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-              <Field label="Range Start">
+              <Field label="Range start">
                 <input
                   value={rangeStart}
                   onChange={(e) => setRangeStart(e.target.value)}
@@ -219,7 +219,7 @@ export function ServerFormModal({
                   style={mono}
                 />
               </Field>
-              <Field label="Range Stop">
+              <Field label="Range stop">
                 <input
                   value={rangeStop}
                   onChange={(e) => setRangeStop(e.target.value)}
@@ -230,7 +230,7 @@ export function ServerFormModal({
               </Field>
             </div>
 
-            <Field label="DNS Servers" hint="Optional — one IPv4 address per line, handed to clients.">
+            <Field label="DNS servers" hint="Optional — one IPv4 address per line, handed to clients.">
               <textarea
                 value={nameServersText}
                 onChange={(e) => setNameServersText(e.target.value)}

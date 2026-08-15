@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
-import { Button } from "@/components/ui/Button";
 import { fetchSystemConfig, SshSettings, SystemUser } from "@/lib/system";
 import { useDashboard } from "@/lib/DashboardContext";
 import { SshFormModal } from "./SshFormModal";
@@ -86,11 +85,21 @@ export default function SshPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>SSH</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Remote console access to the firewall (sshd)
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">SSH</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Remote console access to the firewall (sshd).
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => setModal(true)}
+          disabled={status !== "ready" || !ssh}
+        >
+          Edit Settings
+        </button>
       </div>
 
       {status === "loading" && <div className="clr-secondary">Loading SSH settings…</div>}
@@ -108,21 +117,14 @@ export default function SshPage() {
       {status === "ready" && ssh && (
         <div className="flex flex-col gap-4">
           <div className="card" style={{ maxWidth: 720 }}>
-            <div className="card-header">
-              SSH Service
-              <span style={{ marginLeft: "auto" }}>
-                <Button kind="secondary" size="sm" icon="pencil" onClick={() => setModal(true)}>
-                  Edit Settings
-                </Button>
-              </span>
-            </div>
+            <div className="card-header">SSH Service</div>
             <div className="card-block" style={{ paddingTop: 4, paddingBottom: 8 }}>
               <InfoRow label="Service">
                 {ssh.enabled ? <Pill tone="success">Enabled</Pill> : <Pill>Disabled</Pill>}
               </InfoRow>
               <InfoRow label="Ports"><MonoList items={ssh.ports} fallback="22 (default)" /></InfoRow>
-              <InfoRow label="Listen Addresses"><MonoList items={ssh.listen_addresses} fallback="All addresses" /></InfoRow>
-              <InfoRow label="Password Authentication">
+              <InfoRow label="Listen addresses"><MonoList items={ssh.listen_addresses} fallback="All addresses" /></InfoRow>
+              <InfoRow label="Password authentication">
                 {ssh.password_auth_disabled ? (
                   <Pill tone="warning">Disabled (keys only)</Pill>
                 ) : (

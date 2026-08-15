@@ -40,7 +40,7 @@ function columns(): Column<OpenvpnInterface>[] {
     { key: "protocol", header: "Protocol", value: (r) => r.protocol ?? "udp", render: (r) => r.protocol ?? "udp", mono: true, width: 120 },
     {
       key: "endpoint",
-      header: "Endpoint / Subnet",
+      header: "Endpoint / subnet",
       value: (r) => endpointSummary(r),
       render: (r) => <span style={{ fontFamily: "var(--qz-font-mono)" }}>{endpointSummary(r)}</span>,
     },
@@ -79,6 +79,17 @@ export default function OpenvpnPage() {
     load();
   }, [load]);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const saved = (msg: string) => {
     setModal(null);
     setToast(msg);
@@ -97,11 +108,21 @@ export default function OpenvpnPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2>OpenVPN</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          TLS-based tunnels — site-to-site links, remote-access servers, and outbound clients
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">OpenVPN</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            TLS-based tunnels — site-to-site links, remote-access servers, and outbound clients.
+          </p>
+        </div>
+        {status === "ready" && (
+          <>
+            <Button kind="outline" onClick={refresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            <Button kind="primary" onClick={() => setModal({})}>Add Interface</Button>
+          </>
+        )}
       </div>
 
       {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading OpenVPN configuration…</div>}
@@ -135,13 +156,7 @@ export default function OpenvpnPage() {
               storageKey="vpn-openvpn"
               searchPlaceholder="Search interfaces…"
               emptyMessage="No OpenVPN interfaces configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setModal({ iface: row })}
-              toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
-                  Add Interface
-                </Button>
-              }
               actions={(row) => (
                 <RowActions label={`OpenVPN ${row.name}`} onEdit={() => setModal({ iface: row })} onDelete={() => remove(row)} />
               )}

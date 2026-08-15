@@ -258,7 +258,7 @@ export function ActionFormModal({
 
         <div className="flex items-end gap-6 flex-wrap">
           <div className="clr-form-control" style={{ marginTop: 0 }}>
-            <label className="clr-control-label">Unclassified (Unknown) IPs</label>
+            <label className="clr-control-label">Unclassified (unknown) IPs</label>
             <Segmented
               items={[
                 { value: "allow", label: "Allow" },

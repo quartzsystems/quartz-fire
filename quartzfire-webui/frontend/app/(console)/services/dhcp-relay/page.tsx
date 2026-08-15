@@ -21,7 +21,7 @@ const interfaceColumns: Column<NameRow>[] = [
 ];
 
 const serverColumns: Column<NameRow>[] = [
-  { key: "value", header: "Upstream Server", value: (r) => r.value, mono: true, sortable: true },
+  { key: "value", header: "Upstream server", value: (r) => r.value, mono: true, sortable: true },
 ];
 
 /// Delete-only row action with inline confirmation (relay entries are single
@@ -86,7 +86,7 @@ const KIND_META: Record<EntryKind, { title: string; label: string; hint: string;
   },
   server: {
     title: "Add Upstream Server",
-    label: "Server Address",
+    label: "Server address",
     hint: "DHCP requests are forwarded to this server.",
     placeholder: "10.0.0.5",
   },
@@ -340,7 +340,7 @@ export default function DhcpRelayPage() {
       <div>
         <h2>DHCP Relay</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Forward DHCP requests to upstream servers across subnets
+          Forward DHCP requests from listening interfaces to upstream servers.
         </p>
       </div>
 
@@ -371,7 +371,7 @@ export default function DhcpRelayPage() {
               emptyMessage="No relay interfaces configured."
               onRefresh={() => load("refresh")}
               toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setModal("interface")}>
+                <Button kind="primary" size="sm" onClick={() => setModal("interface")}>
                   Add Interfaces
                 </Button>
               }
@@ -394,7 +394,7 @@ export default function DhcpRelayPage() {
               emptyMessage="No upstream servers configured."
               onRefresh={() => load("refresh")}
               toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setModal("server")}>
+                <Button kind="primary" size="sm" onClick={() => setModal("server")}>
                   Add Server
                 </Button>
               }

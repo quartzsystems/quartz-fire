@@ -68,16 +68,16 @@ const discoveryCols: Column<LdpAdjacency>[] = [
 
 const bindingCols: Column<LdpBinding>[] = [
   { key: "prefix", header: "Prefix (FEC)", value: (r) => r.prefix ?? "", render: (r) => dash(r.prefix), mono: true, sortable: true },
-  { key: "local", header: "Local Label", value: (r) => r.local_label ?? "", render: (r) => dash(r.local_label), mono: true, width: 120 },
-  { key: "remote", header: "Remote Label", value: (r) => r.remote_label ?? "", render: (r) => dash(r.remote_label), mono: true, width: 120 },
+  { key: "local", header: "Local label", value: (r) => r.local_label ?? "", render: (r) => dash(r.local_label), mono: true, width: 120 },
+  { key: "remote", header: "Remote label", value: (r) => r.remote_label ?? "", render: (r) => dash(r.remote_label), mono: true, width: 120 },
   { key: "neighbor_id", header: "Neighbor", value: (r) => r.neighbor_id ?? "", render: (r) => dash(r.neighbor_id), mono: true },
-  { key: "in_use", header: "In Use", value: (r) => (r.in_use ? "yes" : "no"), render: (r) => (r.in_use ? <span className="label label-success" style={pillStyle}>In use</span> : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>), width: 100 },
+  { key: "in_use", header: "In use", value: (r) => (r.in_use ? "yes" : "no"), render: (r) => (r.in_use ? <span className="label label-success" style={pillStyle}>In use</span> : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>), width: 100 },
 ];
 
 const tableCols: Column<MplsRoute>[] = [
-  { key: "in_label", header: "In Label", value: (r) => Number(r.in_label) || 0, render: (r) => dash(r.in_label), mono: true, sortable: true, width: 110 },
-  { key: "out_label", header: "Out Label", value: (r) => r.out_label ?? "", render: (r) => dash(r.out_label), mono: true, width: 120 },
-  { key: "nexthop", header: "Next Hop", value: (r) => r.nexthop ?? "", render: (r) => dash(r.nexthop), mono: true, sortable: true },
+  { key: "in_label", header: "In label", value: (r) => Number(r.in_label) || 0, render: (r) => dash(r.in_label), mono: true, sortable: true, width: 110 },
+  { key: "out_label", header: "Out label", value: (r) => r.out_label ?? "", render: (r) => dash(r.out_label), mono: true, width: 120 },
+  { key: "nexthop", header: "Next hop", value: (r) => r.nexthop ?? "", render: (r) => dash(r.nexthop), mono: true, sortable: true },
   { key: "interface", header: "Interface", value: (r) => r.interface ?? "", render: (r) => dash(r.interface), mono: true, width: 130 },
   { key: "installed", header: "Installed", value: (r) => (r.installed ? "yes" : "no"), render: (r) => (r.installed ? <span className="label label-success" style={pillStyle}>Installed</span> : <span className="label" style={pillStyle}>Pending</span>), width: 120 },
 ];
@@ -146,7 +146,7 @@ export function MplsStatusPanel() {
     return (
       <div className="flex flex-col gap-4">
         <div className="flex justify-end">
-          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
+          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
         </div>
         <div className="card" style={{ marginTop: 0 }}>
           <div className="card-block clr-secondary" style={{ padding: 24, textAlign: "center" }}>
@@ -177,7 +177,7 @@ export function MplsStatusPanel() {
         </div>
         <div className="flex flex-col items-end gap-2">
           {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
-          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
+          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
         </div>
       </div>
 

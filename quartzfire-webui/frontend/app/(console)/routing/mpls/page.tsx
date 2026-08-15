@@ -43,7 +43,7 @@ export default function MplsPage() {
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
         <h2 style={{ margin: 0 }}>MPLS</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Multiprotocol Label Switching — label forwarding and the LDP control plane
+          Multiprotocol Label Switching — label forwarding and the LDP control plane.
         </p>
       </div>
 

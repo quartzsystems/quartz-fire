@@ -134,7 +134,7 @@ export function SubnetFormModal({
           </Field>
         </div>
 
-        <Field label="DNS Servers" hint="One IPv4 address per line, handed to clients.">
+        <Field label="DNS servers" hint="One IPv4 address per line, handed to clients.">
           <textarea
             value={nameServersText}
             onChange={(e) => setNameServersText(e.target.value)}
@@ -146,7 +146,7 @@ export function SubnetFormModal({
         </Field>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Domain Name">
+          <Field label="Domain name">
             <input
               value={domainName}
               onChange={(e) => setDomainName(e.target.value)}

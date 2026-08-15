@@ -122,7 +122,7 @@ export function RangeFormModal({
               </select>
             </div>
           </Field>
-          <Field label="Range Name">
+          <Field label="Range name">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}

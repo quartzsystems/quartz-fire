@@ -1,12 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Icon } from "@/components/ui/Icon";
+import { useMemo } from "react";
 import { formatBytes } from "@/lib/format";
 import { useInterfaceStats } from "./useInterfaceStats";
-import { LiveButton } from "./LiveButton";
-
-type SortKey = "name" | "rx" | "tx";
 
 // Clarity: traffic charts use greens only — download/RX solid, upload/TX light.
 const RX_COLOR = "#00d992";
@@ -34,7 +30,10 @@ function Bar({ value, max, color, up }: { value: number; max: number; color: str
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
   return (
     <div className="flex items-center gap-2">
-      <Icon shape="arrow" dir={up ? "up" : "down"} size={12} style={{ color }} className="shrink-0" />
+      {/* Raw ↓/↑ glyphs per the DC reference. */}
+      <span className="shrink-0 text-[10px]" style={{ color }}>
+        {up ? "↑" : "↓"}
+      </span>
       <div
         className="flex-1 h-[5px] overflow-hidden min-w-0"
         style={{ background: "var(--cds-alias-object-container-background-shade)" }}
@@ -52,80 +51,32 @@ function Bar({ value, max, color, up }: { value: number; max: number; color: str
 }
 
 export function InterfaceStatsTile() {
-  const [paused, setPaused] = useState(false);
-  const { stats, error } = useInterfaceStats(5_000, !paused);
-  const [filter, setFilter] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [asc, setAsc] = useState(true);
+  const { stats, error } = useInterfaceStats(5_000, true);
 
   const max = useMemo(
     () => (stats ? Math.max(1, ...stats.flatMap((s) => [s.rx_bytes ?? 0, s.tx_bytes ?? 0])) : 0),
     [stats],
   );
 
-  const rows = useMemo(() => {
-    if (!stats) return [];
-    const f = filter.trim().toLowerCase();
-    const filtered = f ? stats.filter((s) => s.name.toLowerCase().includes(f)) : stats.slice();
-    filtered.sort((a, b) => {
-      const r =
-        sortKey === "name"
-          ? a.name.localeCompare(b.name)
-          : sortKey === "rx"
-            ? (a.rx_bytes ?? 0) - (b.rx_bytes ?? 0)
-            : (a.tx_bytes ?? 0) - (b.tx_bytes ?? 0);
-      return asc ? r : -r;
-    });
-    return filtered;
-  }, [stats, filter, sortKey, asc]);
-
-  // Switching key uses a sensible default direction (name ↑, RX/TX ↓); same key toggles.
-  const setSort = (k: SortKey) => {
-    if (sortKey === k) setAsc((a) => !a);
-    else {
-      setSortKey(k);
-      setAsc(k === "name");
-    }
-  };
-  const arrow = (k: SortKey) =>
-    sortKey === k ? <Icon shape="arrow" dir={asc ? "up" : "down"} size={12} /> : null;
+  // DC anatomy: a plain name-sorted list — no filter, sort, or pause controls.
+  const rows = useMemo(
+    () => (stats ? [...stats].sort((a, b) => a.name.localeCompare(b.name)) : []),
+    [stats],
+  );
 
   return (
     <>
       <div className="card-header flex-shrink-0">
         Interface Statistics
-        <span className="ml-auto flex items-center gap-2">
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter…"
-            className="clr-input"
-            style={{ width: 96, height: 24, fontSize: 12, fontWeight: 400 }}
-          />
-          <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
+        <span
+          className="ml-auto text-[12px]"
+          style={{ fontWeight: 400, color: "var(--cds-alias-typography-color-200)" }}
+        >
+          totals since boot
         </span>
       </div>
 
       <div className="card-block flex-1 min-h-0 flex flex-col">
-        <div className="flex items-center justify-between mb-2 flex-shrink-0">
-          <div className="flex items-center gap-1 text-[11px]">
-            <span className="text-[var(--cds-alias-typography-color-200)] mr-1">Sort:</span>
-            {(["name", "rx", "tx"] as SortKey[]).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setSort(k)}
-                className={`btn btn-sm ${sortKey === k ? "btn-primary" : "btn-link-neutral"}`}
-              >
-                {k === "name" ? "Name" : k.toUpperCase()} {arrow(k)}
-              </button>
-            ))}
-          </div>
-          <span className="text-[11px] text-[var(--cds-alias-typography-color-200)]">
-            {rows.length} interface{rows.length === 1 ? "" : "s"}
-          </span>
-        </div>
-
         {!stats && !error && (
           <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading interface statistics…</div>
         )}

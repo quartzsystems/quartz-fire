@@ -329,12 +329,55 @@ export default function FirewallRulesPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Rules</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          IPv4 rules for forwarded traffic and traffic to or from the firewall itself, evaluated top to bottom — drag
-          to reorder
-        </p>
+      {/* Page header per the DC reference: title/sub left; search, the inline
+          Default-action select, and the plain Refresh / primary Create buttons
+          right-aligned beside it. */}
+      <div className="flex items-start gap-2 flex-wrap">
+        <div className="mr-auto">
+          <h2>Rules</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            IPv4 rules for forwarded traffic and traffic to or from the firewall itself, evaluated top to bottom.
+          </p>
+        </div>
+        {status === "ready" && (
+          <>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search rules…"
+              className="clr-input"
+              style={{ width: 240, maxWidth: 240 }}
+            />
+            <span
+              className="inline-flex items-center gap-2"
+              style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}
+            >
+              Default action
+              {/* Unset means the VyOS base-chain default, accept — showing
+                  drop would both misreport it and make Deny unselectable
+                  (the change event never fires on an unchanged value). */}
+              <span className="clr-select-wrapper" style={{ width: "auto" }}>
+                <select
+                  value={data.default_action === "drop" ? "drop" : "accept"}
+                  onChange={(e) => changeDefaultAction(e.target.value as "accept" | "drop")}
+                  disabled={defaultDropBlocked !== null}
+                  title={defaultDropBlocked ?? undefined}
+                  className="clr-select"
+                  style={{ width: "auto", minWidth: 100, fontFamily: "var(--qz-font-mono)" }}
+                >
+                  <option value="drop">Deny</option>
+                  <option value="accept">Allow</option>
+                </select>
+              </span>
+            </span>
+            <button type="button" className="btn" onClick={refresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => setModal({})}>
+              Create Rule
+            </button>
+          </>
+        )}
       </div>
 
       {status === "loading" && <div className="clr-secondary">Loading firewall rules…</div>}
@@ -365,62 +408,14 @@ export default function FirewallRulesPage() {
               </div>
             </div>
           )}
-          {/* Controls */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative">
-              <Icon
-                shape="search"
-                size={14}
-                className="absolute left-[9px] top-1/2 -translate-y-1/2"
-                style={{ color: "var(--cds-alias-typography-color-200)" }}
-              />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search rules…"
-                className="clr-input"
-                style={{ paddingLeft: 30, width: 240, maxWidth: 240 }}
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>Default action</span>
-              {/* Unset means the VyOS base-chain default, accept — showing
-                  drop would both misreport it and make Deny unselectable
-                  (the change event never fires on an unchanged value). */}
-              <div className="clr-select-wrapper" style={{ width: "auto" }}>
-                <select
-                  value={data.default_action === "drop" ? "drop" : "accept"}
-                  onChange={(e) => changeDefaultAction(e.target.value as "accept" | "drop")}
-                  disabled={defaultDropBlocked !== null}
-                  title={defaultDropBlocked ?? undefined}
-                  className="clr-select"
-                  style={{ width: "auto", minWidth: 100, fontFamily: "var(--qz-font-mono)" }}
-                >
-                  <option value="drop">Deny</option>
-                  <option value="accept">Allow</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="ml-auto flex items-center gap-3">
-              <Button kind="secondary" size="sm" icon="refresh" onClick={refresh} disabled={refreshing}>
-                {refreshing ? "Refreshing…" : "Refresh"}
-              </Button>
-              <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
-                Create Rule
-              </Button>
-              <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
-                {visibleRules.length} {visibleRules.length === 1 ? "rule" : "rules"}
-              </span>
-            </div>
-          </div>
-
           {/* Pending-order bar */}
           {orderDirty && (
             <div className="alert alert-warning alert-sm">
               <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
-              <div className="alert-text">Rule order changed — not applied yet.</div>
+              <div className="alert-text">
+                Rule order changed — not applied yet. Applying renumbers the rules and repoints any
+                Application Control bindings and Geolocation policies.
+              </div>
               <div className="alert-actions" style={{ display: "flex", gap: 8 }}>
                 <Button kind="secondary" size="sm" icon="undo" onClick={() => setOrder(data.rules.map(ruleKey))} disabled={applyingOrder}>
                   Reset
@@ -449,7 +444,8 @@ export default function FirewallRulesPage() {
                       {resize.handle(i)}
                     </th>
                   ))}
-                  <th className="text-right">Actions</th>
+                  {/* Actions column carries no header label, per the DC reference. */}
+                  <th className="text-right" aria-label="Actions" />
                 </tr>
               </thead>
               <tbody>
@@ -543,9 +539,8 @@ export default function FirewallRulesPage() {
           </div>
 
           <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
-            Forwarded traffic matching no rule falls through to the default action. Traffic to or from the Firewall
-            itself is allowed unless a rule denies it.
-            {q && " Reordering is disabled while a search filter is active."}
+            Forwarded traffic matching no rule falls through to the default action. Traffic to or from the firewall
+            itself is allowed unless a rule denies it. Reordering is disabled while a search filter is active.
           </p>
         </div>
       )}

@@ -326,15 +326,29 @@ export default function AuditLogPage() {
     load();
   }, [load]);
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">Audit Log</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Every configuration commit, and the system journal behind them.
+      </p>
+    </div>
+  );
+
+  const tabStrip = (
+    <Tabs
+      items={[
+        { value: "config", label: "Config Changes", count: commits.length },
+        { value: "system", label: "System Log", count: log.length },
+      ]}
+      value={tab}
+      onChange={(v) => setTab(v as Tab)}
+    />
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Audit Log</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Every configuration change committed on this device, and the firewall&apos;s own system logs — traffic
-          logs live on the Traffic Monitor
-        </p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && <div className="clr-secondary">Loading audit log…</div>}
       {status === "error" && (
@@ -348,70 +362,62 @@ export default function AuditLogPage() {
           </div>
         </div>
       )}
-      {status === "ready" && (
-        <div className="flex flex-col gap-4">
-          <Tabs
-            items={[
-              { value: "config", label: "Config Changes", count: commits.length },
-              { value: "system", label: "System Log", count: log.length },
-            ]}
-            value={tab}
-            onChange={(v) => setTab(v as Tab)}
-          />
-
-          {tab === "config" ? (
-            <DataTable
-              rows={commits}
-              columns={commitCols}
-              rowId={(r) => String(r.revision)}
-              storageKey="system-audit-commits"
-              searchPlaceholder="Search commits…"
-              emptyMessage="No commit history recorded on this device."
-              onRefresh={() => load("refresh")}
-              onRowOpen={(row) => setDiffRevision(row.revision)}
-              footerHint="Double-click a commit to see its diff. Drag headers to reorder columns."
-              actions={(row) => (
-                <span className="inline-flex items-center gap-1 justify-end">
+      {status === "ready" &&
+        (tab === "config" ? (
+          <DataTable
+            rows={commits}
+            columns={commitCols}
+            rowId={(r) => String(r.revision)}
+            storageKey="system-audit-commits"
+            searchPlaceholder="Search commits…"
+            emptyMessage="No commit history recorded on this device."
+            onRefresh={() => load("refresh")}
+            onRowOpen={(row) => setDiffRevision(row.revision)}
+            headerLeft={headerBlock}
+            subHeader={tabStrip}
+            footerHint="Double-click a commit to see its diff. Drag headers to reorder columns."
+            actions={(row) => (
+              <span className="inline-flex items-center gap-1 justify-end">
+                <button
+                  type="button"
+                  title={`Show what revision ${row.revision} changed`}
+                  aria-label="Show diff"
+                  onClick={() => setDiffRevision(row.revision)}
+                  className="btn btn-sm btn-link-neutral btn-icon"
+                >
+                  <Icon shape="file" size={14} />
+                </button>
+                {/* Revision 0 IS the current config — nothing to roll back to. */}
+                {row.revision > 0 && (
                   <button
                     type="button"
-                    title={`Show what revision ${row.revision} changed`}
-                    aria-label="Show diff"
-                    onClick={() => setDiffRevision(row.revision)}
+                    title={`Roll the configuration back to revision ${row.revision}`}
+                    aria-label="Roll back to this revision"
+                    onClick={() => setRollbackTarget(row)}
                     className="btn btn-sm btn-link-neutral btn-icon"
                   >
-                    <Icon shape="file" size={14} />
+                    <Icon shape="history" size={14} />
                   </button>
-                  {/* Revision 0 IS the current config — nothing to roll back to. */}
-                  {row.revision > 0 && (
-                    <button
-                      type="button"
-                      title={`Roll the configuration back to revision ${row.revision}`}
-                      aria-label="Roll back to this revision"
-                      onClick={() => setRollbackTarget(row)}
-                      className="btn btn-sm btn-link-neutral btn-icon"
-                    >
-                      <Icon shape="history" size={14} />
-                    </button>
-                  )}
-                </span>
-              )}
-            />
-          ) : (
-            <DataTable
-              rows={log}
-              columns={logColumns}
-              rowId={(r) => String(r.id)}
-              filters={logFilters}
-              // v2: reset persisted layouts that seeded from the old
-              // stretched-to-fit measurements (unreadably wide columns).
-              storageKey="system-audit-log-v2"
-              searchPlaceholder="Search log messages…"
-              emptyMessage="No system log entries readable on this device."
-              onRefresh={() => load("refresh")}
-            />
-          )}
-        </div>
-      )}
+                )}
+              </span>
+            )}
+          />
+        ) : (
+          <DataTable
+            rows={log}
+            columns={logColumns}
+            rowId={(r) => String(r.id)}
+            filters={logFilters}
+            // v2: reset persisted layouts that seeded from the old
+            // stretched-to-fit measurements (unreadably wide columns).
+            storageKey="system-audit-log-v2"
+            searchPlaceholder="Search log messages…"
+            emptyMessage="No system log entries readable on this device."
+            onRefresh={() => load("refresh")}
+            headerLeft={headerBlock}
+            subHeader={tabStrip}
+          />
+        ))}
 
       {diffRevision !== null && (
         <CommitDiffModal revision={diffRevision} onClose={() => setDiffRevision(null)} />

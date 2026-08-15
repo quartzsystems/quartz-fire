@@ -26,16 +26,11 @@ export interface AppSliceInput {
 /** Slices shown individually; the rest fold into "Other". */
 const MAX_SLICES = 5;
 
-// Categorical slices take the DS chart palette (--cds-alias-viz-general-*);
-// app slices are categorical, so they don't take the traffic greens. Assigned
-// per application in fixed order, never cycled.
-const SLICE_COLORS = [
-  "var(--cds-alias-viz-general-1)",
-  "var(--cds-alias-viz-general-2)",
-  "var(--cds-alias-viz-general-3)",
-  "var(--cds-alias-viz-general-4)",
-  "var(--cds-alias-viz-general-5)",
-];
+// App-mix palette straight from the DC reference (QuartzFire Console.dc.html
+// `appSegs`): TLS #3987e5, QUIC #199e70, DNS #c98500, SSH #e66767, Other ink-7.
+// Deliberately NOT the --cds-alias-viz-general ramp — the DC pins these hexes.
+// Assigned per application in fixed order, never cycled.
+const SLICE_COLORS = ["#3987e5", "#199e70", "#c98500", "#e66767", "#008300"];
 const OTHER_COLOR = "var(--qz-ink-7)";
 
 /// Split a formatted byte figure ("831.20 GB") into value + unit so the donut

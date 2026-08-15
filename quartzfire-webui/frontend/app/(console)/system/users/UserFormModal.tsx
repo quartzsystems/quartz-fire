@@ -188,7 +188,7 @@ export function UserFormModal({
               style={monoSt}
             />
           </Field>
-          <Field label="Full Name" hint="Optional display name.">
+          <Field label="Full name" hint="Optional display name.">
             <input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
@@ -200,7 +200,7 @@ export function UserFormModal({
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label={isEdit ? "New Password" : "Password"} hint={isEdit ? "Leave empty to keep the current password." : undefined}>
+          <Field label={isEdit ? "New password" : "Password"} hint={isEdit ? "Leave empty to keep the current password." : undefined}>
             <input
               type="password"
               value={password}
@@ -210,7 +210,7 @@ export function UserFormModal({
               style={plainSt}
             />
           </Field>
-          <Field label="Confirm Password">
+          <Field label="Confirm password">
             <input
               type="password"
               value={confirm}
@@ -224,7 +224,7 @@ export function UserFormModal({
 
         <div>
           <div className="flex items-center justify-between mb-[6px]">
-            <label className="clr-control-label" style={{ marginBottom: 0 }}>SSH Public Keys</label>
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>SSH public keys</label>
             <button
               type="button"
               onClick={() => setKeys((rows) => [...rows, { id: "", type: "ssh-ed25519", key: "" }])}

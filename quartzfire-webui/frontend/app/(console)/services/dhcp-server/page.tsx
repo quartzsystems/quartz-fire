@@ -67,14 +67,14 @@ const rangeColumns: Column<RangeRow>[] = [
 const mappingColumns: Column<MappingRow>[] = [
   { key: "name", header: "Name", value: (r) => r.mapping.name, sortable: true },
   { key: "subnet", header: "Subnet", value: (r) => r.subnet, mono: true, sortable: true },
-  { key: "ip_address", header: "IP Address", value: (r) => r.mapping.ip_address ?? "", render: (r) => dash(r.mapping.ip_address), mono: true },
-  { key: "mac_address", header: "MAC Address", value: (r) => r.mapping.mac_address ?? "", render: (r) => dash(r.mapping.mac_address), mono: true },
+  { key: "ip_address", header: "IP address", value: (r) => r.mapping.ip_address ?? "", render: (r) => dash(r.mapping.ip_address), mono: true },
+  { key: "mac_address", header: "MAC address", value: (r) => r.mapping.mac_address ?? "", render: (r) => dash(r.mapping.mac_address), mono: true },
   { key: "description", header: "Description", value: (r) => r.mapping.description ?? "", render: (r) => dash(r.mapping.description) },
 ];
 
 const leaseColumns: Column<DhcpLease>[] = [
-  { key: "ip_address", header: "IP Address", value: (r) => r.ip_address, mono: true, sortable: true },
-  { key: "mac_address", header: "MAC Address", value: (r) => r.mac_address ?? "", render: (r) => dash(r.mac_address), mono: true },
+  { key: "ip_address", header: "IP address", value: (r) => r.ip_address, mono: true, sortable: true },
+  { key: "mac_address", header: "MAC address", value: (r) => r.mac_address ?? "", render: (r) => dash(r.mac_address), mono: true },
   { key: "hostname", header: "Hostname", value: (r) => r.hostname ?? "", render: (r) => dash(r.hostname) },
   {
     key: "state",
@@ -174,7 +174,7 @@ export default function DhcpServerPage() {
       <div>
         <h2>DHCP Server</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Shared networks, their subnets, ranges, static mappings, and active leases
+          Address pools, static mappings, and the leases the server has handed out.
         </p>
       </div>
 
@@ -250,16 +250,16 @@ export default function DhcpServerPage() {
                   </>
                 ) : (
                   <>
-                    <Button kind="secondary" size="sm" icon="pencil" onClick={() => setServerModal({ server: selected })}>
+                    <Button kind="secondary" size="sm" onClick={() => setServerModal({ server: selected })}>
                       Edit Server
                     </Button>
-                    <Button kind="secondary" size="sm" icon="trash" onClick={() => setConfirmingServer(true)}>
+                    <Button kind="secondary" size="sm" onClick={() => setConfirmingServer(true)}>
                       Delete Server
                     </Button>
                   </>
                 )
               )}
-              <Button kind="primary" size="sm" icon="plus" onClick={() => setServerModal({})}>
+              <Button kind="primary" size="sm" onClick={() => setServerModal({})}>
                 Create DHCP Server
               </Button>
             </div>
@@ -293,7 +293,7 @@ export default function DhcpServerPage() {
                   onRefresh={() => load("refresh")}
                   onRowOpen={(row) => setSubnetModal({ subnet: row })}
                   toolbar={
-                    <Button kind="primary" size="sm" icon="plus" onClick={() => setSubnetModal({})}>
+                    <Button kind="primary" size="sm" onClick={() => setSubnetModal({})}>
                       Create Subnet
                     </Button>
                   }
@@ -323,7 +323,7 @@ export default function DhcpServerPage() {
                   onRefresh={() => load("refresh")}
                   onRowOpen={(row) => setRangeModal({ row })}
                   toolbar={
-                    <Button kind="primary" size="sm" icon="plus" onClick={() => setRangeModal({})}>
+                    <Button kind="primary" size="sm" onClick={() => setRangeModal({})}>
                       Create Range
                     </Button>
                   }
@@ -353,7 +353,7 @@ export default function DhcpServerPage() {
                   onRefresh={() => load("refresh")}
                   onRowOpen={(row) => setMappingModal({ row })}
                   toolbar={
-                    <Button kind="primary" size="sm" icon="plus" onClick={() => setMappingModal({})}>
+                    <Button kind="primary" size="sm" onClick={() => setMappingModal({})}>
                       Create Mapping
                     </Button>
                   }

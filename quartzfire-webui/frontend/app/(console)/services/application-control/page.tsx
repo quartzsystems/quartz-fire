@@ -30,7 +30,7 @@ const AC_RULE_COLS = [
   { key: "name", header: "Name" },
   { key: "fromto", header: "From → To", width: 140 },
   { key: "action", header: "Action", width: 90 },
-  { key: "ac", header: "Application Control", width: 220 },
+  { key: "ac", header: "Application control", width: 220 },
 ];
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
@@ -140,7 +140,6 @@ function ActionsTab({
         <Button
           kind="primary"
           size="sm"
-          icon="plus"
           onClick={() => {
             setCreating(true);
             setEditing({
@@ -453,7 +452,7 @@ function ActionEditor({
 
         <div className="flex items-start gap-5 flex-wrap">
           <div className="clr-form-control" style={{ marginTop: 0 }}>
-            <label className="clr-control-label">When Application Does Not Match</label>
+            <label className="clr-control-label">When application does not match</label>
             <Segmented
               items={[
                 { value: "allow", label: "Allow" },
@@ -464,7 +463,7 @@ function ActionEditor({
             />
           </div>
           <div className="clr-form-control" style={{ marginTop: 0 }}>
-            <label className="clr-control-label">Block Mode</label>
+            <label className="clr-control-label">Block mode</label>
             <Segmented
               items={[
                 { value: "drop", label: "Drop" },
@@ -719,7 +718,7 @@ const AC_ALERT_COLUMNS: AcAlertCol[] = [
   { key: "category", header: "Category", width: 130, className: "text-[var(--cds-alias-typography-color-300)]", cell: (r) => r.category ?? dash },
   {
     key: "srcdst",
-    header: "Source → Destination",
+    header: "Source → destination",
     className: "mono text-[12px]",
     ellipsis: true,
     cell: (r) => (
@@ -732,7 +731,7 @@ const AC_ALERT_COLUMNS: AcAlertCol[] = [
       </>
     ),
   },
-  { key: "sni", header: "SNI / Host", width: 150, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.sni ?? dash },
+  { key: "sni", header: "SNI / host", width: 150, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.sni ?? dash },
   { key: "policy", header: "Policy", width: 130, className: "text-[12px] text-[var(--cds-alias-typography-color-300)]", cell: (r) => r.action_name || dash },
 ];
 
@@ -855,9 +854,8 @@ function AlertsTab() {
         <div className="ml-auto flex items-center gap-3">
           <ColumnsMenu vis={vis} />
           <Button
-            kind="secondary"
+            kind="outline"
             size="sm"
-            icon="refresh"
             onClick={() => {
               clear();
               setStream("connecting");
@@ -999,7 +997,7 @@ export default function ApplicationControlPage() {
       <div>
         <h2>Application Control</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Identify applications with deep packet inspection (nDPI) and allow or block them per firewall rule
+          Classify flows by application and enforce per-app or per-category verdicts on Allow rules.
         </p>
       </div>
 

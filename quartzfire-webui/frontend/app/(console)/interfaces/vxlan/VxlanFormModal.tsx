@@ -267,11 +267,11 @@ export function VxlanFormModal({
           ))}
         </datalist>
 
-        <Field label="Control Plane" hint="EVPN hands MAC/IP reachability to BGP; static and multicast are self-contained.">
+        <Field label="Control plane" hint="EVPN hands MAC/IP reachability to BGP; static and multicast are self-contained.">
           <Segmented
             items={[
               { value: "evpn", label: "BGP-EVPN" },
-              { value: "static", label: "Static Unicast" },
+              { value: "static", label: "Static unicast" },
               { value: "multicast", label: "Multicast" },
             ]}
             value={mode}
@@ -351,7 +351,7 @@ export function VxlanFormModal({
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field
-            label="Source Address"
+            label="Source address"
             required={mode === "evpn"}
             hint="Local VTEP tunnel IP (usually a loopback address)."
           >
@@ -364,7 +364,7 @@ export function VxlanFormModal({
             />
           </Field>
           <Field
-            label="Source Interface"
+            label="Source interface"
             required={mode === "multicast"}
             hint={mode === "multicast" ? "Interface multicast VXLAN traffic uses." : "Optional underlay interface."}
           >
@@ -417,7 +417,7 @@ export function VxlanFormModal({
         )}
 
         {mode === "multicast" && (
-          <Field label="Multicast Group" required hint="Group address for BUM (broadcast/unknown-unicast/multicast) flooding.">
+          <Field label="Multicast group" required hint="Group address for BUM (broadcast/unknown-unicast/multicast) flooding.">
             <input
               value={group}
               onChange={(e) => setGroup(e.target.value)}
@@ -429,7 +429,7 @@ export function VxlanFormModal({
         )}
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="UDP Port" hint="Default 8472; EVPN fabrics use 4789.">
+          <Field label="UDP port" hint="Default 8472; EVPN fabrics use 4789.">
             <input
               type="number"
               min={1}
@@ -457,7 +457,7 @@ export function VxlanFormModal({
 
         <div className="clr-form-control" style={{ marginTop: 0 }}>
           <div className="flex items-center justify-between">
-            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP Addresses</label>
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP addresses</label>
             <button type="button" onClick={addAddr} className="btn btn-sm btn-link-neutral">
               <Icon shape="plus" size={12} /> Add Address
             </button>
@@ -504,7 +504,7 @@ export function VxlanFormModal({
           className="flex flex-col"
           style={{ gap: 10, border: "1px solid var(--cds-alias-object-border-color)", borderRadius: "var(--clr-base-border-radius-m)", padding: 12 }}
         >
-          <span className="clr-control-label" style={{ marginBottom: 0 }}>Advanced Parameters</span>
+          <span className="clr-control-label" style={{ marginBottom: 0 }}>Advanced parameters</span>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <Switch on={nolearning} onChange={setNolearning} />
             <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>

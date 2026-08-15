@@ -203,7 +203,7 @@ export function BridgeFormModal({
           />
         </Field>
 
-        <Field label="Member Interfaces">
+        <Field label="Member interfaces">
           {candidates.length === 0 ? (
             <div className="clr-subtext">
               No free interfaces — members must have no addresses and not belong to a bond or
@@ -238,7 +238,7 @@ export function BridgeFormModal({
 
         <div className="clr-form-control" style={{ marginTop: 0 }}>
           <div className="flex items-center justify-between">
-            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP Addresses</label>
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP addresses</label>
             <button type="button" onClick={addAddr} className="btn btn-sm btn-link-neutral">
               <Icon shape="plus" size={12} /> Add Address
             </button>
@@ -294,7 +294,7 @@ export function BridgeFormModal({
           {vlanAware && (
             <div className="clr-form-control" style={{ marginTop: 0 }}>
               <div className="flex items-center justify-between">
-                <label className="clr-control-label" style={{ marginBottom: 0 }}>VLAN Sub-Interfaces (VIFs)</label>
+                <label className="clr-control-label" style={{ marginBottom: 0 }}>VLAN sub-interfaces (VIFs)</label>
                 <button type="button" onClick={addVif} className="btn btn-sm btn-link-neutral">
                   <Icon shape="plus" size={12} /> Add VIF
                 </button>

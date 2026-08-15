@@ -39,7 +39,7 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
 
 function neighborColumns(): Column<IsisNeighborState>[] {
   return [
-    { key: "system_id", header: "System ID / Host", value: (r) => r.system_id ?? "", render: (r) => dash(r.system_id), mono: true, sortable: true },
+    { key: "system_id", header: "System ID / host", value: (r) => r.system_id ?? "", render: (r) => dash(r.system_id), mono: true, sortable: true },
     { key: "interface", header: "Interface", value: (r) => r.interface ?? "", render: (r) => dash(r.interface), mono: true, sortable: true, width: 130 },
     { key: "level", header: "Level", value: (r) => r.level ?? "", render: (r) => dash(r.level), mono: true, width: 100 },
     {
@@ -123,7 +123,7 @@ export function IsisStatusPanel() {
         </div>
         <div className="flex flex-col items-end gap-2">
           {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
-          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
+          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
         </div>
       </div>
 

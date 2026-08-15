@@ -142,7 +142,7 @@ export default function FirewallAliasesPage() {
     },
     {
       key: "used",
-      header: "In Use",
+      header: "In use",
       value: (r) => rowUsage(r).length,
       render: (r) => {
         const n = rowUsage(r).length;
@@ -169,15 +169,21 @@ export default function FirewallAliasesPage() {
     },
   ];
 
+  // Title block — standalone while loading/errored, in the DataTable's
+  // header row (headerLeft) once the grid is up, per the DC reference.
+  const header = (
+    <div>
+      <h2>Aliases</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Named hosts, networks, FQDNs, and interface groups used as From/To targets — every configured interface
+        also gets a built-in alias named by its description.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Aliases</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Named hosts, networks, FQDNs, and interface groups used as From/To targets in firewall rules — every
-          configured interface and VLAN also gets a built-in alias named by its description
-        </p>
-      </div>
+      {status !== "ready" && header}
 
       {status === "loading" && <div className="clr-secondary">Loading aliases…</div>}
       {status === "error" && (
@@ -198,6 +204,7 @@ export default function FirewallAliasesPage() {
           storageKey="firewall-aliases"
           searchPlaceholder="Search aliases…"
           emptyMessage="No aliases defined."
+          headerLeft={header}
           onRefresh={() => load("refresh")}
           onRowOpen={(r) => {
             // Built-in interface aliases are read-only here — they're edited
@@ -205,7 +212,7 @@ export default function FirewallAliasesPage() {
             if (r.kind === "user") setModal({ alias: r.alias });
           }}
           toolbar={
-            <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+            <Button kind="primary" onClick={() => setModal({})}>
               Create Alias
             </Button>
           }

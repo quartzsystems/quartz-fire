@@ -221,7 +221,7 @@ export function GroupFormModal({
           </label>
         </div>
 
-        <Advanced label="Authentication, Tracking & Scripts">
+        <Advanced label="Authentication, tracking & scripts">
           <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <Field label="Hello source address">
               <TextInput value={g.hello_source_address ?? ""} onChange={(v) => set({ hello_source_address: v || null })} placeholder="10.0.0.2" mono />
@@ -256,7 +256,7 @@ export function GroupFormModal({
             <StringListEditor values={g.excluded_addresses} onChange={(v) => set({ excluded_addresses: v })} placeholder="10.0.0.9/24" addLabel="Add Address" />
           </Field>
 
-          <div className="clr-smallcaption" style={{ marginTop: 4 }}>Health Check</div>
+          <div className="clr-smallcaption" style={{ marginTop: 4 }}>Health check</div>
           <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <Field label="Script path">
               <TextInput value={g.health_check.script ?? ""} onChange={(v) => setHc({ script: v || null })} placeholder="/config/scripts/chk.sh" mono />
@@ -272,7 +272,7 @@ export function GroupFormModal({
             </Field>
           </div>
 
-          <div className="clr-smallcaption" style={{ marginTop: 4 }}>Transition Scripts</div>
+          <div className="clr-smallcaption" style={{ marginTop: 4 }}>Transition scripts</div>
           <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <Field label="Master">
               <TextInput value={g.transition_script.master ?? ""} onChange={(v) => setTs({ master: v || null })} placeholder="/config/scripts/master.sh" mono />

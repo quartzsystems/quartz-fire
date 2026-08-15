@@ -76,8 +76,8 @@ function peerColumns(): Column<PeerSummary>[] {
       width: 130,
     },
     { key: "uptime", header: "Uptime", value: (r) => r.uptime_secs ?? 0, render: (r) => formatUptime(r.uptime_secs), mono: true, sortable: true, width: 110 },
-    { key: "pfx_rcvd", header: "Pfx Rcvd", value: (r) => r.prefixes_received ?? -1, render: (r) => dash(r.prefixes_received), mono: true, sortable: true, width: 100 },
-    { key: "pfx_sent", header: "Pfx Sent", value: (r) => r.prefixes_sent ?? -1, render: (r) => dash(r.prefixes_sent), mono: true, sortable: true, width: 100 },
+    { key: "pfx_rcvd", header: "Pfx rcvd", value: (r) => r.prefixes_received ?? -1, render: (r) => dash(r.prefixes_received), mono: true, sortable: true, width: 100 },
+    { key: "pfx_sent", header: "Pfx sent", value: (r) => r.prefixes_sent ?? -1, render: (r) => dash(r.prefixes_sent), mono: true, sortable: true, width: 100 },
     { key: "msgs", header: "Msgs Rx/Tx", value: (r) => (r.msg_rcvd ?? 0) + (r.msg_sent ?? 0), render: (r) => `${dash(r.msg_rcvd)} / ${dash(r.msg_sent)}`, mono: true, width: 130 },
   ];
 }
@@ -359,7 +359,7 @@ export function BgpStatusPanel() {
               Updated {lastUpdated.toLocaleTimeString()}
             </span>
           )}
-          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
+          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
         </div>
       </div>
 

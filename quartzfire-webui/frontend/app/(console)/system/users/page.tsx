@@ -31,7 +31,7 @@ const columns: Column<SystemUser>[] = [
   { key: "name", header: "Username", value: (r) => r.name, mono: true, sortable: true, width: 160 },
   {
     key: "full_name",
-    header: "Full Name",
+    header: "Full name",
     value: (r) => r.full_name ?? "",
     render: (r) =>
       r.full_name ? r.full_name : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>,
@@ -46,7 +46,7 @@ const columns: Column<SystemUser>[] = [
   },
   {
     key: "keys",
-    header: "SSH Keys",
+    header: "SSH keys",
     value: (r) => r.keys.length,
     mono: true,
     render: (r) =>
@@ -101,14 +101,18 @@ export default function UsersPage() {
 
   const defaultVyosUser = users?.some((u) => u.name === "vyos") ?? false;
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">Users</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Administrator accounts — used for both this console and console/SSH logins.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Users</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Administrator accounts — used for both the WebUI and console/SSH logins
-        </p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && <div className="clr-secondary">Loading user accounts…</div>}
       {status === "error" && (
@@ -123,66 +127,66 @@ export default function UsersPage() {
         </div>
       )}
       {status === "ready" && users && (
-        <div className="flex flex-col gap-4">
-          {defaultVyosUser && (
-            <div className="alert alert-warning alert-sm">
-              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
-              <div className="alert-text">
-                The built-in <span style={{ fontFamily: "var(--qz-font-mono)" }}>vyos</span> account exists on
-                every installation. Make sure its default password has been changed, or replace it with a
-                personal account and delete it.
+        <DataTable
+          rows={users}
+          columns={columns}
+          rowId={(r) => r.name}
+          storageKey="system-users"
+          searchPlaceholder="Search users…"
+          emptyMessage="No user accounts configured."
+          onRefresh={() => load("refresh")}
+          onRowOpen={(row) => setModal({ user: row })}
+          headerLeft={headerBlock}
+          subHeader={
+            defaultVyosUser && (
+              <div className="alert alert-warning alert-sm">
+                <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+                <div className="alert-text">
+                  The built-in <span style={{ fontFamily: "var(--qz-font-mono)" }}>vyos</span> account exists on
+                  every installation. Make sure its default password has been changed, or replace it with a
+                  personal account and delete it.
+                </div>
               </div>
-            </div>
-          )}
-
-          <DataTable
-            rows={users}
-            columns={columns}
-            rowId={(r) => r.name}
-            storageKey="system-users"
-            searchPlaceholder="Search users…"
-            emptyMessage="No user accounts configured."
-            onRefresh={() => load("refresh")}
-            onRowOpen={(row) => setModal({ user: row })}
-            toolbar={
-              <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
-                Create User
-              </Button>
-            }
-            actions={(row) => {
-              // Deleting yourself would strand the session mid-flight, and
-              // VyOS refuses an empty user set — guard both up front.
-              if (row.name === currentUser || users.length === 1) {
-                return (
-                  <div className="inline-flex items-center gap-1 justify-end">
-                    <button
-                      type="button"
-                      title={`Edit user ${row.name}`}
-                      aria-label="Edit"
-                      onClick={() => setModal({ user: row })}
-                      className="btn btn-sm btn-link-neutral btn-icon"
-                    >
-                      <Icon shape="pencil" size={14} />
-                    </button>
-                    <span
-                      className="px-1"
-                      title={row.name === currentUser ? "You can't delete the account you're signed in as." : "The last account can't be deleted."}
-                    >
-                      {row.name === currentUser ? <Pill>You</Pill> : <Pill>Last</Pill>}
-                    </span>
-                  </div>
-                );
-              }
+            )
+          }
+          toolbar={
+            <Button kind="primary" onClick={() => setModal({})}>
+              Create User
+            </Button>
+          }
+          actions={(row) => {
+            // Deleting yourself would strand the session mid-flight, and
+            // VyOS refuses an empty user set — guard both up front.
+            if (row.name === currentUser || users.length === 1) {
               return (
-                <RowActions
-                  label={`user ${row.name}`}
-                  onEdit={() => setModal({ user: row })}
-                  onDelete={() => remove(row)}
-                />
+                <div className="inline-flex items-center gap-1 justify-end">
+                  <button
+                    type="button"
+                    title={`Edit user ${row.name}`}
+                    aria-label="Edit"
+                    onClick={() => setModal({ user: row })}
+                    className="btn btn-sm btn-link-neutral btn-icon"
+                  >
+                    <Icon shape="pencil" size={14} />
+                  </button>
+                  <span
+                    className="px-1"
+                    title={row.name === currentUser ? "You can't delete the account you're signed in as." : "The last account can't be deleted."}
+                  >
+                    {row.name === currentUser ? <Pill>You</Pill> : <Pill>Last</Pill>}
+                  </span>
+                </div>
               );
-            }}
-          />
-        </div>
+            }
+            return (
+              <RowActions
+                label={`user ${row.name}`}
+                onEdit={() => setModal({ user: row })}
+                onDelete={() => remove(row)}
+              />
+            );
+          }}
+        />
       )}
 
       {modal && users && (

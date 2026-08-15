@@ -133,9 +133,9 @@ function loadViews(): Record<string, SankeyView> {
 /** Columns of the "top flows" table under the Sankey. */
 const TOP_FLOW_COLS: { key: string; header: string; right?: boolean }[] = [
   { key: "src", header: "Source" },
-  { key: "in_if", header: "In If" },
+  { key: "in_if", header: "In if" },
   { key: "rule", header: "Rule" },
-  { key: "out_if", header: "Out If" },
+  { key: "out_if", header: "Out if" },
   { key: "dst", header: "Destination" },
   { key: "service", header: "Service" },
   { key: "hits", header: "Hits", right: true },
@@ -627,11 +627,30 @@ export default function TrafficFlowPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2>Traffic Flow</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Where traffic enters, which firewall rule carries it, and where it goes — ribbon width is {metric === "bytes" ? "bytes" : "connections (hits)"} over the window; color is the verdict
-        </p>
+      {/* Page header per the DC reference: title/sub left; save-view input +
+          plain Save View / Refresh buttons right-aligned beside it. */}
+      <div className="flex items-start gap-2 flex-wrap">
+        <div className="mr-auto">
+          <h2>Traffic Flow</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Aggregated connections from conntrack — group, filter, and save the views you keep coming back to.
+          </p>
+        </div>
+        <input
+          value={viewName}
+          onChange={(e) => setViewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") saveView();
+          }}
+          placeholder="Save current as…"
+          className="clr-input"
+        />
+        <button type="button" className="btn" onClick={saveView} disabled={!viewName.trim()}>
+          Save View
+        </button>
+        <button type="button" className="btn" onClick={() => load(window_, metric)}>
+          Refresh
+        </button>
       </div>
 
       <div>
@@ -667,7 +686,7 @@ export default function TrafficFlowPage() {
             <div className="ml-auto flex items-center gap-3">
               {/* Named views: save the current columns/metric/window/verdict, recall by name */}
               <div className="clr-dropdown" ref={viewsRef}>
-                <Button kind="secondary" size="sm" icon="bookmark" onClick={() => setViewsOpen((o) => !o)}>
+                <Button kind="outline" size="sm" onClick={() => setViewsOpen((o) => !o)}>
                   Views
                 </Button>
                 {viewsOpen && (
@@ -710,32 +729,12 @@ export default function TrafficFlowPage() {
                         </button>
                       </div>
                     ))}
-                    <hr className="dropdown-divider" />
-                    <div className="flex items-center gap-2 px-3 py-[6px]">
-                      <input
-                        value={viewName}
-                        onChange={(e) => setViewName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") saveView();
-                        }}
-                        placeholder="Save current as…"
-                        className="clr-input flex-1 min-w-0"
-                        style={{ maxWidth: "none" }}
-                      />
-                      <Button kind="primary" size="sm" onClick={saveView} disabled={!viewName.trim()}>
-                        Save
-                      </Button>
-                    </div>
                   </div>
                 )}
               </div>
-              <Button kind="secondary" size="sm" icon="refresh" onClick={() => load(window_, metric)}>
-                Refresh
-              </Button>
               <Button
-                kind="secondary"
+                kind="outline"
                 size="sm"
-                icon={paused ? "play" : "pause"}
                 onClick={() =>
                   setPaused((p) => {
                     pausedRef.current = !p;

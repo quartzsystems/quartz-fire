@@ -93,17 +93,18 @@ const ELLIPSIS: React.CSSProperties = { overflow: "hidden", textOverflow: "ellip
 
 // Fixed widths on every column except the trailing IPv4 one, which is left
 // width-less so it absorbs the table's slack — that keeps Description tight to
-// MAC/Last Seen instead of stretching and leaving a big empty gap.
+// MAC/Last seen instead of stretching and leaving a big empty gap. The Usage
+// header carries the active window ("Usage (24h)"), patched in per render.
 const COLUMNS: ColumnDef[] = [
   { key: "status", header: "Status", sort: "status", width: "110px" },
   { key: "description", header: "Description", sort: "description", width: "260px" },
   // Wide enough for a full 17-char MAC at 13px mono plus the cell's padding —
   // any tighter and every address truncates.
   { key: "mac", header: "MAC", width: "190px" },
-  { key: "last_seen", header: "Last Seen", sort: "last_seen", width: "120px" },
+  { key: "last_seen", header: "Last seen", sort: "last_seen", width: "120px" },
   { key: "usage", header: "Usage", sort: "usage", width: "160px" },
-  { key: "type", header: "Client Type / OS", sort: "client_type", width: "150px" },
-  { key: "ip", header: "IPv4 Address", sort: "ip" },
+  { key: "type", header: "Client type / OS", sort: "client_type", width: "150px" },
+  { key: "ip", header: "IPv4 address", sort: "ip" },
 ];
 
 export default function DevicesPage() {
@@ -119,8 +120,13 @@ export default function DevicesPage() {
   const [page, setPage] = useState(1);
 
   // ── data state ────────────────────────────────────────────────────────────
-  const vis = useColumnVisibility("devices", COLUMNS);
-  const visibleColumns = COLUMNS.filter((c) => vis.isVisible(c.key));
+  // The Usage header reflects the active window, per the DC reference.
+  const columnDefs = useMemo<ColumnDef[]>(
+    () => COLUMNS.map((c) => (c.key === "usage" ? { ...c, header: `Usage (${usageWindow})` } : c)),
+    [usageWindow],
+  );
+  const vis = useColumnVisibility("devices", columnDefs);
+  const visibleColumns = columnDefs.filter((c) => vis.isVisible(c.key));
   const resize = useColumnResize(
     "devices",
     visibleColumns.map((c) => ({ key: c.key, width: c.width ? parseInt(c.width, 10) : undefined })),
@@ -262,90 +268,91 @@ export default function DevicesPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
+      {/* Page header per the DC reference: title/sub left; search + plain
+          Refresh right-aligned beside it. */}
+      <div className="flex items-start gap-2 flex-wrap">
+        <div className="mr-auto">
           <h2>Devices</h2>
           <p className="clr-secondary" style={{ marginTop: 4, marginBottom: 0 }}>
-            Clients seen on the network — identity, activity, and usage.
+            Every device seen on the network — identity from DHCP and fingerprinting, usage from conntrack
+            accounting.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>Usage window</span>
-          <Segmented items={WINDOWS} value={usageWindow} onChange={(v) => setUsageWindow(v as UsageWindow)} />
-        </div>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search description, hostname, MAC, IP…"
+          className="clr-input"
+          style={{ width: 280, maxWidth: 280 }}
+        />
+        <button type="button" className="btn" onClick={() => load(true)} disabled={refreshing}>
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
       </div>
 
-      {/* Usage and clients — combined throughput + application mix */}
-      <div className="card mt-6">
-        <div className="card-block">
-          <div className="grid gap-6" style={{ gridTemplateColumns: "minmax(0, 1.9fr) minmax(260px, 1fr)" }}>
-            {/* Usage graph */}
-            <div>
-              <div className="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}>Network Usage</span>
-                {usageSeries && (
-                  <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
-                    {formatBytes(usageSeries.bytes_in + usageSeries.bytes_out)}
-                    <span className="mx-1">·</span>
-                    {formatBytes(usageSeries.bytes_in)} <Icon shape="arrow" dir="down" size={10} /> /{" "}
-                    {formatBytes(usageSeries.bytes_out)} <Icon shape="arrow" dir="up" size={10} />
-                  </span>
-                )}
-              </div>
-              <UsageChart
-                points={usageSeries?.points ?? []}
-                windowSecs={WINDOW_SECS[usageWindow]}
-                nowSecs={usageSeries?.now}
-                height={190}
-              />
-              <UsageLegend />
-            </div>
-            {/* Applications pie — live App Control mix (matches the dashboard) */}
-            <div style={{ borderLeft: "1px solid var(--cds-alias-object-border-subtle)" }} className="pl-6">
-              <div className="flex items-baseline gap-2 mb-3">
-                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}>Applications</span>
-                <span style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }} title={APP_MIX_HINT}>
-                  by traffic volume
+      {/* Throughput + application mix — two cards, per the DC reference */}
+      <div className="grid mt-4" style={{ gridTemplateColumns: "2fr 1fr", gap: 12, alignItems: "stretch" }}>
+        <div className="card">
+          <div className="card-header">
+            Total Throughput
+            {usageSeries && (
+              <span className="ml-auto flex items-center" style={{ gap: 12, fontWeight: 400 }}>
+                <span style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12, fontWeight: 600, color: DOWN_COLOR }}>
+                  ↓ {formatBytes(usageSeries.bytes_in)}
                 </span>
+                <span style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12, fontWeight: 600, color: UP_COLOR }}>
+                  ↑ {formatBytes(usageSeries.bytes_out)}
+                </span>
+              </span>
+            )}
+          </div>
+          <div className="card-block">
+            <UsageChart
+              points={usageSeries?.points ?? []}
+              windowSecs={WINDOW_SECS[usageWindow]}
+              nowSecs={usageSeries?.now}
+              height={190}
+            />
+            <UsageLegend />
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header">
+            Applications
+            <span
+              className="ml-auto"
+              style={{ fontSize: 12, fontWeight: 400, color: "var(--cds-alias-typography-color-200)" }}
+              title={APP_MIX_HINT}
+            >
+              by classified bytes · {usageWindow}
+            </span>
+          </div>
+          <div className="card-block">
+            {appsEmpty ? (
+              <div className="grid place-items-center" style={{ minHeight: 150, fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+                {appsEmpty}
               </div>
-              {appsEmpty ? (
-                <div className="grid place-items-center" style={{ minHeight: 150, fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
-                  {appsEmpty}
-                </div>
-              ) : (
-                <TopAppsDonut apps={appSlices} totalBytes={appTotal} centerSub="classified" />
-              )}
-            </div>
+            ) : (
+              // fill mode: donut left, legend hugging the card's right edge (DC).
+              <div style={{ height: 170 }}>
+                <TopAppsDonut apps={appSlices} totalBytes={appTotal} centerSub="classified" fill />
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Controls */}
       <div className="flex items-center gap-3 flex-wrap mt-6">
-        <div className="relative">
-          <Icon
-            shape="search"
-            size={14}
-            className="absolute left-[9px] top-1/2 -translate-y-1/2"
-            style={{ color: "var(--cds-alias-typography-color-200)" }}
-          />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search description, hostname, MAC, IP…"
-            className="clr-input"
-            style={{ paddingLeft: 30, width: 300, maxWidth: 300 }}
-          />
-        </div>
-
         <Segmented items={statusItems} value={status} onChange={(v) => setStatus(v as StatusFilter)} />
+
+        <div className="flex items-center gap-2">
+          <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>Usage window</span>
+          <Segmented items={WINDOWS} value={usageWindow} onChange={(v) => setUsageWindow(v as UsageWindow)} />
+        </div>
 
         <div className="ml-auto flex items-center gap-3">
           <ColumnsMenu vis={vis} />
-          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load(true)} disabled={refreshing}>
-            {refreshing ? "Refreshing…" : "Refresh"}
-          </Button>
           <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
             {total} {total === 1 ? "device" : "devices"}
           </span>
@@ -503,10 +510,20 @@ function DeviceRowView({
   > = {
     status: {
       style: ELLIPSIS,
-      node: device.online ? (
-        <span className="badge badge-ok">Online</span>
-      ) : (
-        <span className="badge badge-muted">Offline</span>
+      // DC anatomy: a small colored dot + plain text, not a pill.
+      node: (
+        <span className="inline-flex items-center gap-[7px]">
+          <span
+            className="flex-shrink-0"
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 999,
+              background: device.online ? "var(--qz-success)" : "var(--qz-ink-7)",
+            }}
+          />
+          {device.online ? "Online" : "Offline"}
+        </span>
       ),
     },
     description: {

@@ -20,7 +20,7 @@ const dash = (v: string | null) => (v && v.length ? v : "—");
 function interfaceColumns(): Column<IsisInterface>[] {
   return [
     { key: "name", header: "Interface", value: (r) => r.name, mono: true, sortable: true, width: 140 },
-    { key: "circuit_type", header: "Circuit Type", value: (r) => r.circuit_type ?? "", render: (r) => dash(r.circuit_type), mono: true, sortable: true, width: 150 },
+    { key: "circuit_type", header: "Circuit type", value: (r) => r.circuit_type ?? "", render: (r) => dash(r.circuit_type), mono: true, sortable: true, width: 150 },
     { key: "metric", header: "Metric", value: (r) => r.metric ?? -1, render: (r) => (r.metric == null ? "—" : String(r.metric)), mono: true, width: 100 },
     {
       key: "timers",
@@ -101,7 +101,7 @@ export default function IsisPage() {
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
         <h2 style={{ margin: 0 }}>IS-IS</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Intermediate System to Intermediate System — link-state IGP for the underlay
+          Intermediate System to Intermediate System — link-state IGP for the underlay.
         </p>
       </div>
 
@@ -143,7 +143,7 @@ export default function IsisPage() {
                 onRefresh={() => load("refresh")}
                 onRowOpen={(row) => setIfaceModal({ iface: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon="plus" onClick={() => setIfaceModal({})}>
+                  <Button kind="primary" size="sm" onClick={() => setIfaceModal({})}>
                     Add Interface
                   </Button>
                 }

@@ -13,14 +13,14 @@ const dash = (v: string | null) => (v && v.length ? v : "—");
 
 function columns(): Column<VirtualServer>[] {
   return [
-    { key: "id", header: "Virtual Server", value: (r) => r.id, mono: true, sortable: true },
+    { key: "id", header: "Virtual server", value: (r) => r.id, mono: true, sortable: true },
     { key: "port", header: "Port", value: (r) => r.port ?? "", render: (r) => dash(r.port?.toString() ?? null), mono: true, width: 90 },
     { key: "protocol", header: "Protocol", value: (r) => r.protocol ?? "", render: (r) => dash(r.protocol ? r.protocol.toUpperCase() : null), mono: true, width: 100 },
     { key: "algorithm", header: "Algorithm", value: (r) => r.algorithm ?? "", render: (r) => dash(r.algorithm), mono: true, width: 200 },
     { key: "forward", header: "Forward", value: (r) => r.forward_method ?? "", render: (r) => dash(r.forward_method ? r.forward_method.toUpperCase() : null), mono: true, width: 110 },
     {
       key: "reals",
-      header: "Real Servers",
+      header: "Real servers",
       value: (r) => r.real_servers.length,
       mono: true,
       width: 120,
@@ -66,14 +66,18 @@ export default function VirtualServersPage() {
     }
   };
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">Virtual Servers</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        L4 load balancing (IPVS) — distribute a service VIP across a pool of real servers.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2>Virtual Servers</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          L4 load balancing (IPVS) — distribute a service VIP across a pool of real servers
-        </p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && <div className="clr-secondary">Loading virtual servers…</div>}
       {status === "error" && (
@@ -97,8 +101,9 @@ export default function VirtualServersPage() {
           emptyMessage="No virtual servers configured."
           onRefresh={() => load("refresh")}
           onRowOpen={(row) => setModal({ vs: row })}
+          headerLeft={headerBlock}
           toolbar={
-            <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+            <Button kind="primary" onClick={() => setModal({})}>
               Add Virtual Server
             </Button>
           }

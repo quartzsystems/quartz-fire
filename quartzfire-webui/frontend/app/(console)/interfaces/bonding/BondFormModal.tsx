@@ -13,12 +13,12 @@ const wideMono = { ...wide, ...mono } as const;
 // Bond modes VyOS accepts; 802.3ad is the default when the leaf is absent.
 const MODE_OPTIONS = [
   { value: "802.3ad", label: "802.3ad (LACP)" },
-  { value: "active-backup", label: "Active-Backup" },
-  { value: "adaptive-load-balance", label: "Adaptive Load Balance" },
+  { value: "active-backup", label: "Active-backup" },
+  { value: "adaptive-load-balance", label: "Adaptive load balance" },
   { value: "broadcast", label: "Broadcast" },
-  { value: "round-robin", label: "Round-Robin" },
-  { value: "transmit-load-balance", label: "Transmit Load Balance" },
-  { value: "xor-hash", label: "XOR Hash" },
+  { value: "round-robin", label: "Round-robin" },
+  { value: "transmit-load-balance", label: "Transmit load balance" },
+  { value: "xor-hash", label: "XOR hash" },
 ];
 
 /// Clarity field: label + control + optional helper sentence.
@@ -187,7 +187,7 @@ export function BondFormModal({
           />
         </Field>
 
-        <Field label="Member Interfaces">
+        <Field label="Member interfaces">
           {candidates.length === 0 ? (
             <div className="clr-subtext">
               No free ethernet interfaces — members must have no addresses and not belong to
@@ -222,7 +222,7 @@ export function BondFormModal({
 
         <div className="clr-form-control" style={{ marginTop: 0 }}>
           <div className="flex items-center justify-between">
-            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP Addresses</label>
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP addresses</label>
             <button type="button" onClick={addAddr} className="btn btn-sm btn-link-neutral">
               <Icon shape="plus" size={12} /> Add Address
             </button>

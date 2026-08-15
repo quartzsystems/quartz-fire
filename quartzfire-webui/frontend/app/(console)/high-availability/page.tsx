@@ -11,7 +11,7 @@ export default function HighAvailabilityPage() {
       <div>
         <h2>High Availability</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Keep a standby firewall in lockstep — configuration sync and VRRP failover
+          Keep a standby firewall in lockstep — configuration sync and VRRP failover.
         </p>
       </div>
 

@@ -30,7 +30,7 @@ function columns(): Column<WireguardInterface>[] {
           <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
         ),
     },
-    { key: "port", header: "Listen Port", value: (r) => r.port ?? -1, render: (r) => (r.port == null ? "—" : String(r.port)), mono: true, width: 120 },
+    { key: "port", header: "Listen port", value: (r) => r.port ?? -1, render: (r) => (r.port == null ? "—" : String(r.port)), mono: true, width: 120 },
     { key: "peers", header: "Peers", value: (r) => r.peers.length, mono: true, sortable: true, width: 90 },
     {
       key: "state",
@@ -70,6 +70,17 @@ export default function WireguardPage() {
     load();
   }, [load]);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const saved = (msg: string) => {
     setModal(null);
     setToast(msg);
@@ -88,11 +99,21 @@ export default function WireguardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2>WireGuard</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Fast, modern point-to-point tunnels — one interface per endpoint, one peer per remote
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">WireGuard</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Fast, modern point-to-point tunnels — one interface per endpoint, one peer per remote.
+          </p>
+        </div>
+        {status === "ready" && (
+          <>
+            <Button kind="outline" onClick={refresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            <Button kind="primary" onClick={() => setModal({})}>Add Interface</Button>
+          </>
+        )}
       </div>
 
       {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading WireGuard configuration…</div>}
@@ -126,13 +147,7 @@ export default function WireguardPage() {
               storageKey="vpn-wireguard"
               searchPlaceholder="Search interfaces…"
               emptyMessage="No WireGuard interfaces configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setModal({ iface: row })}
-              toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
-                  Add Interface
-                </Button>
-              }
               actions={(row) => (
                 <RowActions label={`WireGuard ${row.name}`} onEdit={() => setModal({ iface: row })} onDelete={() => remove(row)} />
               )}

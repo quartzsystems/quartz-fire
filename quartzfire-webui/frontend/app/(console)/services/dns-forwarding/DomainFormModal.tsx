@@ -109,7 +109,7 @@ export function DomainFormModal({
           />
         </Field>
 
-        <Field label="Name Servers" hint="One address per line.">
+        <Field label="Name servers" hint="One address per line.">
           <textarea
             value={serversText}
             onChange={(e) => setServersText(e.target.value)}

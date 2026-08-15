@@ -34,7 +34,7 @@ const columns: Column<EthRow>[] = [
   { key: "description", header: "Description", value: (r) => r.description ?? "", sortable: true },
   {
     key: "addresses",
-    header: "IP Address",
+    header: "IP address",
     value: (r) => r.addresses.join(", "),
     render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
     mono: true,
@@ -146,12 +146,18 @@ export default function EthernetPage() {
     [physical, rows],
   );
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">Ethernet</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Physical ethernet interfaces — link state and negotiated speed are read live.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
-      <div>
-        <h2>Ethernet Interfaces</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>Physical ethernet interfaces</p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && (
         <div className="clr-secondary">Loading interfaces…</div>
@@ -178,12 +184,11 @@ export default function EthernetPage() {
           emptyMessage="No ethernet interfaces configured."
           onRefresh={() => load("refresh")}
           onRowOpen={(row) => setModal({ eth: row })}
+          headerLeft={headerBlock}
           toolbar={
             <span title={freeNames.length === 0 ? "No free physical interfaces available" : undefined}>
               <Button
                 kind="primary"
-                size="sm"
-                icon="plus"
                 onClick={() => setModal({})}
                 disabled={freeNames.length === 0}
               >

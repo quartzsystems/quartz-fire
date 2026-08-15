@@ -11,14 +11,25 @@ const UPTIME_UNITS: Record<string, string> = {
   year: "y", week: "w", day: "d", hour: "h", minute: "m", second: "s",
 };
 
-/// "1 day, 2 hours, 34 minutes, 5 seconds" → "1d 2h 34m 5s" (falls back to the raw string).
+/// "1 day, 2 hours, 34 minutes, 5 seconds" → "1 d 2 h" — the two largest units,
+/// spaced like the DC reference ("41 d 6 h"). Falls back to the raw string.
 function shortUptime(s: string | null): string | null {
   if (!s) return null;
   const parts: string[] = [];
   const re = /(\d+)\s*(year|week|day|hour|minute|second)/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(s))) parts.push(`${m[1]}${UPTIME_UNITS[m[2]]}`);
-  return parts.length ? parts.join(" ") : s;
+  while ((m = re.exec(s))) parts.push(`${m[1]} ${UPTIME_UNITS[m[2]]}`);
+  return parts.length ? parts.slice(0, 2).join(" ") : s;
+}
+
+/// Built-on strings arrive like "Sat 15 Aug 2026 17:58 UTC" — render ISO per the
+/// content rules ("2026-08-15 17:58 UTC"). Unparseable strings pass through.
+function isoBuilt(s: string): string {
+  const t = Date.parse(s);
+  if (Number.isNaN(t)) return s;
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())} UTC`;
 }
 
 /// "quartzfire-0.1.0" → "QuartzFire v0.1.0" (unrecognized strings pass through).
@@ -48,12 +59,15 @@ function Bar({ pct }: { pct: number | null }) {
   );
 }
 
-/// Uppercase Clarity section label, with an optional right-hand annotation.
-function SectionTitle({ label, right }: { label: string; right?: React.ReactNode }) {
+/// Uppercase section eyebrow, exactly as the DC reference hand-rolls it
+/// (11px, 0.04em tracking, color-200) — deliberately not .clr-smallcaption.
+function SectionTitle({ label }: { label: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between mb-[8px]">
-      <div className="clr-smallcaption">{label}</div>
-      {right != null && <div className="text-[12px] text-[var(--cds-alias-typography-color-300)]">{right}</div>}
+    <div
+      className="mb-[8px] text-[11px] uppercase"
+      style={{ letterSpacing: "0.04em", color: "var(--cds-alias-typography-color-200)" }}
+    >
+      {label}
     </div>
   );
 }
@@ -119,7 +133,7 @@ export function SystemInfoPod() {
               color: "var(--cds-alias-typography-color-200)",
             }}
           >
-            Uptime {uptime}
+            UPTIME {uptime}
           </span>
         )}
       </div>
@@ -164,7 +178,7 @@ export function SystemInfoPod() {
                 <>
                   <span style={{ color: "var(--cds-alias-typography-color-200)" }}>Built</span>
                   <span style={{ color: "var(--cds-alias-typography-color-400)", fontFamily: "var(--qz-font-mono)" }}>
-                    {info.built_on}
+                    {isoBuilt(info.built_on)}
                   </span>
                 </>
               )}
@@ -173,57 +187,51 @@ export function SystemInfoPod() {
             <Divider />
 
             {/* Load average */}
-            <SectionTitle label="Load Average" />
+            <SectionTitle label="Load average" />
             <MetricRow label="1 min" value={info.load.one != null ? `${info.load.one}%` : "—"} pct={info.load.one} />
             <MetricRow label="5 min" value={info.load.five != null ? `${info.load.five}%` : "—"} pct={info.load.five} />
             <MetricRow label="15 min" value={info.load.fifteen != null ? `${info.load.fifteen}%` : "—"} pct={info.load.fifteen} />
 
             <Divider />
 
-            {/* Memory */}
+            {/* Memory — DC anatomy: "Memory · 38.2%" eyebrow, bar, Used/Total row. */}
             <SectionTitle
-              label="Memory"
-              right={mem?.used_pct != null ? `${mem.used_pct.toFixed(1)}%` : undefined}
+              label={mem?.used_pct != null ? `Memory · ${mem.used_pct.toFixed(1)}%` : "Memory"}
             />
-            <div className="flex items-baseline justify-between mb-[5px]">
-              <span className="text-[12px] text-[var(--cds-alias-typography-color-300)]">
-                Used:{" "}
-                <span
-                  className="text-[var(--cds-alias-typography-color-450)] font-semibold"
-                  style={{ fontFamily: "var(--qz-font-mono)" }}
-                >
-                  {formatBytes(mem?.used_bytes ?? null)}
-                </span>
-              </span>
-            </div>
             <Bar pct={mem?.used_pct ?? null} />
-            <div className="flex items-baseline justify-between mt-[6px] text-[12px] text-[var(--cds-alias-typography-color-300)]">
-              <span>Free: {formatBytes(mem?.free_bytes ?? null)}</span>
-              <span>Total: {formatBytes(mem?.total_bytes ?? null)}</span>
+            <div
+              className="flex justify-between mt-1 text-[11px]"
+              style={{ fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-200)" }}
+            >
+              <span>Used {formatBytes(mem?.used_bytes ?? null)}</span>
+              <span>Total {formatBytes(mem?.total_bytes ?? null)}</span>
             </div>
 
             <Divider />
 
-            {/* Disk usage */}
-            <SectionTitle label="Disk Usage" />
+            {/* Disk usage — DC anatomy: fs · bar · "used / total" per row. */}
+            <SectionTitle label="Disk usage" />
             {info.storage.length === 0 && (
               <div className="text-[12px] text-[var(--cds-alias-typography-color-200)]">No storage data available.</div>
             )}
             {info.storage.map((s) => (
-              <div key={s.filesystem} className="mb-3 last:mb-0">
-                <div className="flex items-baseline justify-between mb-[5px]">
-                  <span
-                    className="text-[12px] text-[var(--cds-alias-typography-color-400)]"
-                    style={{ fontFamily: "var(--qz-font-mono)" }}
-                  >
-                    {s.filesystem}
-                  </span>
-                  <span className="text-[12px] text-[var(--cds-alias-typography-color-300)]">
-                    {formatBytes(s.used_bytes)} / {formatBytes(s.size_bytes)}
-                    {s.used_pct != null && ` (${s.used_pct}%)`}
-                  </span>
+              <div key={s.filesystem} className="flex items-center gap-2 mb-[6px] last:mb-0">
+                <span
+                  className="w-[88px] flex-shrink-0 truncate text-[11px] text-[var(--cds-alias-typography-color-300)]"
+                  style={{ fontFamily: "var(--qz-font-mono)" }}
+                  title={s.filesystem}
+                >
+                  {s.filesystem}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <Bar pct={s.used_pct} />
                 </div>
-                <Bar pct={s.used_pct} />
+                <span
+                  className="w-[96px] flex-shrink-0 text-right text-[11px] text-[var(--cds-alias-typography-color-200)]"
+                  style={{ fontFamily: "var(--qz-font-mono)" }}
+                >
+                  {formatBytes(s.used_bytes)} / {formatBytes(s.size_bytes)}
+                </span>
               </div>
             ))}
           </>

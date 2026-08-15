@@ -18,7 +18,7 @@ const columns: Column<VlanInterface>[] = [
   { key: "description", header: "Description", value: (r) => r.description ?? "", sortable: true },
   {
     key: "addresses",
-    header: "IP Address",
+    header: "IP address",
     value: (r) => r.addresses.join(", "),
     render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
     mono: true,
@@ -101,12 +101,18 @@ export default function VlanPage() {
     ];
   }, [rows]);
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">VLAN</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        802.1Q VLAN sub-interfaces on ethernet parents.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
-      <div>
-        <h2>VLAN Interfaces</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>802.1Q VLAN sub-interfaces</p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && (
         <div className="clr-secondary">Loading VLAN interfaces…</div>
@@ -133,8 +139,9 @@ export default function VlanPage() {
           emptyMessage="No VLAN interfaces configured."
           onRefresh={() => load("refresh")}
           onRowOpen={(row) => setModal({ vlan: row })}
+          headerLeft={headerBlock}
           toolbar={
-            <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+            <Button kind="primary" onClick={() => setModal({})}>
               Create VLAN
             </Button>
           }

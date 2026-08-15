@@ -148,7 +148,7 @@ export function VlanFormModal({
 
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Parent Interface" required>
+          <Field label="Parent interface" required>
             {parents.length > 0 ? (
               <div className="clr-select-wrapper" style={wide}>
                 <select
@@ -201,7 +201,7 @@ export function VlanFormModal({
 
         <div className="clr-form-control" style={{ marginTop: 0 }}>
           <div className="flex items-center justify-between">
-            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP Addresses</label>
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP addresses</label>
             <button type="button" onClick={addAddr} className="btn btn-sm btn-link-neutral">
               <Icon shape="plus" size={12} /> Add Address
             </button>

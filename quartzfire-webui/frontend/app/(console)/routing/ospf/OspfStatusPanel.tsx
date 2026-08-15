@@ -149,7 +149,7 @@ export function OspfStatusPanel() {
         </div>
         <div className="flex flex-col items-end gap-2">
           {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
-          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
+          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
         </div>
       </div>
 

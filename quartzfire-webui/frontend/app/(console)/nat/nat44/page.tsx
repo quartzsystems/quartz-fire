@@ -50,8 +50,8 @@ const staticColumns: Column<StaticNatMapping>[] = [
   { key: "rule", header: "Rule", value: (r) => r.rule, mono: true, sortable: true, width: 80 },
   { key: "description", header: "Description", value: (r) => r.description ?? "", render: (r) => dash(r.description), sortable: true },
   { key: "interface", header: "Interface", value: (r) => r.interface ?? "", render: (r) => dash(r.interface), mono: true, width: 110 },
-  { key: "internal_address", header: "Internal Address", value: (r) => r.internal_address, mono: true },
-  { key: "external_address", header: "External Address", value: (r) => r.external_address, mono: true },
+  { key: "internal_address", header: "Internal address", value: (r) => r.internal_address, mono: true },
+  { key: "external_address", header: "External address", value: (r) => r.external_address, mono: true },
   {
     key: "status",
     header: "Status",
@@ -136,7 +136,7 @@ export default function Nat44Page() {
       <div>
         <h2>NAT44</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          IPv4-to-IPv4 source (SNAT) and destination (DNAT) translation
+          IPv4-to-IPv4 source (SNAT) and destination (DNAT) translation.
         </p>
       </div>
 
@@ -177,7 +177,7 @@ export default function Nat44Page() {
               onRefresh={() => load("refresh")}
               onRowOpen={(row) => setStaticModal({ mapping: row })}
               toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setStaticModal({})}>
+                <Button kind="primary" onClick={() => setStaticModal({})}>
                   Create Mapping
                 </Button>
               }
@@ -200,7 +200,7 @@ export default function Nat44Page() {
               onRefresh={() => load("refresh")}
               onRowOpen={(row) => setModal({ section: tab as NatSection, rule: row })}
               toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({ section: tab as NatSection })}>
+                <Button kind="primary" onClick={() => setModal({ section: tab as NatSection })}>
                   Create Rule
                 </Button>
               }
@@ -213,6 +213,14 @@ export default function Nat44Page() {
               )}
             />
           )}
+
+          <div className="alert alert-info alert-sm">
+            <Icon shape="info-circle" size={14} className="alert-icon" />
+            <div className="alert-text">
+              An unset match address means any, and an unset protocol means all. Destination NAT
+              still needs a firewall rule that allows the translated traffic.
+            </div>
+          </div>
         </div>
       )}
 

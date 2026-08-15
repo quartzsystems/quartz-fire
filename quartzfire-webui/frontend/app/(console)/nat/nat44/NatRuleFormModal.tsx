@@ -203,7 +203,7 @@ export function NatRuleFormModal({
     }
   };
 
-  const ifaceLabel = isSource ? "Outbound Interface" : "Inbound Interface";
+  const ifaceLabel = isSource ? "Outbound interface" : "Inbound interface";
 
   return (
     <ModalShell onClose={onClose} maxWidth={560}>
@@ -221,7 +221,7 @@ export function NatRuleFormModal({
         </datalist>
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Rule Number" required>
+          <Field label="Rule number" required>
             <input
               type="number"
               min={1}
@@ -323,7 +323,7 @@ export function NatRuleFormModal({
                         {hasAliasOptions ? "Select alias…" : "No aliases defined"}
                       </option>
                       {builtinOptions.length > 0 && (
-                        <optgroup label="Interface Networks">
+                        <optgroup label="Interface networks">
                           {builtinOptions.map((o) => (
                             <option key={o.value} value={o.value}>
                               {o.label}
@@ -346,7 +346,7 @@ export function NatRuleFormModal({
               </div>
             </div>
           </Field>
-          <Field label="Source Port">
+          <Field label="Source port">
             <input
               value={sourcePort}
               onChange={(e) => setSourcePort(e.target.value)}
@@ -358,7 +358,7 @@ export function NatRuleFormModal({
         </div>
 
         <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 12 }}>
-          <Field label="Destination Address">
+          <Field label="Destination address">
             <input
               value={destAddress}
               onChange={(e) => setDestAddress(e.target.value)}
@@ -367,7 +367,7 @@ export function NatRuleFormModal({
               style={wideMono}
             />
           </Field>
-          <Field label="Destination Port">
+          <Field label="Destination port">
             <input
               value={destPort}
               onChange={(e) => setDestPort(e.target.value)}
@@ -390,7 +390,7 @@ export function NatRuleFormModal({
         {!masquerade && (
           <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 12 }}>
             <Field
-              label={isSource ? "Translation Address" : "Forward-to Address"}
+              label={isSource ? "Translation address" : "Forward-to address"}
               required
               hint="An IP, CIDR block, or range (192.168.1.10-192.168.1.20)."
             >
@@ -402,7 +402,7 @@ export function NatRuleFormModal({
                 style={wideMono}
               />
             </Field>
-            <Field label="Translation Port">
+            <Field label="Translation port">
               <input
                 value={translationPort}
                 onChange={(e) => setTranslationPort(e.target.value)}

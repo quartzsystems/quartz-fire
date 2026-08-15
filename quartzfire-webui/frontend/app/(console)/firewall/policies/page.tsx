@@ -89,7 +89,7 @@ export default function FirewallPoliciesPage() {
     },
     {
       key: "used",
-      header: "In Use",
+      header: "In use",
       value: (p) => usedBy(p).length,
       render: (p) => {
         const n = usedBy(p).length;
@@ -113,14 +113,20 @@ export default function FirewallPoliciesPage() {
     },
   ];
 
+  // Title block — standalone while loading/errored, in the DataTable's
+  // header row (headerLeft) once the grid is up, per the DC reference.
+  const header = (
+    <div>
+      <h2>Policies</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Named TCP/UDP port sets (HTTP, DNS, …) applied by firewall rules.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Policies</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Named TCP/UDP port sets (HTTP, DNS, …) applied by firewall rules
-        </p>
-      </div>
+      {status !== "ready" && header}
 
       {status === "loading" && <div className="clr-secondary">Loading policies…</div>}
       {status === "error" && (
@@ -141,10 +147,11 @@ export default function FirewallPoliciesPage() {
           storageKey="firewall-policies"
           searchPlaceholder="Search policies…"
           emptyMessage="No policies defined."
+          headerLeft={header}
           onRefresh={() => load("refresh")}
           onRowOpen={(p) => setModal({ policy: p })}
           toolbar={
-            <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+            <Button kind="primary" onClick={() => setModal({})}>
               Create Policy
             </Button>
           }

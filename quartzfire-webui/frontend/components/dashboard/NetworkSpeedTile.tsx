@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatRate } from "@/lib/format";
-import { Icon } from "@/components/ui/Icon";
 import { ChartTooltip, DOWN_COLOR, UP_COLOR } from "@/components/ui/ChartTooltip";
 import { useInterfaceStats } from "./useInterfaceStats";
 import { LiveButton } from "./LiveButton";
@@ -25,12 +24,12 @@ function niceStep(x: number): number {
   return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p;
 }
 
-/// Compact bits/sec axis label, e.g. 3_000_000 → "3.0M".
+/// Compact bits/sec axis label with units, per the DC reference ("88 Mb/s").
 function formatRateShort(bits: number): string {
-  if (bits >= 1e9) return `${(bits / 1e9).toFixed(1)}G`;
-  if (bits >= 1e6) return `${(bits / 1e6).toFixed(1)}M`;
-  if (bits >= 1e3) return `${(bits / 1e3).toFixed(0)}K`;
-  return `${Math.round(bits)}`;
+  if (bits >= 1e9) return `${(bits / 1e9).toFixed(1)} Gb/s`;
+  if (bits >= 1e6) return `${(bits / 1e6).toFixed(0)} Mb/s`;
+  if (bits >= 1e3) return `${(bits / 1e3).toFixed(0)} Kb/s`;
+  return `${Math.round(bits)} b/s`;
 }
 
 /// Seconds-ago label, e.g. 90 → "1m30s", 0 → "now".
@@ -64,7 +63,7 @@ function SpeedGraph({ rx, tx }: { rx: number[]; tx: number[] }) {
   }, []);
 
   const { w, h } = size;
-  const PAD_L = 40;
+  const PAD_L = 52;
   const PAD_R = 10;
   const PAD_T = 10;
   const PAD_B = 20;
@@ -131,7 +130,9 @@ function SpeedGraph({ rx, tx }: { rx: number[]; tx: number[] }) {
         })}
         {/* baseline + top max + x labels */}
         <line x1={PAD_L} x2={w - PAD_R} y1={PAD_T + plotH} y2={PAD_T + plotH} stroke="var(--cds-alias-object-border-subtle)" strokeWidth={1} />
-        <text x={PAD_L - 6} y={PAD_T + plotH + 3} textAnchor="end" fontSize={9} fill="var(--cds-alias-typography-color-200)" fontFamily="var(--qz-font-mono)">0</text>
+        <text x={PAD_L - 6} y={PAD_T + plotH + 3} textAnchor="end" fontSize={9} fill="var(--cds-alias-typography-color-200)" fontFamily="var(--qz-font-mono)">
+          {`0 ${formatRateShort(bitsMax).split(" ").slice(1).join(" ") || "b/s"}`}
+        </text>
         <text x={PAD_L - 6} y={PAD_T + 3} textAnchor="end" fontSize={9} fill="var(--cds-alias-typography-color-200)" fontFamily="var(--qz-font-mono)">
           {formatRateShort(bitsMax)}
         </text>
@@ -249,20 +250,18 @@ export function NetworkSpeedTile() {
         )}
         <span className="ml-auto flex items-center gap-3">
           <span
-            className="inline-flex items-center gap-1 text-[12px] font-semibold"
+            className="text-[12px] font-semibold"
             style={{ color: RX_COLOR, fontFamily: "var(--qz-font-mono)" }}
             title="Download"
           >
-            <Icon shape="arrow" dir="down" size={12} />
-            {formatRate(curRx)}
+            ↓ {formatRate(curRx)}
           </span>
           <span
-            className="inline-flex items-center gap-1 text-[12px] font-semibold"
+            className="text-[12px] font-semibold"
             style={{ color: TX_COLOR, fontFamily: "var(--qz-font-mono)" }}
             title="Upload"
           >
-            <Icon shape="arrow" dir="up" size={12} />
-            {formatRate(curTx)}
+            ↑ {formatRate(curTx)}
           </span>
           <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
         </span>

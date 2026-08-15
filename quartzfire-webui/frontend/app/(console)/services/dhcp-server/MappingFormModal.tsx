@@ -143,7 +143,7 @@ export function MappingFormModal({
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="IP Address" hint="The fixed address handed to this client.">
+          <Field label="IP address" hint="The fixed address handed to this client.">
             <input
               value={ipAddress}
               onChange={(e) => setIpAddress(e.target.value)}
@@ -152,7 +152,7 @@ export function MappingFormModal({
               style={mono}
             />
           </Field>
-          <Field label="MAC Address">
+          <Field label="MAC address">
             <input
               value={macAddress}
               onChange={(e) => setMacAddress(e.target.value)}

@@ -38,7 +38,7 @@ const columns: Column<StaticRoute>[] = [
   },
   {
     key: "via",
-    header: "Next Hop",
+    header: "Next hop",
     value: (r) => r.via ?? "",
     render: (r) => (r.kind === "blackhole" ? "drop" : dash(r.via)),
     mono: true,
@@ -117,7 +117,7 @@ export default function StaticRoutesPage() {
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
         <h2 style={{ margin: 0 }}>Static Routes</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Manually configured routes via a gateway, an interface, or a blackhole
+          Manually configured routes via a gateway, an interface, or a blackhole.
         </p>
       </div>
 
@@ -154,7 +154,7 @@ export default function StaticRoutesPage() {
               onRefresh={() => load("refresh")}
               onRowOpen={(row) => setModal({ route: row })}
               toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+                <Button kind="primary" size="sm" onClick={() => setModal({})}>
                   Create Route
                 </Button>
               }

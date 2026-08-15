@@ -82,6 +82,28 @@ export default function L2tpPage() {
     load();
   }, [load]);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Header "Add" control follows the active tab (DC pattern: one primary
+  // button in the page-header row whose label tracks the tab).
+  const addAction: { label: string; onClick: () => void } | null =
+    tab === "users"
+      ? { label: "Add User", onClick: () => setUserModal({}) }
+      : tab === "pools"
+        ? { label: "Add Pool", onClick: () => setPoolModal({}) }
+        : tab === "radius"
+          ? { label: "Add Server", onClick: () => setRadiusModal({}) }
+          : null;
+
   const saved = (msg: string) => {
     setUserModal(null);
     setPoolModal(null);
@@ -120,11 +142,21 @@ export default function L2tpPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2>L2TP</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          L2TP/IPsec remote-access server — dial-in VPN for roaming clients
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">L2TP</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            L2TP/IPsec remote-access server — dial-in VPN for roaming clients.
+          </p>
+        </div>
+        {status === "ready" && (
+          <>
+            <Button kind="outline" onClick={refresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            {addAction && <Button kind="primary" onClick={addAction.onClick}>{addAction.label}</Button>}
+          </>
+        )}
       </div>
 
       {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading L2TP configuration…</div>}
@@ -169,9 +201,7 @@ export default function L2tpPage() {
               storageKey="vpn-l2tp-users"
               searchPlaceholder="Search users…"
               emptyMessage="No L2TP users configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setUserModal({ user: row })}
-              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setUserModal({})}>Add User</Button>}
               actions={(row) => <RowActions label={`user ${row.username}`} onEdit={() => setUserModal({ user: row })} onDelete={() => removeUser(row)} />}
             />
           )}
@@ -184,9 +214,7 @@ export default function L2tpPage() {
               storageKey="vpn-l2tp-pools"
               searchPlaceholder="Search pools…"
               emptyMessage="No IP pools configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setPoolModal({ pool: row })}
-              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setPoolModal({})}>Add Pool</Button>}
               actions={(row) => <RowActions label={`pool ${row.name}`} onEdit={() => setPoolModal({ pool: row })} onDelete={() => removePool(row)} />}
             />
           )}
@@ -199,9 +227,7 @@ export default function L2tpPage() {
               storageKey="vpn-l2tp-radius"
               searchPlaceholder="Search servers…"
               emptyMessage="No RADIUS servers configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setRadiusModal({ server: row })}
-              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setRadiusModal({})}>Add Server</Button>}
               actions={(row) => <RowActions label={`RADIUS server ${row.address}`} onEdit={() => setRadiusModal({ server: row })} onDelete={() => removeRadius(row)} />}
             />
           )}

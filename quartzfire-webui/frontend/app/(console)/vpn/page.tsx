@@ -24,7 +24,7 @@ export default function VpnPage() {
     <div className="flex flex-col gap-4">
       <div>
         <h2>VPN</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>Site-to-site and remote-access tunnels</p>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>Site-to-site and remote-access tunnels.</p>
       </div>
 
       <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>

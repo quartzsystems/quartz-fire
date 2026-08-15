@@ -45,6 +45,8 @@ export function DataTable<T>({
   filters = [],
   searchPlaceholder = "Search…",
   emptyMessage = "No rows.",
+  headerLeft,
+  subHeader,
   toolbar,
   actions,
   onRefresh,
@@ -59,6 +61,13 @@ export function DataTable<T>({
   filters?: FilterDef<T>[];
   searchPlaceholder?: string;
   emptyMessage?: string;
+  /** Page title block (h2 + sub-line). When set, the toolbar renders as the
+   *  page-header row per the DC reference: title left, search + filters +
+   *  Columns + Refresh + `toolbar` right-aligned beside it. */
+  headerLeft?: React.ReactNode;
+  /** Rendered between the page-header/toolbar row and the grid — the DC slot
+   *  for alerts and tab strips. */
+  subHeader?: React.ReactNode;
   /** Right-aligned controls (e.g. a Create button). */
   toolbar?: React.ReactNode;
   /** Trailing per-row actions cell (e.g. edit/delete). Does not trigger row selection. */
@@ -408,23 +417,17 @@ export function DataTable<T>({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative">
-          <Icon
-            shape="search"
-            size={14}
-            className="absolute left-[9px] top-1/2 -translate-y-1/2"
-            style={{ color: "var(--cds-alias-typography-color-200)" }}
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={searchPlaceholder}
-            className="clr-input"
-            style={{ paddingLeft: 30, width: 240, maxWidth: 240 }}
-          />
-        </div>
+      {/* Toolbar — with headerLeft this IS the page-header row (DC anatomy):
+          title block left, controls right-aligned beside it. */}
+      <div className={headerLeft ? "flex items-start gap-2 flex-wrap" : "flex items-center gap-3 flex-wrap"}>
+        {headerLeft && <div className="mr-auto">{headerLeft}</div>}
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={searchPlaceholder}
+          className="clr-input"
+          style={{ width: 240, maxWidth: 240 }}
+        />
 
         {filters.map((f) => (
           <div key={f.key} className="flex items-center gap-2">
@@ -449,12 +452,12 @@ export function DataTable<T>({
           </div>
         ))}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className={headerLeft ? "flex items-center gap-2" : "ml-auto flex items-center gap-2"}>
           {/* Columns menu */}
           <div className="clr-dropdown" ref={menuRef}>
-            <Button kind="secondary" size="sm" icon="grid-view" onClick={() => setMenuOpen((o) => !o)}>
+            <button type="button" className="btn" onClick={() => setMenuOpen((o) => !o)}>
               Columns
-            </Button>
+            </button>
             {menuOpen && (
               <div className="dropdown-menu right" style={{ minWidth: 200 }}>
                 <div className="dropdown-header">Show Columns</div>
@@ -500,13 +503,15 @@ export function DataTable<T>({
           </div>
 
           {onRefresh && (
-            <Button kind="secondary" size="sm" icon="refresh" onClick={handleRefresh} disabled={refreshing}>
+            <button type="button" className="btn" onClick={handleRefresh} disabled={refreshing}>
               {refreshing ? "Refreshing…" : "Refresh"}
-            </Button>
+            </button>
           )}
           {toolbar}
         </div>
       </div>
+
+      {subHeader}
 
       {/* Datagrid */}
       <div className="datagrid" style={{ userSelect: isDragging ? "none" : "auto" }}>
@@ -636,11 +641,8 @@ export function DataTable<T>({
                     )}
                   </th>
                 ))}
-                {actions && (
-                  <th style={{ width: 90 }} className="text-right">
-                    Actions
-                  </th>
-                )}
+                {/* Actions column carries no header label, per the DC reference. */}
+                {actions && <th style={{ width: 90 }} className="text-right" aria-label="Actions" />}
               </tr>
             </thead>
             <tbody>
@@ -707,11 +709,11 @@ export function DataTable<T>({
           <span className="datagrid-footer-description">
             {footerHint ??
               (onRowOpen
-                ? "Double-click a row to edit it. Drag headers to reorder columns."
-                : "Drag headers to reorder columns; drag a header edge to resize.")}
+                ? "Double-click a row to edit · click a header to sort · drag headers to reorder · drag a header edge to resize"
+                : "Click a header to sort · drag headers to reorder · drag a header edge to resize")}
           </span>
           <span>
-            {displayed.length} {displayed.length === 1 ? "item" : "items"}
+            {displayed.length} {displayed.length === 1 ? "Item" : "Items"}
           </span>
         </div>
       </div>

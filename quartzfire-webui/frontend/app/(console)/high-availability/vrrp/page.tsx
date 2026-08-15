@@ -33,7 +33,7 @@ function groupColumns(): Column<VrrpGroup>[] {
     { key: "priority", header: "Priority", value: (r) => r.priority ?? 100, mono: true, sortable: true, width: 90 },
     {
       key: "addresses",
-      header: "Virtual Addresses",
+      header: "Virtual addresses",
       value: (r) => r.addresses.map((a) => a.address).join(", "),
       render: (r) =>
         r.addresses.length ? (
@@ -109,6 +109,26 @@ export default function VrrpPage() {
 
   const groupNames = useMemo(() => (cfg?.groups ?? []).map((g) => g.name), [cfg]);
 
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Header "Add" control follows the active tab (DC pattern: one primary
+  // button in the page-header row whose label tracks the tab).
+  const addAction: { label: string; onClick: () => void } | null =
+    section === "groups"
+      ? { label: "Add Group", onClick: () => setGroupModal({}) }
+      : section === "sync-groups"
+        ? { label: "Add Sync Group", onClick: () => setSyncModal({}) }
+        : null;
+
   const saved = (msg: string) => {
     setGroupModal(null);
     setSyncModal(null);
@@ -137,11 +157,21 @@ export default function VrrpPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h2>VRRP</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Virtual Router Redundancy Protocol — a floating gateway that fails over between routers
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">VRRP</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Virtual Router Redundancy Protocol — a floating gateway that fails over between routers.
+          </p>
+        </div>
+        {status === "ready" && (
+          <>
+            <Button kind="outline" onClick={refresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            {addAction && <Button kind="primary" onClick={addAction.onClick}>{addAction.label}</Button>}
+          </>
+        )}
       </div>
 
       {status === "loading" && <div className="clr-secondary">Loading VRRP configuration…</div>}
@@ -176,13 +206,7 @@ export default function VrrpPage() {
               storageKey="ha-vrrp-groups"
               searchPlaceholder="Search groups…"
               emptyMessage="No VRRP groups configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setGroupModal({ group: row })}
-              toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setGroupModal({})}>
-                  Add Group
-                </Button>
-              }
               actions={(row) => (
                 <RowActions label={`group ${row.name}`} onEdit={() => setGroupModal({ group: row })} onDelete={() => removeGroup(row)} />
               )}
@@ -197,13 +221,7 @@ export default function VrrpPage() {
               storageKey="ha-vrrp-sync-groups"
               searchPlaceholder="Search sync-groups…"
               emptyMessage="No VRRP sync-groups configured."
-              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setSyncModal({ group: row })}
-              toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setSyncModal({})}>
-                  Add Sync Group
-                </Button>
-              }
               actions={(row) => (
                 <RowActions label={`sync-group ${row.name}`} onEdit={() => setSyncModal({ group: row })} onDelete={() => removeSync(row)} />
               )}

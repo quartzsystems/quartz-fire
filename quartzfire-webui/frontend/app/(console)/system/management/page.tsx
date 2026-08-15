@@ -227,11 +227,16 @@ export default function ManagementPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Management</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Quartz Command cloud management — enrollment and the control channel
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">Management</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Enrollment into Quartz Command — fleet identity and the persistent mTLS control channel.
+          </p>
+        </div>
+        <button type="button" className="btn" onClick={() => void loadStatus()}>
+          Refresh
+        </button>
       </div>
 
       {phase === "loading" && <div className="clr-secondary">Loading cloud management state…</div>}
@@ -263,11 +268,7 @@ export default function ManagementPage() {
 
           <Section
             title="Status"
-            action={
-              <Button kind="secondary" size="sm" icon="refresh" onClick={() => void loadStatus()}>
-                Refresh
-              </Button>
-            }
+            action={live?.control === "connected" ? <Pill tone="success">Connected</Pill> : undefined}
           >
             <InfoRow label="Enrollment">
               {enrolled ? <Pill tone="success">Enrolled</Pill> : <Pill>Not enrolled</Pill>}
@@ -307,7 +308,7 @@ export default function ManagementPage() {
                 </InfoRow>
               </>
             )}
-            <InfoRow label="Control Channel">
+            <InfoRow label="Control channel">
               <span className="flex items-center gap-2 flex-wrap">
                 {controlBadge(live?.control)}
                 {live?.control === "connected" && live.control_since_unix && (
@@ -318,7 +319,7 @@ export default function ManagementPage() {
               </span>
             </InfoRow>
             {live?.last_error && (
-              <InfoRow label="Last Error">
+              <InfoRow label="Last error">
                 <span style={{ color: "var(--cds-alias-status-danger)" }}>{live.last_error}</span>
               </InfoRow>
             )}
@@ -327,7 +328,7 @@ export default function ManagementPage() {
           {!enrolled && (
             <Section title="Enroll">
               <div className="clr-form-control">
-                <label className="clr-control-label" htmlFor="enroll-token">Enrollment Token</label>
+                <label className="clr-control-label" htmlFor="enroll-token">Enrollment token</label>
                 <textarea
                   id="enroll-token"
                   className="clr-textarea"
@@ -393,7 +394,7 @@ export default function ManagementPage() {
             </p>
             <div className="flex flex-col gap-3 pb-2 max-w-[560px]">
               <div className="clr-form-control">
-                <label className="clr-control-label">Gateway Host</label>
+                <label className="clr-control-label">Gateway host</label>
                 <input
                   className="clr-input"
                   style={{ fontFamily: "var(--qz-font-mono)", maxWidth: "none" }}
@@ -416,7 +417,7 @@ export default function ManagementPage() {
                 <p className="clr-subtext" style={{ marginTop: 6, marginBottom: 0 }}>Default 443.</p>
               </div>
               <div className="clr-form-control">
-                <label className="clr-control-label">CA Certificate</label>
+                <label className="clr-control-label">CA certificate</label>
                 <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
                   <select
                     className="clr-select"

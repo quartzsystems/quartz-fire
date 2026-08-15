@@ -88,7 +88,7 @@ export function BgpGlobalPanel({ live, onSaved }: { live: BgpGlobal; onSaved: (m
   const netEditor = (rows: ListRow[], setRows: (u: (p: ListRow[]) => ListRow[]) => void, placeholder: string) => (
     <div className="clr-form-control" style={{ marginTop: 0 }}>
       <div className="flex items-center justify-between">
-        <label className="clr-control-label" style={{ marginBottom: 0 }}>Advertised Networks</label>
+        <label className="clr-control-label" style={{ marginBottom: 0 }}>Advertised networks</label>
         <button
           type="button"
           onClick={() => setRows((p) => [...p, { key: nextKey(), value: "" }])}

@@ -148,7 +148,7 @@ export default function ConfigSyncPage() {
       <div>
         <h2>Config Sync</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Replicate selected config sections from this primary to a secondary on every commit
+          Replicate chosen configuration sections from this firewall to its standby peer.
         </p>
       </div>
 

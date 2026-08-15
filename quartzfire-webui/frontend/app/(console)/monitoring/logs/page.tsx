@@ -16,7 +16,6 @@
 // it no longer appears in.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
@@ -87,12 +86,12 @@ const LOG_COLUMNS: LogCol[] = [
   { key: "source", header: "Source", width: 84, cell: (r) => <SourcePill source={r.source} /> },
   { key: "action", header: "Action", width: 88, cell: (r) => <ActionPill action={r.action} /> },
   { key: "event", header: "Event", ellipsis: true, cell: (r) => r.summary, title: (r) => r.summary },
-  { key: "ifin", header: "In If", width: 96, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.ifIn ?? dash, title: (r) => r.ifIn },
+  { key: "ifin", header: "In if", width: 96, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.ifIn ?? dash, title: (r) => r.ifIn },
   { key: "src", header: "From", width: 128, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.src ?? dash },
-  { key: "spt", header: "Src Port", width: 62, className: "mono text-[12px]", cell: (r) => (r.spt != null ? r.spt : dash) },
-  { key: "ifout", header: "Out If", width: 96, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.ifOut ?? dash, title: (r) => r.ifOut },
+  { key: "spt", header: "Src port", width: 62, className: "mono text-[12px]", cell: (r) => (r.spt != null ? r.spt : dash) },
+  { key: "ifout", header: "Out if", width: 96, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.ifOut ?? dash, title: (r) => r.ifOut },
   { key: "dst", header: "To", width: 128, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.dst ?? dash },
-  { key: "dpt", header: "Dst Port", width: 62, className: "mono text-[12px]", cell: (r) => (r.dpt != null ? r.dpt : dash) },
+  { key: "dpt", header: "Dst port", width: 62, className: "mono text-[12px]", cell: (r) => (r.dpt != null ? r.dpt : dash) },
   { key: "proto", header: "Proto", width: 56, className: "mono text-[12px]", cell: (r) => r.proto ?? "—" },
   { key: "detail", header: "Detail", width: 170, className: "text-[12px] text-[var(--qz-fg-3)]", ellipsis: true, cell: (r) => r.detail ?? dash, title: (r) => r.detail ?? "" },
 ];
@@ -339,7 +338,7 @@ export default function UnifiedLogsPage() {
       <div>
         <h2>Logs</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Every traffic and security event in one live, time-sorted pane — firewall, content filtering, and IPS / App Control / Geolocation alerts
+          One stream across the firewall, IPS, application control, geolocation, and content filtering.
         </p>
       </div>
 
@@ -347,21 +346,13 @@ export default function UnifiedLogsPage() {
         <div className="flex flex-col gap-3">
           {/* Controls */}
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative">
-              <Icon
-                shape="search"
-                size={14}
-                className="absolute left-[9px] top-1/2 -translate-y-1/2"
-                style={{ color: "var(--cds-alias-typography-color-200)" }}
-              />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Filter logs…"
-                className="clr-input"
-                style={{ paddingLeft: 30, width: 240, maxWidth: 240 }}
-              />
-            </div>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter logs…"
+              className="clr-input"
+              style={{ width: 240, maxWidth: 240 }}
+            />
 
             <Segmented
               items={[
@@ -375,13 +366,13 @@ export default function UnifiedLogsPage() {
 
             <div className="ml-auto flex items-center gap-3">
               <ColumnsMenu vis={vis} />
-              <Button kind="secondary" size="sm" icon="refresh" onClick={refresh}>
+              <Button kind="outline" size="sm" onClick={refresh}>
                 Refresh
               </Button>
-              <Button kind="secondary" size="sm" icon={paused ? "play" : "pause"} onClick={togglePause}>
+              <Button kind="outline" size="sm" onClick={togglePause}>
                 {paused ? "Resume" : "Pause"}
               </Button>
-              <Button kind="secondary" size="sm" icon="times" onClick={clear}>
+              <Button kind="outline" size="sm" onClick={clear}>
                 Clear
               </Button>
               <span className="inline-flex items-center gap-[6px] text-[12px] text-[var(--qz-fg-4)]">

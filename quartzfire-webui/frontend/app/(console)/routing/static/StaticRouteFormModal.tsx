@@ -206,7 +206,7 @@ export function StaticRouteFormModal({
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           {kind === "gateway" && (
-            <Field label="Egress Interface" hint="Optional — pin the next-hop to an interface.">
+            <Field label="Egress interface" hint="Optional — pin the next-hop to an interface.">
               <input
                 list="static-route-interfaces"
                 value={iface}

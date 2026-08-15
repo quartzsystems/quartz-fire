@@ -116,7 +116,7 @@ export default function RoutingPolicyPage() {
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
         <h2 style={{ margin: 0 }}>Routing Policy</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Prefix-lists and route-maps for filtering and shaping routes — referenced by BGP
+          Prefix-lists and route-maps for filtering and shaping routes — referenced by BGP.
         </p>
       </div>
 
@@ -152,7 +152,7 @@ export default function RoutingPolicyPage() {
                 onRefresh={() => load("refresh")}
                 onRowOpen={(row) => setPrefixModal({ list: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon="plus" onClick={() => setPrefixModal({})}>
+                  <Button kind="primary" size="sm" onClick={() => setPrefixModal({})}>
                     Create Prefix-List
                   </Button>
                 }
@@ -173,7 +173,7 @@ export default function RoutingPolicyPage() {
                 onRefresh={() => load("refresh")}
                 onRowOpen={(row) => setRouteMapModal({ map: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon="plus" onClick={() => setRouteMapModal({})}>
+                  <Button kind="primary" size="sm" onClick={() => setRouteMapModal({})}>
                     Create Route-Map
                   </Button>
                 }

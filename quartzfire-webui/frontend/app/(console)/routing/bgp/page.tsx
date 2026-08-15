@@ -48,7 +48,7 @@ function peerColumns(showPeerGroup: boolean): Column<BgpPeer>[] {
   const cols: Column<BgpPeer>[] = [
     {
       key: "name",
-      header: showPeerGroup ? "Neighbor" : "Peer Group",
+      header: showPeerGroup ? "Neighbor" : "Peer group",
       value: (r) => r.name,
       render: (r) => (
         <span>
@@ -62,11 +62,11 @@ function peerColumns(showPeerGroup: boolean): Column<BgpPeer>[] {
     { key: "remote_as", header: "Remote AS", value: (r) => r.remote_as ?? "", render: (r) => dash(r.remote_as), mono: true, sortable: true, width: 120 },
   ];
   if (showPeerGroup) {
-    cols.push({ key: "peer_group", header: "Peer Group", value: (r) => r.peer_group ?? "", render: (r) => dash(r.peer_group), mono: true, sortable: true, width: 130 });
+    cols.push({ key: "peer_group", header: "Peer group", value: (r) => r.peer_group ?? "", render: (r) => dash(r.peer_group), mono: true, sortable: true, width: 130 });
   }
   cols.push(
-    { key: "update_source", header: "Update Source", value: (r) => r.update_source ?? "", render: (r) => dash(r.update_source), mono: true, width: 130 },
-    { key: "afi", header: "Address Families", value: (r) => ADDRESS_FAMILIES.filter((af) => r.afi[af].enabled).join(","), render: (r) => <AfBadges peer={r} />, width: 160 },
+    { key: "update_source", header: "Update source", value: (r) => r.update_source ?? "", render: (r) => dash(r.update_source), mono: true, width: 130 },
+    { key: "afi", header: "Address families", value: (r) => ADDRESS_FAMILIES.filter((af) => r.afi[af].enabled).join(","), render: (r) => <AfBadges peer={r} />, width: 160 },
     {
       key: "status",
       header: "Status",
@@ -154,7 +154,7 @@ export default function BgpPage() {
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
         <h2 style={{ margin: 0 }}>BGP</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Border Gateway Protocol — underlay peering and the L2VPN-EVPN overlay for a spine/leaf fabric
+          Border Gateway Protocol — underlay peering and the L2VPN-EVPN overlay for a spine/leaf fabric.
         </p>
       </div>
 
@@ -196,7 +196,7 @@ export default function BgpPage() {
                 onRefresh={() => load("refresh")}
                 onRowOpen={(row) => setNeighborModal({ peer: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon="plus" onClick={() => setNeighborModal({})}>
+                  <Button kind="primary" size="sm" onClick={() => setNeighborModal({})}>
                     Add Neighbor
                   </Button>
                 }
@@ -217,7 +217,7 @@ export default function BgpPage() {
                 onRefresh={() => load("refresh")}
                 onRowOpen={(row) => setGroupModal({ peer: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon="plus" onClick={() => setGroupModal({})}>
+                  <Button kind="primary" size="sm" onClick={() => setGroupModal({})}>
                     Add Peer-Group
                   </Button>
                 }

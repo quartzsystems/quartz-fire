@@ -164,14 +164,14 @@ function SettingsTab({
             </span>
             <div className="ml-auto flex items-center gap-2">
               <StatusBadge status={status} />
-              <Button kind="secondary" size="sm" icon="refresh" onClick={onRefresh}>
+              <Button kind="outline" size="sm" onClick={onRefresh}>
                 Refresh
               </Button>
             </div>
           </div>
 
           <div className="clr-form-control" style={{ marginTop: 0 }}>
-            <label className="clr-control-label">Scan Mode</label>
+            <label className="clr-control-label">Scan mode</label>
             <div className="flex items-center gap-4">
               <Segmented
                 items={[
@@ -201,7 +201,7 @@ function SettingsTab({
               </colgroup>
               <thead>
                 <tr>
-                  <th>Threat Level</th>
+                  <th>Threat level</th>
                   <th>Action</th>
                   <th style={{ textAlign: "center" }}>Alarm</th>
                   <th style={{ textAlign: "center" }}>Log</th>
@@ -354,7 +354,7 @@ function SettingsTab({
         <div className="card-header">Signature Updates</div>
         <div className="card-block flex flex-col gap-3">
           <div className="clr-form-control" style={{ marginTop: 0 }}>
-            <label className="clr-control-label">Update Server</label>
+            <label className="clr-control-label">Update server</label>
             <div className="flex items-center gap-4">
               <input
                 value={draft.update_url ?? ""}
@@ -782,7 +782,7 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
         </div>
         <div className="ml-auto flex items-center gap-3">
           <ColumnsMenu vis={vis} />
-          <Button kind="secondary" size="sm" icon="refresh" onClick={() => { clear(); setStream("connecting"); setStreamGen((g) => g + 1); }}>
+          <Button kind="outline" size="sm" onClick={() => { clear(); setStream("connecting"); setStreamGen((g) => g + 1); }}>
             Refresh
           </Button>
           <Button kind="secondary" size="sm" icon={paused ? "play" : "pause"} onClick={togglePause}>
@@ -940,7 +940,7 @@ export default function IntrusionPreventionPage() {
       <div>
         <h2>Intrusion Prevention</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Inline traffic inspection (Suricata) for firewall rules with IPS enabled
+          Signature inspection for traffic on rules that opt in — verdicts by threat level.
         </p>
       </div>
 

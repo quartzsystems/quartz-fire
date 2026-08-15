@@ -171,7 +171,7 @@ function ScheduleRebootModal({
       />
       <div className="flex flex-col gap-4">
         <div className="clr-form-control">
-          <label className="clr-control-label">Reboot At</label>
+          <label className="clr-control-label">Reboot at</label>
           <input
             type="datetime-local"
             value={when}
@@ -640,7 +640,7 @@ function FactoryResetModal({
           below to confirm.
         </p>
         <div className="clr-form-control">
-          <label className="clr-control-label" htmlFor="factory-reset-phrase">Confirmation Phrase</label>
+          <label className="clr-control-label" htmlFor="factory-reset-phrase">Confirmation phrase</label>
           <input
             id="factory-reset-phrase"
             value={phrase}
@@ -719,9 +719,9 @@ export default function MaintenancePage() {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h2>Maintenance</h2>
+        <h2 className="m-0">Maintenance</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Configuration backup and restore, power control, and system image upgrades
+          Configuration backups, power, system images, and the factory-reset escape hatch.
         </p>
       </div>
 
@@ -867,7 +867,7 @@ export default function MaintenancePage() {
                   <thead>
                     <tr>
                       <th>Image</th>
-                      <th style={{ width: 130 }}>Default Boot</th>
+                      <th style={{ width: 130 }}>Default boot</th>
                       <th style={{ width: 110 }}>Running</th>
                       <th className="right" style={{ width: 150 }}>Actions</th>
                     </tr>

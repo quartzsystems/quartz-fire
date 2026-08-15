@@ -49,7 +49,7 @@ export function IpsecStatusPanel() {
         onRefresh={reload}
         tiles={
           <>
-            <StatTile label="Security Associations" value={String(total)} />
+            <StatTile label="Security associations" value={String(total)} />
             <StatTile label="Established" value={`${up}/${total}`} sub="up / total" />
           </>
         }

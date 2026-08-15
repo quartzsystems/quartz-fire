@@ -16,7 +16,7 @@ const columns: Column<LoopbackInterface>[] = [
   { key: "description", header: "Description", value: (r) => r.description ?? "", sortable: true },
   {
     key: "addresses",
-    header: "IP Address",
+    header: "IP address",
     value: (r) => r.addresses.join(", "),
     render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
     mono: true,
@@ -72,12 +72,19 @@ export default function LoopbackPage() {
   // when it's absent from the config.
   const loMissing = !rows.some((r) => r.name === "lo");
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">Loopback</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Stable local addressing — VyOS has exactly one loopback node,{" "}
+        <span style={{ fontFamily: "var(--qz-font-mono)" }}>lo</span>.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
-      <div>
-        <h2>Loopback Interfaces</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>Loopback interfaces for stable local addressing</p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && (
         <div className="clr-secondary">Loading loopback interfaces…</div>
@@ -104,9 +111,10 @@ export default function LoopbackPage() {
           emptyMessage="Loopback lo is not in the config yet — configure it to add addresses."
           onRefresh={() => load("refresh")}
           onRowOpen={(row) => setModal({ lo: row })}
+          headerLeft={headerBlock}
           toolbar={
             loMissing ? (
-              <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+              <Button kind="primary" onClick={() => setModal({})}>
                 Configure lo
               </Button>
             ) : undefined

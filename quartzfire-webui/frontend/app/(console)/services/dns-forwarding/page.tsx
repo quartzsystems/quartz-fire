@@ -14,7 +14,7 @@ const domainColumns: Column<DnsForwardingDomain>[] = [
   { key: "name", header: "Domain", value: (r) => r.name, mono: true, sortable: true },
   {
     key: "name_servers",
-    header: "Name Servers",
+    header: "Name servers",
     value: (r) => r.name_servers.join(", "),
     render: (r) => (r.name_servers.length ? r.name_servers.join(", ") : "—"),
     mono: true,
@@ -82,7 +82,7 @@ export default function DnsForwardingPage() {
       <div>
         <h2>DNS Forwarding</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Recursive DNS forwarder / cache configuration
+          Recursive DNS forwarder and cache for the networks behind this firewall.
         </p>
       </div>
 
@@ -104,7 +104,7 @@ export default function DnsForwardingPage() {
             <div className="card-header">
               Forwarder Settings
               <span style={{ marginLeft: "auto" }}>
-                <Button kind="secondary" size="sm" icon="pencil" onClick={() => setSettingsModal(true)}>
+                <Button kind="secondary" size="sm" onClick={() => setSettingsModal(true)}>
                   Edit Settings
                 </Button>
               </span>
@@ -113,13 +113,13 @@ export default function DnsForwardingPage() {
               className="card-block"
               style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 24px", fontSize: 13 }}
             >
-              <InfoRow label="Listen Addresses"><MonoList items={data.listen_addresses} /></InfoRow>
-              <InfoRow label="Allow From"><MonoList items={data.allow_from} /></InfoRow>
-              <InfoRow label="Upstream Name Servers"><MonoList items={data.name_servers} /></InfoRow>
-              <InfoRow label="Use System Name Servers">
+              <InfoRow label="Listen addresses"><MonoList items={data.listen_addresses} /></InfoRow>
+              <InfoRow label="Allow from"><MonoList items={data.allow_from} /></InfoRow>
+              <InfoRow label="Upstream name servers"><MonoList items={data.name_servers} /></InfoRow>
+              <InfoRow label="Use system name servers">
                 <span className={data.system ? "badge badge-ok" : "badge badge-muted"}>{data.system ? "Yes" : "No"}</span>
               </InfoRow>
-              <InfoRow label="Cache Size">
+              <InfoRow label="Cache size">
                 <span style={{ fontFamily: "var(--qz-font-mono)" }}>{data.cache_size ?? "10000 (default)"}</span>
               </InfoRow>
               <InfoRow label="DNSSEC">
@@ -142,7 +142,7 @@ export default function DnsForwardingPage() {
               onRefresh={() => load("refresh")}
               onRowOpen={(row) => setDomainModal({ domain: row })}
               toolbar={
-                <Button kind="primary" size="sm" icon="plus" onClick={() => setDomainModal({})}>
+                <Button kind="primary" size="sm" onClick={() => setDomainModal({})}>
                   Create Domain
                 </Button>
               }

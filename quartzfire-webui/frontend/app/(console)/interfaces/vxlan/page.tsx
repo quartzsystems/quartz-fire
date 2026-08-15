@@ -48,7 +48,7 @@ const columns: Column<VxlanInterface>[] = [
   },
   {
     key: "plane",
-    header: "Control Plane",
+    header: "Control plane",
     value: (r) => plane(r),
     // Control plane is a category, not a status — every value gets the same
     // neutral pill; "no plane" renders as a bare dash like other empty cells.
@@ -62,14 +62,14 @@ const columns: Column<VxlanInterface>[] = [
   },
   {
     key: "source",
-    header: "VTEP Source",
+    header: "VTEP source",
     value: (r) => r.source_address ?? r.source_interface ?? "",
     render: (r) => dash(r.source_address ?? r.source_interface),
     mono: true,
   },
   {
     key: "peers",
-    header: "Remotes / Group",
+    header: "Remotes / group",
     value: (r) => [...r.remotes, r.group ?? ""].join(", "),
     render: (r) => (r.remotes.length ? r.remotes.join(", ") : dash(r.group)),
     mono: true,
@@ -89,7 +89,7 @@ const columns: Column<VxlanInterface>[] = [
 const filters: FilterDef<VxlanInterface>[] = [
   {
     key: "plane",
-    label: "Control Plane",
+    label: "Control plane",
     options: [
       { value: "EVPN", label: "EVPN" },
       { value: "Static", label: "Static" },
@@ -144,14 +144,18 @@ export default function VxlanPage() {
     }
   };
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">VXLAN</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Overlay tunnel endpoints (VTEPs) — EVPN fabric, static unicast, or multicast flooding.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
-      <div>
-        <h2>VXLAN Interfaces</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Layer 2/3 overlay tunnel endpoints (VTEPs) — EVPN fabric, static unicast, or multicast
-        </p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && (
         <div className="clr-secondary">Loading VXLAN interfaces…</div>
@@ -178,8 +182,9 @@ export default function VxlanPage() {
           emptyMessage="No VXLAN interfaces configured."
           onRefresh={() => load("refresh")}
           onRowOpen={(row) => setModal({ vxlan: row })}
+          headerLeft={headerBlock}
           toolbar={
-            <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+            <Button kind="primary" onClick={() => setModal({})}>
               Create VXLAN
             </Button>
           }

@@ -33,7 +33,7 @@ const columns: Column<BondInterface>[] = [
   },
   {
     key: "addresses",
-    header: "IP Address",
+    header: "IP address",
     value: (r) => r.addresses.join(", "),
     render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
     mono: true,
@@ -122,12 +122,18 @@ export default function BondingPage() {
     }
   };
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">Bonding</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Link-aggregation interfaces — members must carry no addresses and belong to no bridge.
+      </p>
+    </div>
+  );
+
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
-      <div>
-        <h2>Bonding Interfaces</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>Link aggregation (bonding) interfaces</p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && (
         <div className="clr-secondary">Loading bond interfaces…</div>
@@ -154,8 +160,9 @@ export default function BondingPage() {
           emptyMessage="No bond interfaces configured."
           onRefresh={() => load("refresh")}
           onRowOpen={(row) => openModal(row)}
+          headerLeft={headerBlock}
           toolbar={
-            <Button kind="primary" size="sm" icon="plus" onClick={() => openModal()}>
+            <Button kind="primary" onClick={() => openModal()}>
               Create Bond
             </Button>
           }

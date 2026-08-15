@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { DashboardGrid, TileInstance, findFreeCell, packTiles } from "@/components/dashboard/DashboardGrid";
 import { TILE_REGISTRY, TILE_TYPES } from "@/components/dashboard/tiles";
 import { apiFetch } from "@/lib/api";
@@ -13,17 +13,36 @@ import { apiFetch } from "@/lib/api";
 const STORAGE_KEY = "qz-dashboard";
 const LAYOUT_PATH = "/dashboard/layout";
 
-const DEFAULT_TILES: TileInstance[] = [{ id: "system-info-1", type: "system-info", x: 0, y: 0, w: 2, h: 6 }];
+// Default layout straight from the DC reference (12-col grid):
+// System Information 4 · Network Usage 8 / Interface Statistics 4 ·
+// Top Applications 4 · IPS Alerts 4 / Top Blocked Countries 6 · map 6.
+const DEFAULT_TILES: TileInstance[] = [
+  { id: "system-info-1", type: "system-info", x: 0, y: 0, w: 4, h: 6 },
+  { id: "network-speed-1", type: "network-speed", x: 4, y: 0, w: 8, h: 6 },
+  { id: "interface-stats-1", type: "interface-stats", x: 0, y: 6, w: 4, h: 5 },
+  { id: "top-applications-1", type: "top-applications", x: 4, y: 6, w: 4, h: 5 },
+  { id: "ips-alerts-1", type: "ips-alerts", x: 8, y: 6, w: 4, h: 5 },
+  { id: "top-blocked-countries-1", type: "top-blocked-countries", x: 0, y: 11, w: 6, h: 5 },
+  { id: "geolocation-map-1", type: "geolocation-map", x: 6, y: 11, w: 6, h: 5 },
+];
 
 let idCounter = 0;
 const newId = (type: string) => `${type}-${Date.now().toString(36)}-${idCounter++}`;
 
 /// Drop tiles whose type no longer exists and migrate older order-based layouts
-/// (no x/y) to explicit coordinates. Returns null when nothing usable remains.
+/// (no x/y) to explicit coordinates. Layouts saved on the old 4-column grid
+/// (every tile within columns 0–4) are scaled ×3 onto the 12-column grid.
+/// Returns null when nothing usable remains.
 function normalize(raw: unknown): TileInstance[] | null {
   if (!Array.isArray(raw)) return null;
-  const valid = (raw as TileInstance[]).filter((t) => t && TILE_REGISTRY[t.type]);
+  let valid = (raw as TileInstance[]).filter((t) => t && TILE_REGISTRY[t.type]);
   if (!valid.length) return null;
+  const placed = valid.filter((t) => t.x != null && t.w != null);
+  if (placed.length && placed.every((t) => (t.x ?? 0) + (t.w ?? 1) <= 4)) {
+    valid = valid.map((t) =>
+      t.x == null ? t : { ...t, x: t.x * 3, w: Math.max(1, (t.w ?? 1) * 3) },
+    );
+  }
   const needsPack = valid.some((t) => t.x == null || t.y == null);
   return needsPack ? packTiles(valid) : valid;
 }
@@ -114,20 +133,20 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex items-start gap-2 mb-4">
+        <div className="mr-auto">
           <h2 className="m-0">Dashboard</h2>
           <p className="clr-secondary" style={{ marginTop: 4 }}>
-            Live overview of system health, traffic, and security events.
+            What this firewall is passing, blocking, and running — right now.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {editing && (
             <div className="clr-dropdown" ref={pickerRef}>
-              <Button kind="secondary" size="sm" icon="plus" onClick={() => setPickerOpen((o) => !o)}>
+              <button type="button" className="btn" onClick={() => setPickerOpen((o) => !o)}>
                 Add Component
-              </Button>
+              </button>
               {pickerOpen && (
                 <div className="dropdown-menu right" style={{ minWidth: 240 }}>
                   {TILE_TYPES.map((def) => {
@@ -157,19 +176,28 @@ export default function DashboardPage() {
             </div>
           )}
 
-          <Button
-            kind={editing ? "primary" : "secondary"}
-            size="sm"
-            icon={editing ? "check" : "pencil"}
+          <button
+            type="button"
+            className={`btn${editing ? " btn-primary" : ""}`}
             onClick={() => {
               setEditing((e) => !e);
               setPickerOpen(false);
             }}
           >
             {editing ? "Done" : "Edit Dashboard"}
-          </Button>
+          </button>
         </div>
       </div>
+
+      {editing && (
+        <div className="alert alert-info alert-sm mb-4">
+          <Icon shape="info-circle" size={14} className="alert-icon" />
+          <span className="alert-text">
+            Edit mode — drag a tile to any cell, resize from its corner, or remove it with ✕. The
+            layout is saved per user on the firewall itself.
+          </span>
+        </div>
+      )}
 
       {tiles.length === 0 ? (
         <div className="text-[13px] text-[var(--cds-alias-typography-color-200)] py-10 text-center">
