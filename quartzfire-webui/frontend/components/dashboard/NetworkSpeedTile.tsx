@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatRate } from "@/lib/format";
+import { Icon } from "@/components/ui/Icon";
 import { ChartTooltip, DOWN_COLOR, UP_COLOR } from "@/components/ui/ChartTooltip";
 import { useInterfaceStats } from "./useInterfaceStats";
 import { LiveButton } from "./LiveButton";
@@ -248,18 +249,20 @@ export function NetworkSpeedTile() {
         )}
         <span className="ml-auto flex items-center gap-3">
           <span
-            className="text-[12px] font-semibold"
+            className="inline-flex items-center gap-1 text-[12px] font-semibold"
             style={{ color: RX_COLOR, fontFamily: "var(--qz-font-mono)" }}
             title="Download"
           >
-            ↓ {formatRate(curRx)}
+            <Icon shape="arrow" dir="down" size={12} />
+            {formatRate(curRx)}
           </span>
           <span
-            className="text-[12px] font-semibold"
+            className="inline-flex items-center gap-1 text-[12px] font-semibold"
             style={{ color: TX_COLOR, fontFamily: "var(--qz-font-mono)" }}
             title="Upload"
           >
-            ↑ {formatRate(curTx)}
+            <Icon shape="arrow" dir="up" size={12} />
+            {formatRate(curTx)}
           </span>
           <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
         </span>

@@ -129,13 +129,13 @@ export default function L2tpPage() {
 
       {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading L2TP configuration…</div>}
       {status === "error" && (
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 text-[13px]" style={{ color: "var(--cds-alias-status-danger)" }}>
-            <Icon shape="exclamation-triangle" size={16} />
-            {errorMsg}
-          </div>
-          <div>
-            <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <span className="alert-text">{errorMsg}</span>
+          <div className="alert-actions">
+            <button type="button" className="alert-action" onClick={() => load()}>
+              Retry
+            </button>
           </div>
         </div>
       )}

@@ -11,6 +11,11 @@ const variantMap: Record<BadgeVariant, { cls: string; text: string; dot: string 
   muted: { cls: "badge-muted",text: "—",        dot: "var(--qz-ink-7)" },
 };
 
+/// Enabled/Disabled admin-state pill shared by the config tables.
+export function StatePill({ enabled }: { enabled: boolean }) {
+  return <span className={enabled ? "badge badge-ok" : "badge badge-muted"}>{enabled ? "Enabled" : "Disabled"}</span>;
+}
+
 export function StatusBadge({ status }: { status: BadgeVariant }) {
   const m = variantMap[status] ?? variantMap.muted;
   return (

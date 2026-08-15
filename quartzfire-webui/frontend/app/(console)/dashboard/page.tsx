@@ -113,9 +113,14 @@ export default function DashboardPage() {
   }, [pickerOpen]);
 
   return (
-    <div className="p-[28px_36px]">
+    <div>
       <div className="flex items-center justify-between mb-6">
-        <h2 className="m-0">Dashboard</h2>
+        <div>
+          <h2 className="m-0">Dashboard</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Live overview of system health, traffic, and security events.
+          </p>
+        </div>
 
         <div className="flex items-center gap-2">
           {editing && (

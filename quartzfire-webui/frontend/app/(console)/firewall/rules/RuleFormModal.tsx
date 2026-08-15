@@ -624,7 +624,7 @@ export function RuleFormModal({
 
         <Field
           label="Policy"
-          hint={policies.length === 0 ? "No policies defined yet — create them under Firewall › Policies." : "The ports and protocol this rule matches."}
+          hint={policies.length === 0 ? "No policies defined yet — create them under Firewall → Policies." : "The ports and protocol this rule matches."}
         >
           <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
             <select
@@ -673,7 +673,7 @@ export function RuleFormModal({
             <div className="flex items-center gap-2">
               <Icon shape="shield-check" size={14} style={{ color: "var(--cds-alias-typography-color-300)" }} />
               <span style={{ fontSize: 12, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}>
-                Security services
+                Security Services
               </span>
             </div>
             {/* IPS lives on the rule itself, so it's available on any Allow rule

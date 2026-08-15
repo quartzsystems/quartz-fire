@@ -29,6 +29,7 @@ function statePill(state: string) {
   const s = state.toLowerCase();
   if (s.startsWith("full")) return "label label-success";
   if (s.startsWith("down")) return "label label-danger";
+  if (["init", "2-way", "exstart", "exchange", "loading"].some((t) => s.startsWith(t))) return "label label-warning";
   return "label";
 }
 
@@ -170,7 +171,7 @@ export function OspfStatusPanel() {
                       {a.backbone && <span className="label label-info" style={pillStyle}>backbone</span>}
                     </div>
                     <span className="clr-subtext" style={{ marginTop: 0 }}>
-                      {dash(a.interfaces_active)}/{dash(a.interfaces_total)} interfaces active · {dash(a.neighbors_full)} full
+                      <span className="mono">{dash(a.interfaces_active)}/{dash(a.interfaces_total)}</span> interfaces active · <span className="mono">{dash(a.neighbors_full)}</span> full
                     </span>
                   </div>
                 </div>

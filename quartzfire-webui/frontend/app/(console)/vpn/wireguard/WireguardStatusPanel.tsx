@@ -36,7 +36,7 @@ function PeerRow({ peer, first }: { peer: WgPeerStatus; first: boolean }) {
   return (
     <div className="grid gap-x-4 gap-y-1 px-4 py-3" style={{ gridTemplateColumns: "minmax(120px,1fr) minmax(140px,1.4fr) minmax(120px,1fr)", borderTop: first ? undefined : "1px solid var(--cds-alias-object-border-subtle)" }}>
       <div className="flex items-center gap-2 min-w-0">
-        <span className={active ? "label label-success" : "label"}>{active ? "active" : "idle"}</span>
+        <span className={active ? "badge badge-ok" : "badge badge-muted"}>{active ? "active" : "idle"}</span>
         <span className="text-[13px] truncate" style={{ ...mono, color: "var(--cds-alias-typography-color-450)" }}>{peer.name}</span>
       </div>
       <div className="text-[12px] min-w-0" style={{ color: "var(--cds-alias-typography-color-300)" }}>
@@ -44,7 +44,7 @@ function PeerRow({ peer, first }: { peer: WgPeerStatus; first: boolean }) {
         <div><span style={muted}>allowed </span><span style={mono}>{dash(peer.allowed_ips)}</span></div>
       </div>
       <div className="text-[12px] min-w-0" style={{ color: "var(--cds-alias-typography-color-300)" }}>
-        <div><span style={muted}>handshake </span>{dash(peer.latest_handshake)}</div>
+        <div><span style={muted}>handshake </span><span style={mono}>{dash(peer.latest_handshake)}</span></div>
         <div><span style={muted}>transfer </span><span style={mono}>{dash(peer.transfer)}</span></div>
       </div>
     </div>

@@ -3,15 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { StatePill } from "@/components/ui/Badge";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { MtuCell } from "@/components/dashboard/MtuCell";
+import { RowActions } from "@/components/dashboard/RowActions";
 import { effectiveMtu, fetchLoopback, LoopbackInterface } from "@/lib/interfaces";
 import { useDashboard } from "@/lib/DashboardContext";
 import { LoopbackFormModal } from "./LoopbackFormModal";
-
-function StatePill({ enabled }: { enabled: boolean }) {
-  return <span className={enabled ? "badge badge-ok" : "badge badge-muted"}>{enabled ? "Enabled" : "Disabled"}</span>;
-}
 
 const columns: Column<LoopbackInterface>[] = [
   { key: "name", header: "Interface", value: (r) => r.name, mono: true, sortable: true, width: 130 },
@@ -103,7 +101,7 @@ export default function LoopbackPage() {
           rowId={(r) => r.name}
           storageKey="interfaces-loopback"
           searchPlaceholder="Search loopback interfaces…"
-          emptyMessage="Loopback `lo` is not in the config yet — configure it to add addresses."
+          emptyMessage="Loopback lo is not in the config yet — configure it to add addresses."
           onRefresh={() => load("refresh")}
           onRowOpen={(row) => setModal({ lo: row })}
           toolbar={
@@ -114,17 +112,7 @@ export default function LoopbackPage() {
             ) : undefined
           }
           actions={(row) => (
-            <div className="inline-flex items-center justify-end">
-              <button
-                type="button"
-                title={`Edit ${row.name}`}
-                aria-label="Edit"
-                onClick={() => setModal({ lo: row })}
-                className="btn btn-sm btn-link-neutral btn-icon"
-              >
-                <Icon shape="pencil" size={14} />
-              </button>
-            </div>
+            <RowActions label={row.name} onEdit={() => setModal({ lo: row })} />
           )}
         />
       )}

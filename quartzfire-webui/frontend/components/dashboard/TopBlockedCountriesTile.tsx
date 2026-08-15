@@ -11,7 +11,6 @@ import {
   countryName,
   fetchGeoCountries,
   fetchGeoStatus,
-  flagEmoji,
   GeoCountry,
   GeoStatus,
 } from "@/lib/geolocation";
@@ -109,8 +108,11 @@ export function TopBlockedCountriesTile() {
             {rows.map((r) => (
               <div key={r.code} className="flex flex-col gap-[4px]">
                 <div className="flex items-baseline gap-2 text-[12px]">
-                  <span className="flex-shrink-0" style={{ fontSize: 14, lineHeight: 1 }}>
-                    {flagEmoji(r.code) || "🏳️"}
+                  <span
+                    className="flex-shrink-0 text-[11px] text-[var(--cds-alias-typography-color-200)]"
+                    style={{ fontFamily: "var(--qz-font-mono)", width: 24 }}
+                  >
+                    {r.code.toUpperCase()}
                   </span>
                   <span className="text-[var(--cds-alias-typography-color-400)] truncate flex-1" title={r.name}>
                     {r.name}

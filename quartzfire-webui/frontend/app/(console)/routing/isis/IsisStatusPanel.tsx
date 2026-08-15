@@ -20,7 +20,7 @@ const pillStyle = {
 function statePill(state: string | null) {
   const s = (state ?? "").toLowerCase();
   if (s === "up") return "label label-success";
-  if (s === "init") return "label";
+  if (s === "init") return "label label-warning";
   if (s === "" ) return "label";
   return "label label-danger";
 }

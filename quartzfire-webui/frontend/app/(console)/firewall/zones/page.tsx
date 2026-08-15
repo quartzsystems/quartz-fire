@@ -124,7 +124,7 @@ export default function FirewallZonesPage() {
     },
     {
       key: "default_action",
-      header: "Unmatched traffic",
+      header: "Unmatched Traffic",
       value: (z) => z.default_action ?? "drop",
       render: (z) => <DefaultActionPill zone={z} />,
       sortable: true,
@@ -132,7 +132,7 @@ export default function FirewallZonesPage() {
     },
     {
       key: "intra_zone",
-      header: "Within zone",
+      header: "Within Zone",
       value: (z) => z.intra_zone ?? "accept",
       render: (z) => {
         if (z.local) return <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;

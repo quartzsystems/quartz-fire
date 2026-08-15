@@ -13,7 +13,6 @@ import { Switch } from "@/components/ui/Switch";
 import { useDashboard } from "@/lib/DashboardContext";
 import {
   CONTINENT_NAMES,
-  flagEmoji,
   GeoAction,
   GeoActionUpdate,
   GeoCountry,
@@ -201,7 +200,7 @@ export function ActionFormModal({
         )}
 
         <div
-          className="rounded-md overflow-auto"
+          className="rounded-lg overflow-auto"
           style={{ border: "1px solid var(--cds-alias-object-border-color)", maxHeight: "40vh" }}
         >
           {groups.length === 0 ? (
@@ -241,7 +240,6 @@ export function ActionFormModal({
                           checked={selected.has(c.code)}
                           onChange={() => toggle(c.code)}
                         />
-                        <span>{flagEmoji(c.code)}</span>
                         <span
                           className="flex-1 text-[13px] text-[var(--cds-alias-typography-color-450)]"
                           style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
@@ -258,9 +256,9 @@ export function ActionFormModal({
           )}
         </div>
 
-        <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)]">Unclassified (unknown) IPs:</span>
+        <div className="flex items-end gap-6 flex-wrap">
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <label className="clr-control-label">Unclassified (Unknown) IPs</label>
             <Segmented
               items={[
                 { value: "allow", label: "Allow" },
@@ -270,7 +268,7 @@ export function ActionFormModal({
               onChange={(v) => setUnknownIp(v as GeoUnknown)}
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pb-[6px]">
             <Switch on={log} onChange={setLog} />
             <span className="text-[13px] text-[var(--cds-alias-typography-color-300)]">
               Log blocked packets <span className="mono text-[11px]">[GEO-{name.trim() || "name"}]</span>

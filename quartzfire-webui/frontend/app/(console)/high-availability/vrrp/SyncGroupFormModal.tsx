@@ -85,7 +85,7 @@ export function SyncGroupFormModal({
           />
         </Field>
 
-        <Advanced label="Health check & transition scripts">
+        <Advanced label="Health Check & Transition Scripts">
           <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <Field label="Health-check script">
               <TextInput value={sg.health_check.script ?? ""} onChange={(v) => setHc({ script: v || null })} placeholder="/config/scripts/chk.sh" mono />

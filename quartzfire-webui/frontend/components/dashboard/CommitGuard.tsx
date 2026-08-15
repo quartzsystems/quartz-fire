@@ -95,7 +95,7 @@ function PendingBanner({ state }: { state: Extract<GuardState, { phase: "pending
               <span
                 style={{
                   fontFamily: "var(--qz-font-mono)",
-                  fontWeight: 700,
+                  fontWeight: 600,
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
@@ -136,7 +136,8 @@ function PendingBanner({ state }: { state: Extract<GuardState, { phase: "pending
           bottom: 0,
           height: 3,
           width: `${Math.min(100, (remaining / pending.timeoutSecs) * 100)}%`,
-          background: "rgba(0,0,0,0.35)",
+          background: "var(--qz-ink-0)",
+          opacity: 0.35,
           transition: "width 250ms linear",
         }}
       />

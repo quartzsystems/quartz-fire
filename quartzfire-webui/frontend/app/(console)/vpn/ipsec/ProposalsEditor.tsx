@@ -66,7 +66,7 @@ export function ProposalsEditor({ rows, onChange, withDh }: {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--cds-alias-typography-color-400)" }}>Proposals</span>
+        <span className="clr-smallcaption">Proposals</span>
         <Button kind="ghost" size="sm" icon="plus" onClick={add}>Add Proposal</Button>
       </div>
 

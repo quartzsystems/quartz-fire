@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
 import { IkeGroup, KeyExchange, applyIkeGroup, emptyIkeGroup } from "@/lib/ipsec";
 import { ProposalRow, ProposalsEditor, rowsToProposals, toProposalRows } from "./ProposalsEditor";
 
@@ -120,7 +121,12 @@ export function IkeGroupFormModal({ initial, existingNames, onClose, onSaved }: 
 
         <ProposalsEditor rows={proposals} onChange={setProposals} withDh />
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <span className="alert-text">{error}</span>
+          </div>
+        )}
 
         <ModalFooter>
           <button type="button" onClick={onClose} className="btn btn-neutral">Cancel</button>

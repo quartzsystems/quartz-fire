@@ -29,9 +29,25 @@ const pillStyle = {
   textTransform: "uppercase",
 } as const;
 
+/// State → pill. Operational is healthy; a down/torn-down session
+/// (NONEXISTENT) is trouble; anything else stays neutral.
 function statePill(state: string | null) {
-  if (state && state.toLowerCase() === "operational") return "label label-success";
+  const s = (state ?? "").toLowerCase();
+  if (s === "operational") return "label label-success";
+  if (s === "nonexistent" || s === "down") return "label label-danger";
   return "label";
+}
+
+function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="card-block flex flex-col gap-1">
+        <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--cds-alias-typography-color-200)" }}>{label}</span>
+        <span style={{ fontSize: 20, fontWeight: 600, fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>{value}</span>
+        {sub && <span className="clr-subtext" style={{ marginTop: 0 }}>{sub}</span>}
+      </div>
+    </div>
+  );
 }
 
 const neighborCols: Column<LdpNeighbor>[] = [
@@ -52,16 +68,16 @@ const discoveryCols: Column<LdpAdjacency>[] = [
 
 const bindingCols: Column<LdpBinding>[] = [
   { key: "prefix", header: "Prefix (FEC)", value: (r) => r.prefix ?? "", render: (r) => dash(r.prefix), mono: true, sortable: true },
-  { key: "local", header: "Local label", value: (r) => r.local_label ?? "", render: (r) => dash(r.local_label), mono: true, width: 120 },
-  { key: "remote", header: "Remote label", value: (r) => r.remote_label ?? "", render: (r) => dash(r.remote_label), mono: true, width: 120 },
+  { key: "local", header: "Local Label", value: (r) => r.local_label ?? "", render: (r) => dash(r.local_label), mono: true, width: 120 },
+  { key: "remote", header: "Remote Label", value: (r) => r.remote_label ?? "", render: (r) => dash(r.remote_label), mono: true, width: 120 },
   { key: "neighbor_id", header: "Neighbor", value: (r) => r.neighbor_id ?? "", render: (r) => dash(r.neighbor_id), mono: true },
-  { key: "in_use", header: "In use", value: (r) => (r.in_use ? "yes" : "no"), render: (r) => (r.in_use ? <span className="label label-success" style={pillStyle}>In use</span> : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>), width: 100 },
+  { key: "in_use", header: "In Use", value: (r) => (r.in_use ? "yes" : "no"), render: (r) => (r.in_use ? <span className="label label-success" style={pillStyle}>In use</span> : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>), width: 100 },
 ];
 
 const tableCols: Column<MplsRoute>[] = [
-  { key: "in_label", header: "In label", value: (r) => Number(r.in_label) || 0, render: (r) => dash(r.in_label), mono: true, sortable: true, width: 110 },
-  { key: "out_label", header: "Out label", value: (r) => r.out_label ?? "", render: (r) => dash(r.out_label), mono: true, width: 120 },
-  { key: "nexthop", header: "Next hop", value: (r) => r.nexthop ?? "", render: (r) => dash(r.nexthop), mono: true, sortable: true },
+  { key: "in_label", header: "In Label", value: (r) => Number(r.in_label) || 0, render: (r) => dash(r.in_label), mono: true, sortable: true, width: 110 },
+  { key: "out_label", header: "Out Label", value: (r) => r.out_label ?? "", render: (r) => dash(r.out_label), mono: true, width: 120 },
+  { key: "nexthop", header: "Next Hop", value: (r) => r.nexthop ?? "", render: (r) => dash(r.nexthop), mono: true, sortable: true },
   { key: "interface", header: "Interface", value: (r) => r.interface ?? "", render: (r) => dash(r.interface), mono: true, width: 130 },
   { key: "installed", header: "Installed", value: (r) => (r.installed ? "yes" : "no"), render: (r) => (r.installed ? <span className="label label-success" style={pillStyle}>Installed</span> : <span className="label" style={pillStyle}>Pending</span>), width: 120 },
 ];
@@ -134,7 +150,7 @@ export function MplsStatusPanel() {
         </div>
         <div className="card" style={{ marginTop: 0 }}>
           <div className="card-block clr-secondary" style={{ padding: 24, textAlign: "center" }}>
-            LDP is not running, and the MPLS forwarding table is empty. Enable MPLS/LDP in the Configuration tab.
+            LDP is not running, and the MPLS forwarding table is empty. Enable MPLS/LDP in the Global tab.
           </div>
         </div>
       </div>
@@ -148,18 +164,27 @@ export function MplsStatusPanel() {
     ["table", "Forwarding", table.length],
   ];
 
+  const operationalNeighbors = status?.neighbors.filter((n) => n.is_up).length ?? 0;
+  const totalNeighbors = status?.neighbors.length ?? 0;
+
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 flex-1 min-w-[280px]">
+          <StatTile label="LDP Neighbors" value={`${operationalNeighbors}/${totalNeighbors}`} sub="operational / total" />
+          <StatTile label="Label Bindings" value={String(bindings.length)} />
+          <StatTile label="Forwarding Entries" value={String(table.length)} />
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
+          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
+        </div>
+      </div>
+
       <Tabs
         items={subTabs.map(([id, label, count]) => ({ value: id, label, count }))}
         value={view}
         onChange={(v) => setView(v as View)}
-        trailing={
-          <>
-            {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
-            <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
-          </>
-        }
       />
 
       {view === "neighbors" && (

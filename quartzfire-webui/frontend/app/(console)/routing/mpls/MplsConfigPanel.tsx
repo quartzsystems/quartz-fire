@@ -193,7 +193,7 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
       </Section>
 
       <Section title="LDP Router" subtitle="Label Distribution Protocol identity and protocol behaviour.">
-        <Field label="LDP router-id" hint="The LSR-id, usually a loopback address.">
+        <Field label="LDP Router ID" hint="The LSR-id, usually a loopback address.">
           <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
         </Field>
         <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
@@ -242,16 +242,16 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
 
       <Section title="Discovery" subtitle="Transport addresses and hello / session timers.">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="IPv4 transport address"><input value={transportV4} onChange={(e) => setTransportV4(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv6 transport address"><input value={transportV6} onChange={(e) => setTransportV6(e.target.value)} placeholder="2001:db8::1" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv4 Transport Address"><input value={transportV4} onChange={(e) => setTransportV4(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv6 Transport Address"><input value={transportV6} onChange={(e) => setTransportV6(e.target.value)} placeholder="2001:db8::1" className="clr-input" style={monoStyle} /></Field>
         </div>
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <Field label="IPv4 hello interval"><input value={helloV4Int} onChange={(e) => setHelloV4Int(e.target.value)} placeholder="5" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv4 hello holdtime"><input value={helloV4Hold} onChange={(e) => setHelloV4Hold(e.target.value)} placeholder="15" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv4 session holdtime"><input value={sessV4Hold} onChange={(e) => setSessV4Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv6 hello interval"><input value={helloV6Int} onChange={(e) => setHelloV6Int(e.target.value)} placeholder="5" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv6 hello holdtime"><input value={helloV6Hold} onChange={(e) => setHelloV6Hold(e.target.value)} placeholder="15" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv6 session holdtime"><input value={sessV6Hold} onChange={(e) => setSessV6Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv4 Hello Interval"><input value={helloV4Int} onChange={(e) => setHelloV4Int(e.target.value)} placeholder="5" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv4 Hello Holdtime"><input value={helloV4Hold} onChange={(e) => setHelloV4Hold(e.target.value)} placeholder="15" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv4 Session Holdtime"><input value={sessV4Hold} onChange={(e) => setSessV4Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv6 Hello Interval"><input value={helloV6Int} onChange={(e) => setHelloV6Int(e.target.value)} placeholder="5" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv6 Hello Holdtime"><input value={helloV6Hold} onChange={(e) => setHelloV6Hold(e.target.value)} placeholder="15" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv6 Session Holdtime"><input value={sessV6Hold} onChange={(e) => setSessV6Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} /></Field>
         </div>
       </Section>
 
@@ -389,10 +389,10 @@ function TargetedSection({ af, value, onChange, placeholder }: { af: "IPv4" | "I
         }}
       />
       <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-        <Field label="Hello interval">
+        <Field label="Hello Interval">
           <input value={numStr(value.hello_interval)} onChange={(e) => set({ hello_interval: numOrNull(e.target.value) })} placeholder="10" className="clr-input" style={monoStyle} />
         </Field>
-        <Field label="Hello holdtime">
+        <Field label="Hello Holdtime">
           <input value={numStr(value.hello_holdtime)} onChange={(e) => set({ hello_holdtime: numOrNull(e.target.value) })} placeholder="30" className="clr-input" style={monoStyle} />
         </Field>
       </div>

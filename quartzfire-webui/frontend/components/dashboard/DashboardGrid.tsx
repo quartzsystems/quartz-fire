@@ -269,7 +269,7 @@ export function DashboardGrid({
               <>
                 {isResizing && (
                   <div
-                    className="absolute top-2 left-2 z-20 rounded-md px-2 py-1 text-[11px] font-semibold text-[var(--qz-fg-on-accent)]"
+                    className="absolute top-2 left-2 z-20 rounded-full px-2 py-1 text-[11px] font-semibold text-[var(--qz-fg-on-accent)]"
                     style={{ background: "var(--cds-alias-interaction-action)", fontFamily: "var(--qz-font-mono)" }}
                   >
                     {tile.w} × {tile.h}

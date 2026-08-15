@@ -57,7 +57,7 @@ export function StatTile({ label, value, sub }: { label: string; value: string; 
   return (
     <div className="card">
       <div className="card-block flex flex-col gap-1" style={{ padding: "12px 16px" }}>
-        <span className="text-[11px] uppercase tracking-wider" style={{ color: "var(--cds-alias-typography-color-300)" }}>{label}</span>
+        <span className="clr-smallcaption">{label}</span>
         <span className="text-[20px] font-semibold" style={{ color: "var(--cds-alias-typography-color-450)", fontFamily: "var(--qz-font-mono)" }}>{value}</span>
         {sub && <span className="text-[11px]" style={{ color: "var(--cds-alias-typography-color-200)" }}>{sub}</span>}
       </div>
@@ -76,7 +76,7 @@ export function StatusHeader({ tiles, lastUpdated, onRefresh }: {
     <div className="flex items-start justify-between gap-3 flex-wrap">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 flex-1 min-w-[280px]">{tiles}</div>
       <div className="flex flex-col items-end gap-2">
-        {lastUpdated && <span className="text-[12px]" style={{ color: "var(--cds-alias-typography-color-200)" }}>Updated {lastUpdated.toLocaleTimeString()}</span>}
+        {lastUpdated && <span className="text-[12px]" style={{ color: "var(--cds-alias-typography-color-200)" }}>Updated <span className="mono">{lastUpdated.toLocaleTimeString()}</span></span>}
         <Button kind="secondary" size="sm" icon="refresh" onClick={onRefresh}>Refresh</Button>
       </div>
     </div>
@@ -89,12 +89,13 @@ export function StatusLoading({ what }: { what: string }) {
 
 export function StatusError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-[13px]" style={{ color: "var(--cds-alias-status-danger)" }}>
-        <Icon shape="exclamation-triangle" size={16} /> {message}
-      </div>
-      <div>
-        <Button kind="secondary" icon="refresh" onClick={onRetry}>Retry</Button>
+    <div className="alert alert-danger alert-sm">
+      <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+      <span className="alert-text">{message}</span>
+      <div className="alert-actions">
+        <button type="button" className="alert-action" onClick={onRetry}>
+          Retry
+        </button>
       </div>
     </div>
   );

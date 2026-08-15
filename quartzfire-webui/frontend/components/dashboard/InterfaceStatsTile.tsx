@@ -87,7 +87,8 @@ export function InterfaceStatsTile() {
       setAsc(k === "name");
     }
   };
-  const arrow = (k: SortKey) => (sortKey === k ? (asc ? "↑" : "↓") : "");
+  const arrow = (k: SortKey) =>
+    sortKey === k ? <Icon shape="arrow" dir={asc ? "up" : "down"} size={12} /> : null;
 
   return (
     <>
@@ -114,12 +115,7 @@ export function InterfaceStatsTile() {
                 key={k}
                 type="button"
                 onClick={() => setSort(k)}
-                className="px-2 py-[3px] rounded-md cursor-pointer font-medium transition-colors"
-                style={
-                  sortKey === k
-                    ? { background: "var(--cds-alias-interaction-action)", color: "var(--qz-fg-on-accent)" }
-                    : { background: "transparent", color: "var(--cds-alias-typography-color-300)" }
-                }
+                className={`btn btn-sm ${sortKey === k ? "btn-primary" : "btn-link-neutral"}`}
               >
                 {k === "name" ? "Name" : k.toUpperCase()} {arrow(k)}
               </button>

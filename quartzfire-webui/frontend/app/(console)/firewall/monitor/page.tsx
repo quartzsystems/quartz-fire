@@ -517,7 +517,7 @@ export default function TrafficMonitorPage() {
         </div>
 
         {/* Table */}
-        <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+        <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
           <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
             <colgroup>
               {cols.map((c) => (

@@ -23,7 +23,7 @@ function Field({ label, hint, required, children }: { label: string; hint?: stri
   return (
     <div className="clr-form-control" style={{ marginTop: 0 }}>
       <label className="clr-control-label">
-        {label} {required && <span style={{ color: "var(--cds-alias-status-danger)" }}>*</span>}
+        {label} {required && <span className="clr-required">*</span>}
       </label>
       {children}
       {hint && <div className="clr-subtext">{hint}</div>}
@@ -166,7 +166,7 @@ export function IsisGlobalPanel({ live, onSaved }: { live: IsisGlobal; onSaved: 
           <input value={net} onChange={(e) => setNet(e.target.value)} placeholder="49.0001.1921.6800.1002.00" className="clr-input" style={monoStyle} />
         </Field>
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="IS type (level)" hint="Which levels this router participates in.">
+          <Field label="IS Type (Level)" hint="Which levels this router participates in.">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
               <select value={level} onChange={(e) => setLevel(e.target.value as IsisLevel | "")} className="clr-select" style={inputStyle}>
                 <option value="">Default (level-1-2)</option>
@@ -176,7 +176,7 @@ export function IsisGlobalPanel({ live, onSaved }: { live: IsisGlobal; onSaved: 
               </select>
             </div>
           </Field>
-          <Field label="Metric style" hint="wide is required for anything but the smallest legacy network.">
+          <Field label="Metric Style" hint="wide is required for anything but the smallest legacy network.">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
               <select value={metricStyle} onChange={(e) => setMetricStyle(e.target.value as IsisMetricStyle | "")} className="clr-select" style={inputStyle}>
                 <option value="">Default (narrow)</option>
@@ -196,9 +196,9 @@ export function IsisGlobalPanel({ live, onSaved }: { live: IsisGlobal; onSaved: 
 
       <Section title="Timers" subtitle="LSP generation / refresh and SPF pacing (seconds).">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <Field label="LSP gen interval"><input value={lspGen} onChange={(e) => setLspGen(e.target.value)} placeholder="30" className="clr-input" style={monoStyle} /></Field>
-          <Field label="LSP refresh interval"><input value={lspRefresh} onChange={(e) => setLspRefresh(e.target.value)} placeholder="900" className="clr-input" style={monoStyle} /></Field>
-          <Field label="SPF interval"><input value={spfInterval} onChange={(e) => setSpfInterval(e.target.value)} placeholder="1" className="clr-input" style={monoStyle} /></Field>
+          <Field label="LSP Gen Interval"><input value={lspGen} onChange={(e) => setLspGen(e.target.value)} placeholder="30" className="clr-input" style={monoStyle} /></Field>
+          <Field label="LSP Refresh Interval"><input value={lspRefresh} onChange={(e) => setLspRefresh(e.target.value)} placeholder="900" className="clr-input" style={monoStyle} /></Field>
+          <Field label="SPF Interval"><input value={spfInterval} onChange={(e) => setSpfInterval(e.target.value)} placeholder="1" className="clr-input" style={monoStyle} /></Field>
         </div>
       </Section>
 

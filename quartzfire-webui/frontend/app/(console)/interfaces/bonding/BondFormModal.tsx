@@ -13,12 +13,12 @@ const wideMono = { ...wide, ...mono } as const;
 // Bond modes VyOS accepts; 802.3ad is the default when the leaf is absent.
 const MODE_OPTIONS = [
   { value: "802.3ad", label: "802.3ad (LACP)" },
-  { value: "active-backup", label: "Active-backup" },
-  { value: "adaptive-load-balance", label: "Adaptive load balance" },
+  { value: "active-backup", label: "Active-Backup" },
+  { value: "adaptive-load-balance", label: "Adaptive Load Balance" },
   { value: "broadcast", label: "Broadcast" },
-  { value: "round-robin", label: "Round-robin" },
-  { value: "transmit-load-balance", label: "Transmit load balance" },
-  { value: "xor-hash", label: "XOR hash" },
+  { value: "round-robin", label: "Round-Robin" },
+  { value: "transmit-load-balance", label: "Transmit Load Balance" },
+  { value: "xor-hash", label: "XOR Hash" },
 ];
 
 /// Clarity field: label + control + optional helper sentence.
@@ -140,7 +140,7 @@ export function BondFormModal({
     <ModalShell onClose={onClose}>
       <ModalHeader
         title={isEdit ? "Edit Bond" : "Create Bond"}
-        subtitle={isEdit ? initial!.name : "Link aggregation (bonding) interface"}
+        subtitle={isEdit ? <span className="mono">{initial!.name}</span> : "Link aggregation (bonding) interface"}
         onClose={onClose}
       />
 
@@ -200,7 +200,7 @@ export function BondFormModal({
                 gap: 6,
                 maxHeight: 170,
                 border: "1px solid var(--cds-alias-object-border-color)",
-                borderRadius: 4,
+                borderRadius: "var(--clr-base-border-radius-m)",
                 padding: "10px 12px",
               }}
             >

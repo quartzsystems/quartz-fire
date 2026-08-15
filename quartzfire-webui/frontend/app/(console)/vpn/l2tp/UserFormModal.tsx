@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
 import { Switch } from "@/components/ui/Switch";
 import { L2tpUser, applyL2tpUser, emptyL2tpUser } from "@/lib/l2tp";
 
@@ -79,7 +80,12 @@ export function UserFormModal({ initial, existingNames, onClose, onSaved }: {
           Account disabled
         </label>
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <span className="alert-text">{error}</span>
+          </div>
+        )}
 
         <ModalFooter>
           <button type="button" onClick={onClose} className="btn btn-neutral">Cancel</button>

@@ -71,8 +71,8 @@ export function Advanced({ children, label = "Advanced" }: { children: React.Rea
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between bg-transparent border-0 cursor-pointer"
-        style={{ padding: "10px 12px", fontSize: 13, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}
+        className="btn btn-sm btn-link-neutral"
+        style={{ justifyContent: "space-between", width: "100%", height: "auto", padding: "10px 12px" }}
       >
         <span>{label}</span>
         <Icon shape="angle" dir={open ? "up" : "down"} size={14} style={{ color: "var(--cds-alias-typography-color-200)" }} />

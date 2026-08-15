@@ -29,6 +29,9 @@ export function ModalShell({
       <div className="modal" onClick={onClose}>
         <div className="modal-dialog" style={{ width: maxWidth }} onClick={(e) => e.stopPropagation()}>
           <div className="modal-content">
+            {/* Composed anatomy: header/footer render inside one scrolling body,
+                with paddings matching the DS .modal-header/.modal-body/.modal-footer
+                stack (top 20, sides 24, 16 under the title, 20 at the bottom). */}
             <div className="modal-body" style={{ padding: "20px 24px" }}>
               {children}
             </div>
@@ -45,15 +48,14 @@ export function ModalHeader({
   onClose,
 }: {
   title: string;
-  subtitle?: string;
+  /** One-line context under the title; pass a mono span for technical values. */
+  subtitle?: React.ReactNode;
   onClose: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between mb-5">
+    <div className="flex items-start justify-between mb-4">
       <div>
-        <h3 className="clr-section" style={{ color: "var(--cds-alias-typography-color-450)" }}>
-          {title}
-        </h3>
+        <h3 className="modal-title">{title}</h3>
         {subtitle && (
           <p className="clr-secondary" style={{ marginTop: 3 }}>
             {subtitle}
@@ -68,6 +70,11 @@ export function ModalHeader({
 }
 
 /// Right-aligned action row for the bottom of a modal (primary action last).
+/// DS .modal-footer anatomy, minus its side padding (the body already pads).
 export function ModalFooter({ children }: { children: React.ReactNode }) {
-  return <div className="flex justify-end gap-2 mt-6">{children}</div>;
+  return (
+    <div className="modal-footer" style={{ padding: 0, marginTop: 16 }}>
+      {children}
+    </div>
+  );
 }

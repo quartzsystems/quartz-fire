@@ -204,16 +204,12 @@ export default function DhcpServerPage() {
                     key={s.name}
                     type="button"
                     onClick={() => setSelectedName(s.name)}
-                    className="flex flex-col items-start gap-[6px] px-4 py-3 text-left cursor-pointer min-w-[180px]"
+                    className="card clickable items-start gap-[6px] px-4 py-3 text-left min-w-[180px]"
                     style={{
                       background: active
-                        ? "var(--qz-accent-soft)"
-                        : "var(--cds-alias-object-container-background)",
-                      border: active
-                        ? "1px solid var(--qz-accent-border)"
-                        : "1px solid var(--cds-alias-object-container-border-color)",
-                      borderRadius: "var(--clr-base-border-radius-m)",
-                      transition: "border-color var(--qz-dur-1) var(--qz-ease-out)",
+                        ? "var(--cds-alias-object-interaction-background-selected)"
+                        : undefined,
+                      borderColor: active ? "var(--cds-alias-interaction-action)" : undefined,
                     }}
                   >
                     <div className="flex items-center gap-2">

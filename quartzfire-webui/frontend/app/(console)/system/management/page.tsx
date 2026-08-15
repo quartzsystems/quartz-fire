@@ -88,13 +88,28 @@ function controlBadge(control: ControlState | undefined): React.ReactNode {
     case "connecting":
       return <Pill>Connecting…</Pill>;
     case "backoff":
-      return <Pill tone="warning">Reconnecting (backoff)</Pill>;
+      return <Pill tone="warning">Reconnecting</Pill>;
     case "host-mismatch":
-      return <Pill tone="danger">Refused — identity/host mismatch</Pill>;
+      return (
+        <>
+          <Pill tone="danger">Refused</Pill>
+          <span style={{ color: "var(--cds-alias-typography-color-200)" }}>identity/host mismatch</span>
+        </>
+      );
     case "unenrolled":
-      return <Pill>Not started (unenrolled)</Pill>;
+      return (
+        <>
+          <Pill>Not Started</Pill>
+          <span style={{ color: "var(--cds-alias-typography-color-200)" }}>(unenrolled)</span>
+        </>
+      );
     default:
-      return <Pill>Unknown (agent not running?)</Pill>;
+      return (
+        <>
+          <Pill>Unknown</Pill>
+          <span style={{ color: "var(--cds-alias-typography-color-200)" }}>(agent not running?)</span>
+        </>
+      );
   }
 }
 
@@ -281,9 +296,12 @@ export default function ManagementPage() {
                 </InfoRow>
                 <InfoRow label="Certificate">
                   <span className="flex items-center gap-2 flex-wrap">
-                    expires {fmtUnix(live?.cert_not_after_unix ?? state?.cert_not_after_unix ?? null)}
+                    expires <span className="mono">{fmtUnix(live?.cert_not_after_unix ?? state?.cert_not_after_unix ?? null)}</span>
                     {live?.cert_renewal_alarm && (
-                      <Pill tone="danger">renewal failing — expires in &lt;7 days</Pill>
+                      <>
+                        <Pill tone="danger">Renewal Failing</Pill>
+                        <span style={{ color: "var(--cds-alias-typography-color-200)" }}>expires in &lt;7 days</span>
+                      </>
                     )}
                   </span>
                 </InfoRow>
@@ -294,7 +312,7 @@ export default function ManagementPage() {
                 {controlBadge(live?.control)}
                 {live?.control === "connected" && live.control_since_unix && (
                   <span style={{ color: "var(--cds-alias-typography-color-200)" }}>
-                    since {fmtUnix(live.control_since_unix)}
+                    since <span className="mono">{fmtUnix(live.control_since_unix)}</span>
                   </span>
                 )}
               </span>
@@ -308,25 +326,29 @@ export default function ManagementPage() {
 
           {!enrolled && (
             <Section title="Enroll">
-              <p className="clr-secondary" style={{ marginTop: 4, marginBottom: 12 }}>
-                Paste an enrollment token issued by your Quartz Command controller
-                (QC1|…). Enrollment runs as a config commit: the token is consumed
-                once and removed from the configuration automatically.
-              </p>
-              <textarea
-                className="clr-textarea"
-                style={{
-                  fontFamily: "var(--qz-font-mono)",
-                  maxWidth: "none",
-                  minHeight: 64,
-                  resize: "vertical",
-                }}
-                placeholder="QC1|gateway.example.com:443|org_…|token_id.secret|sha256:…"
-                value={token}
-                onChange={(e) => { setToken(e.target.value); setEnrollError(null); }}
-                disabled={enrolling}
-                spellCheck={false}
-              />
+              <div className="clr-form-control">
+                <label className="clr-control-label" htmlFor="enroll-token">Enrollment Token</label>
+                <textarea
+                  id="enroll-token"
+                  className="clr-textarea"
+                  style={{
+                    fontFamily: "var(--qz-font-mono)",
+                    maxWidth: "none",
+                    minHeight: 64,
+                    resize: "vertical",
+                  }}
+                  placeholder="QC1|gateway.example.com:443|org_…|token_id.secret|sha256:…"
+                  value={token}
+                  onChange={(e) => { setToken(e.target.value); setEnrollError(null); }}
+                  disabled={enrolling}
+                  spellCheck={false}
+                />
+                <p className="clr-subtext" style={{ marginTop: 6, marginBottom: 0 }}>
+                  Paste an enrollment token issued by your Quartz Command controller
+                  (QC1|…). Enrollment runs as a config commit: the token is consumed
+                  once and removed from the configuration automatically.
+                </p>
+              </div>
               {tokenCheck && !tokenCheck.ok && (
                 <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)", marginTop: 8 }}>
                   {tokenCheck.error}
@@ -371,7 +393,7 @@ export default function ManagementPage() {
             </p>
             <div className="flex flex-col gap-3 pb-2 max-w-[560px]">
               <div className="clr-form-control">
-                <label className="clr-control-label">Gateway host</label>
+                <label className="clr-control-label">Gateway Host</label>
                 <input
                   className="clr-input"
                   style={{ fontFamily: "var(--qz-font-mono)", maxWidth: "none" }}
@@ -382,7 +404,7 @@ export default function ManagementPage() {
                 />
               </div>
               <div className="clr-form-control">
-                <label className="clr-control-label">Port (default 443)</label>
+                <label className="clr-control-label">Port</label>
                 <input
                   className="clr-input"
                   style={{ fontFamily: "var(--qz-font-mono)", maxWidth: "none" }}
@@ -391,11 +413,10 @@ export default function ManagementPage() {
                   placeholder="443"
                   inputMode="numeric"
                 />
+                <p className="clr-subtext" style={{ marginTop: 6, marginBottom: 0 }}>Default 443.</p>
               </div>
               <div className="clr-form-control">
-                <label className="clr-control-label">
-                  CA certificate (PKI name, for controllers without WebPKI certificates)
-                </label>
+                <label className="clr-control-label">CA Certificate</label>
                 <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
                   <select
                     className="clr-select"
@@ -409,6 +430,9 @@ export default function ManagementPage() {
                     ))}
                   </select>
                 </div>
+                <p className="clr-subtext" style={{ marginTop: 6, marginBottom: 0 }}>
+                  PKI name, for controllers without WebPKI certificates.
+                </p>
               </div>
             </div>
           </Section>

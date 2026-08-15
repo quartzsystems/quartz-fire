@@ -23,7 +23,7 @@ const ACTIONS: PaletteAction[] = NAV_SECTIONS.flatMap((s) => {
     entries.push({
       id: `nav-${p.id}`,
       section: "Go to",
-      label: `${s.label} › ${p.label}`,
+      label: `${s.label} → ${p.label}`,
       kbd: "",
       href: p.href,
     });
@@ -129,7 +129,7 @@ export function CommandPalette({
                         fontSize: 10,
                         color: "var(--cds-alias-typography-color-200)",
                         border: "1px solid var(--cds-alias-object-border-color)",
-                        borderRadius: 3,
+                        borderRadius: "var(--clr-base-border-radius-s)",
                         padding: "1px 5px",
                       }}
                     >

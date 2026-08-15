@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { StatePill } from "@/components/ui/Badge";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { MtuCell } from "@/components/dashboard/MtuCell";
+import { RowActions } from "@/components/dashboard/RowActions";
 import {
   EthernetInterface,
   LinkState,
@@ -21,10 +23,6 @@ import { EthernetFormModal } from "./EthernetFormModal";
 /// Configured interface plus its operational link (carrier) state and
 /// negotiated speed.
 type EthRow = EthernetInterface & { link: LinkState; phy: PhyInfo | null };
-
-function StatePill({ enabled }: { enabled: boolean }) {
-  return <span className={enabled ? "badge badge-ok" : "badge badge-muted"}>{enabled ? "Enabled" : "Disabled"}</span>;
-}
 
 function LinkPill({ link }: { link: LinkState }) {
   if (link === "unknown") return <span className="badge badge-muted">Unknown</span>;
@@ -194,17 +192,7 @@ export default function EthernetPage() {
             </span>
           }
           actions={(row) => (
-            <div className="inline-flex items-center justify-end">
-              <button
-                type="button"
-                title={`Edit ${row.name}`}
-                aria-label="Edit"
-                onClick={() => setModal({ eth: row })}
-                className="btn btn-sm btn-link-neutral btn-icon"
-              >
-                <Icon shape="pencil" size={14} />
-              </button>
-            </div>
+            <RowActions label={row.name} onEdit={() => setModal({ eth: row })} />
           )}
         />
       )}

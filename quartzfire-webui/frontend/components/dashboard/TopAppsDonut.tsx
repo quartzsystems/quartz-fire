@@ -26,12 +26,16 @@ export interface AppSliceInput {
 /** Slices shown individually; the rest fold into "Other". */
 const MAX_SLICES = 5;
 
-// Categorical palette validated for the qz dark surface (#161920) — all-pairs
-// CVD check passes with the 2px surface gaps + legend (see dataviz skill).
-// Matches the Clarity reference's app-mix slices (app slices are categorical,
-// so they don't take the traffic greens). Assigned per application in fixed
-// order, never cycled.
-const SLICE_COLORS = ["#3987e5", "#199e70", "#c98500", "#e66767", "#008300"];
+// Categorical slices take the DS chart palette (--cds-alias-viz-general-*);
+// app slices are categorical, so they don't take the traffic greens. Assigned
+// per application in fixed order, never cycled.
+const SLICE_COLORS = [
+  "var(--cds-alias-viz-general-1)",
+  "var(--cds-alias-viz-general-2)",
+  "var(--cds-alias-viz-general-3)",
+  "var(--cds-alias-viz-general-4)",
+  "var(--cds-alias-viz-general-5)",
+];
 const OTHER_COLOR = "var(--qz-ink-7)";
 
 /// Split a formatted byte figure ("831.20 GB") into value + unit so the donut
@@ -119,7 +123,7 @@ function Donut({
           <path
             key={s.key}
             d={arcPath(c, c, rOut, rIn, a0, a1)}
-            fill={s.color}
+            style={{ fill: s.color }}
             opacity={hover == null || hover === s.key ? 1 : 0.45}
             stroke="var(--cds-alias-object-container-background)"
             strokeWidth={2}
@@ -136,7 +140,7 @@ function Donut({
       <div className="absolute inset-0 grid place-items-center pointer-events-none">
         <div className="text-center" style={{ maxWidth: rIn * 1.7 }}>
           <div
-            className="text-[15px] font-bold text-[var(--cds-alias-typography-color-450)] truncate"
+            className="text-[15px] font-semibold text-[var(--cds-alias-typography-color-450)] truncate"
             style={{ fontFamily: "var(--qz-font-mono)" }}
           >
             {hovered ? `${hovered.pct.toFixed(1)}%` : splitBytes(totalBytes).value}

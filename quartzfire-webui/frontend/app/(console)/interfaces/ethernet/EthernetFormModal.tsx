@@ -131,7 +131,7 @@ export function EthernetFormModal({
     <ModalShell onClose={onClose}>
       <ModalHeader
         title={isEdit ? "Edit Interface" : "Add Interface"}
-        subtitle={isEdit ? initial!.name : "Configure a physical ethernet interface"}
+        subtitle={isEdit ? <span className="mono">{initial!.name}</span> : "Configure a physical ethernet interface"}
         onClose={onClose}
       />
 

@@ -28,8 +28,8 @@ interface Result {
 const isUp = (sl: string) => sl.trim().toLowerCase() === "u/u";
 
 function slBadge(value: string) {
-  if (isUp(value)) return <span className="label label-success">{value}</span>;
-  return <span className="label">{value || "—"}</span>;
+  if (isUp(value)) return <span className="badge badge-ok">{value}</span>;
+  return <span className="badge badge-muted">{value || "—"}</span>;
 }
 
 /// Live OpenVPN status: the interface state table plus per-mode session output

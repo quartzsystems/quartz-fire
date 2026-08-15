@@ -145,10 +145,11 @@ export function RecentIpsAlertsTile() {
                   title={`${meta.label} · SID ${r.sid}${r.category ? ` · ${r.category}` : ""}\n${route}${r.proto ? ` (${r.proto})` : ""}`}
                 >
                   <span
-                    className="flex-shrink-0"
-                    style={{ width: 8, height: 8, borderRadius: 999, background: meta.color }}
-                    aria-label={meta.label}
-                  />
+                    className="badge flex-shrink-0"
+                    style={{ borderColor: meta.color, color: meta.color }}
+                  >
+                    {meta.label}
+                  </span>
                   <div className="flex-1 min-w-0">
                     <div className="text-[var(--cds-alias-typography-color-400)] truncate">{r.signature}</div>
                     <div

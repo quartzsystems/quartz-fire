@@ -171,7 +171,7 @@ function ScheduleRebootModal({
       />
       <div className="flex flex-col gap-4">
         <div className="clr-form-control">
-          <label className="clr-control-label">Reboot at</label>
+          <label className="clr-control-label">Reboot At</label>
           <input
             type="datetime-local"
             value={when}
@@ -352,7 +352,7 @@ function AddImageModal({
           onClick={() => !working && isoInput.current?.click()}
           role="button"
           aria-label="Upload an ISO file"
-          className="rounded-md px-4 py-4 text-center cursor-pointer select-none"
+          className="rounded-lg px-4 py-4 text-center cursor-pointer select-none"
           style={{
             border: `1px dashed ${dragOver ? "var(--cds-alias-interaction-action)" : "var(--cds-alias-object-border-color)"}`,
             background: dragOver
@@ -639,14 +639,18 @@ function FactoryResetModal({
           <span className="mono" style={{ color: "var(--cds-alias-typography-color-400)" }}>{RESET_PHRASE}</span>{" "}
           below to confirm.
         </p>
-        <input
-          value={phrase}
-          onChange={(e) => setPhrase(e.target.value)}
-          placeholder={RESET_PHRASE}
-          className="clr-input"
-          style={monoSt}
-          autoFocus
-        />
+        <div className="clr-form-control">
+          <label className="clr-control-label" htmlFor="factory-reset-phrase">Confirmation Phrase</label>
+          <input
+            id="factory-reset-phrase"
+            value={phrase}
+            onChange={(e) => setPhrase(e.target.value)}
+            placeholder={RESET_PHRASE}
+            className="clr-input"
+            style={monoSt}
+            autoFocus
+          />
+        </div>
         {error && (
           <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
             {error}
@@ -781,7 +785,11 @@ export default function MaintenancePage() {
                 <Icon shape="history" size={14} className="alert-icon" />
                 <div className="alert-text">
                   {schedule.mode === "poweroff" ? "Shutdown" : "Reboot"} scheduled for{" "}
-                  {schedule.at_ms ? new Date(schedule.at_ms).toLocaleString() : "an unknown time"}.
+                  {schedule.at_ms ? (
+                    <span className="mono">{new Date(schedule.at_ms).toLocaleString()}</span>
+                  ) : (
+                    "an unknown time"
+                  )}.
                 </div>
                 <div className="alert-actions">
                   <button
@@ -884,11 +892,8 @@ export default function MaintenancePage() {
                         </td>
                         <td className="right">
                           {img.running ? (
-                            <span
-                              style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}
-                              title="The running image can't delete itself."
-                            >
-                              in use
+                            <span title="The running image can't delete itself.">
+                              <Pill tone="info">In Use</Pill>
                             </span>
                           ) : (
                             <DeleteImageAction name={img.name} onDelete={() => removeImage(img)} />

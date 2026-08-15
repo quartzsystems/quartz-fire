@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { AddressFamily, fetchBgp } from "@/lib/bgp";
 import {
   AfSummary,
@@ -39,13 +39,13 @@ const pillStyle = {
 function statePill(state: string) {
   const s = state.toLowerCase();
   if (s === "established") return "label label-success";
-  if (["idle", "connect", "active", "opensent", "openconfirm"].includes(s)) return "label";
+  if (["idle", "connect", "active", "opensent", "openconfirm"].includes(s)) return "label label-warning";
   return "label label-danger";
 }
 
 // ── summary tiles ─────────────────────────────────────────────────────────────
 
-function StatTile({ label, value, sub, subTone = "muted" }: { label: string; value: string; sub?: string; subTone?: "muted" | "warn" }) {
+function StatTile({ label, value, sub, subTone = "muted" }: { label: string; value: string; sub?: React.ReactNode; subTone?: "muted" | "warn" }) {
   return (
     <div className="card" style={{ marginTop: 0 }}>
       <div className="card-block flex flex-col gap-1">
@@ -88,7 +88,7 @@ function AfTable({ af, onInspect }: { af: AfSummary; onInspect: (neighbor: strin
       <div className="flex items-center gap-2">
         <h3 className="clr-section" style={{ margin: 0, color: "var(--cds-alias-typography-color-450)" }}>{AF_LABEL[af.af] ?? af.af}</h3>
         <span className="clr-secondary">
-          {af.established_peers}/{af.total_peers} established
+          <span className="mono">{af.established_peers}/{af.total_peers}</span> established
         </span>
       </div>
       <DataTable
@@ -164,8 +164,13 @@ function NeighborDetailModal({ neighbor, onClose }: { neighbor: string; onClose:
   return (
     <ModalShell onClose={onClose} maxWidth={560}>
       <ModalHeader
-        title={neighbor}
-        subtitle={detail?.description ?? "BGP neighbor detail"}
+        title="Neighbor Detail"
+        subtitle={
+          <>
+            <span className="mono">{neighbor}</span>
+            {detail?.description ? <> — {detail.description}</> : null}
+          </>
+        }
         onClose={onClose}
       />
       {status === "loading" && <div className="clr-secondary">Loading neighbor detail…</div>}
@@ -240,6 +245,7 @@ function NeighborDetailModal({ neighbor, onClose }: { neighbor: string; onClose:
           )}
         </div>
       )}
+      <ModalFooter><button type="button" className="btn btn-primary" onClick={onClose}>Close</button></ModalFooter>
     </ModalShell>
   );
 }
@@ -324,7 +330,7 @@ export function BgpStatusPanel() {
   // that differs from the live one means FRR hasn't applied it yet (`clear ip
   // bgp *`).
   const opRouterId = summary?.router_id ?? null;
-  let routerIdSub: string | undefined;
+  let routerIdSub: React.ReactNode | undefined;
   let routerIdTone: "muted" | "warn" = "muted";
   if (opRouterId) {
     if (cfgRouterId === undefined) {
@@ -332,7 +338,7 @@ export function BgpStatusPanel() {
     } else if (!cfgRouterId) {
       routerIdSub = "auto-derived — none configured";
     } else if (cfgRouterId !== opRouterId) {
-      routerIdSub = `configured ${cfgRouterId} — clear session to apply`;
+      routerIdSub = <>configured <span className="mono">{cfgRouterId}</span> — clear session to apply</>;
       routerIdTone = "warn";
     } else {
       routerIdSub = "configured";

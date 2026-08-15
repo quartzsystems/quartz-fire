@@ -108,7 +108,10 @@ export function DefaultPasswordGate() {
         </div>
 
         {error && (
-          <p style={{ fontSize: 12, marginTop: 12, color: "var(--cds-alias-status-danger)" }}>{error}</p>
+          <div className="alert alert-danger alert-sm" style={{ marginTop: 12 }}>
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <span className="alert-text">{error}</span>
+          </div>
         )}
 
         <ModalFooter>

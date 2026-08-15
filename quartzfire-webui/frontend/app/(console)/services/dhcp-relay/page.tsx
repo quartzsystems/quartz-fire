@@ -196,18 +196,10 @@ function AddEntryModal({
               <button
                 type="button"
                 onClick={toggleAll}
-                className="cursor-pointer hover:underline"
-                style={{
-                  background: "none",
-                  border: 0,
-                  padding: 0,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  marginBottom: 6,
-                  color: "var(--cds-alias-typography-link-color)",
-                }}
+                className="btn btn-sm btn-link"
+                style={{ marginBottom: 6 }}
               >
-                {allSelected ? "Clear all" : "Select all"}
+                {allSelected ? "Clear All" : "Select All"}
               </button>
             )}
           </div>

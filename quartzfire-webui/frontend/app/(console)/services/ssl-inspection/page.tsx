@@ -51,7 +51,7 @@ function Indicator({ label, state, detail }: { label: string; state: "ok" | "war
   const cls = state === "ok" ? "badge-ok" : state === "warn" ? "badge-warn" : "badge-muted";
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">{label}</span>
+      <span className="clr-smallcaption">{label}</span>
       <span className={`badge ${cls}`} title={detail}>
         {detail ?? (state === "ok" ? "Yes" : state === "warn" ? "No" : "—")}
       </span>
@@ -141,7 +141,7 @@ function CaPanel({
 
   const row = (label: string, value: React.ReactNode) => (
     <div className="flex flex-col gap-[2px]">
-      <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">{label}</span>
+      <span className="clr-smallcaption">{label}</span>
       <span className="text-[13px] text-[var(--cds-alias-typography-color-450)] break-all">{value}</span>
     </div>
   );
@@ -167,7 +167,7 @@ function CaPanel({
               {row("Valid until", ca.not_after ?? "—")}
             </div>
             <div className="flex flex-col gap-[2px]">
-              <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">
+              <span className="clr-smallcaption">
                 SHA-256 fingerprint
               </span>
               <div className="flex items-center gap-2">
@@ -398,7 +398,7 @@ function PoliciesTab({
         source or destination instead.
       </p>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {SSL_RULE_COLS.map((c) => (
@@ -459,7 +459,7 @@ function PoliciesTab({
                         </div>
                         {problem && (
                           <span className="badge badge-warn flex-shrink-0" title={problem}>
-                            !
+                            Not Enforced
                           </span>
                         )}
                       </div>
@@ -688,7 +688,7 @@ export default function SslInspectionPage() {
               <div className="card-header">Inspection Policy</div>
               <div className="card-block flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
-                  <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">Default action</span>
+                  <span className="clr-smallcaption">Default action</span>
                   <Segmented
                     items={[
                       { value: "inspect", label: "Inspect all" },
@@ -703,7 +703,7 @@ export default function SslInspectionPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">
+                  <span className="clr-smallcaption">
                     Do-not-inspect (spliced) domains
                   </span>
                   <NoInspectEditor domains={draft.noInspect} onChange={(next) => setDraft((d) => ({ ...d, noInspect: next }))} />
@@ -720,7 +720,7 @@ export default function SslInspectionPage() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">
+                  <span className="clr-smallcaption">
                     Upstream certificate validation
                   </span>
                   <Segmented
@@ -760,16 +760,16 @@ export default function SslInspectionPage() {
                   will plug into.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">ICAP host</span>
+                  <div className="clr-form-control" style={{ marginTop: 0 }}>
+                    <label className="clr-control-label">ICAP Host</label>
                     <input disabled value={draft.contentFilter?.icapHost ?? "127.0.0.1"} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">ICAP port</span>
+                  <div className="clr-form-control" style={{ marginTop: 0 }}>
+                    <label className="clr-control-label">ICAP Port</label>
                     <input disabled value={draft.contentFilter?.icapPort ?? 1344} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">Fail mode</span>
+                  <div className="clr-form-control" style={{ marginTop: 0 }}>
+                    <label className="clr-control-label">Fail Mode</label>
                     <input disabled value={draft.contentFilter?.failMode ?? "closed (fail closed)"} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
                   </div>
                 </div>
@@ -781,7 +781,7 @@ export default function SslInspectionPage() {
 
       {confirm === "enable" && (
         <ConfirmModal
-          title="Enable SSL inspection?"
+          title="Enable SSL Inspection?"
           tone="warn"
           confirmLabel="Enable Inspection"
           onCancel={() => setConfirm(null)}
@@ -804,7 +804,7 @@ export default function SslInspectionPage() {
 
       {confirm === "regenerate" && (
         <ConfirmModal
-          title="Regenerate the inspection CA?"
+          title="Regenerate the Inspection CA?"
           tone="danger"
           confirmLabel="Regenerate CA"
           onCancel={() => setConfirm(null)}

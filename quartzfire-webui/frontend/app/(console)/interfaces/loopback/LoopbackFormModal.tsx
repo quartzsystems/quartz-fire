@@ -71,7 +71,7 @@ export function LoopbackFormModal({
     <ModalShell onClose={onClose}>
       <ModalHeader
         title={isEdit ? "Edit Interface" : "Configure Loopback"}
-        subtitle={name}
+        subtitle={<span className="mono">{name}</span>}
         onClose={onClose}
       />
 

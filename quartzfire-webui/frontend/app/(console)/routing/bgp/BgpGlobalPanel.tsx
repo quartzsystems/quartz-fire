@@ -13,7 +13,7 @@ function Field({ label, hint, required, children }: { label: string; hint?: stri
   return (
     <div className="clr-form-control" style={{ marginTop: 0 }}>
       <label className="clr-control-label">
-        {label} {required && <span style={{ color: "var(--cds-alias-status-danger)" }}>*</span>}
+        {label} {required && <span className="clr-required">*</span>}
       </label>
       {children}
       {hint && <div className="clr-subtext">{hint}</div>}

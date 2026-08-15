@@ -136,10 +136,7 @@ export default function SshPage() {
             <div className="card-header">
               Authorized Keys
               <span style={{ marginLeft: "auto" }}>
-                <Link
-                  href="/system/users"
-                  style={{ fontSize: 12, fontWeight: 400, color: "var(--cds-alias-typography-link-color)", textDecoration: "none" }}
-                >
+                <Link href="/system/users" className="btn btn-sm btn-link">
                   Manage on the Users page →
                 </Link>
               </span>

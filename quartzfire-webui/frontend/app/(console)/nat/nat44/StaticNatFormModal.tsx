@@ -11,10 +11,23 @@ const wide = { maxWidth: "none" } as const;
 const wideMono = { ...wide, ...mono } as const;
 
 /// Clarity field: label + control + optional helper sentence.
-function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="clr-form-control" style={{ marginTop: 0 }}>
-      <label className="clr-control-label">{label}</label>
+      <label className="clr-control-label">
+        {label}
+        {required && <span className="clr-required">*</span>}
+      </label>
       {children}
       {hint && <div className="clr-subtext">{hint}</div>}
     </div>
@@ -121,7 +134,7 @@ export function StaticNatFormModal({
         </datalist>
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Rule Number">
+          <Field label="Rule Number" required>
             <input
               type="number"
               min={1}
@@ -156,7 +169,7 @@ export function StaticNatFormModal({
         </Field>
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Internal Address" hint="The private host (LAN side).">
+          <Field label="Internal Address" required hint="The private host (LAN side).">
             <input
               value={internalAddress}
               onChange={(e) => setInternalAddress(e.target.value)}
@@ -165,7 +178,7 @@ export function StaticNatFormModal({
               style={wideMono}
             />
           </Field>
-          <Field label="External Address" hint="The public address (WAN side).">
+          <Field label="External Address" required hint="The public address (WAN side).">
             <input
               value={externalAddress}
               onChange={(e) => setExternalAddress(e.target.value)}

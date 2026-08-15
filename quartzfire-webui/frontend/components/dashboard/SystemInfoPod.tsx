@@ -52,12 +52,7 @@ function Bar({ pct }: { pct: number | null }) {
 function SectionTitle({ label, right }: { label: string; right?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between mb-[8px]">
-      <div
-        className="text-[11px] uppercase"
-        style={{ letterSpacing: "0.04em", color: "var(--cds-alias-typography-color-200)" }}
-      >
-        {label}
-      </div>
+      <div className="clr-smallcaption">{label}</div>
       {right != null && <div className="text-[12px] text-[var(--cds-alias-typography-color-300)]">{right}</div>}
     </div>
   );

@@ -403,31 +403,28 @@ export default function UnifiedLogsPage() {
           </div>
 
           {/* Source toggles */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {ALL_SOURCES.map((s) => {
-              const on = sources.has(s);
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => toggleSource(s)}
-                  className="inline-flex items-center gap-[6px] px-[10px] py-[5px] rounded-md text-[12px] font-medium border cursor-pointer transition-colors"
-                  style={{
-                    background: on ? "var(--qz-accent-soft)" : "transparent",
-                    borderColor: on ? "color-mix(in oklab, var(--qz-accent) 30%, transparent)" : "var(--qz-border)",
-                    color: on ? "var(--qz-fg-1)" : "var(--qz-fg-4)",
-                  }}
-                  title={on ? "Hide this source" : "Show this source"}
-                >
-                  <SourcePill source={s} />
-                  <span className="text-[var(--qz-fg-4)]">{counts[s]}</span>
-                </button>
-              );
-            })}
+          <div className="flex items-center flex-wrap">
+            <div className="btn-group">
+              {ALL_SOURCES.map((s) => {
+                const on = sources.has(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => toggleSource(s)}
+                    className={`btn btn-sm${on ? " active" : ""}`}
+                    title={on ? "Hide this source" : "Show this source"}
+                  >
+                    <SourcePill source={s} />
+                    <span style={{ opacity: 0.75 }}>{counts[s]}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Table */}
-          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
+          <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
             <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
               <colgroup>
                 {cols.map((c) => (

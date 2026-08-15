@@ -244,7 +244,7 @@ export function UserFormModal({
               {keys.map((k, i) => (
                 <div
                   key={i}
-                  className="rounded-md p-3 flex flex-col gap-2"
+                  className="rounded-lg p-3 flex flex-col gap-2"
                   style={{ border: "1px solid var(--cds-alias-object-border-color-tint)" }}
                 >
                   <div className="flex items-center gap-2">

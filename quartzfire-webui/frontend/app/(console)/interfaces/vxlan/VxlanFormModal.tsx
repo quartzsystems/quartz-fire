@@ -251,7 +251,7 @@ export function VxlanFormModal({
     <ModalShell onClose={onClose} maxWidth={560}>
       <ModalHeader
         title={isEdit ? "Edit VXLAN" : "Create VXLAN"}
-        subtitle={isEdit ? initial!.name : "Overlay tunnel endpoint (VTEP)"}
+        subtitle={isEdit ? <span className="mono">{initial!.name}</span> : "Overlay tunnel endpoint (VTEP)"}
         onClose={onClose}
       />
 
@@ -271,7 +271,7 @@ export function VxlanFormModal({
           <Segmented
             items={[
               { value: "evpn", label: "BGP-EVPN" },
-              { value: "static", label: "Static unicast" },
+              { value: "static", label: "Static Unicast" },
               { value: "multicast", label: "Multicast" },
             ]}
             value={mode}
@@ -309,7 +309,7 @@ export function VxlanFormModal({
                   className="clr-input"
                   style={wideMono}
                 />
-                <span className="clr-subtext" style={{ marginTop: 0, flexShrink: 0 }}>↔ VLAN</span>
+                <span className="clr-subtext" style={{ marginTop: 0, flexShrink: 0 }}>→ VLAN</span>
                 <input
                   value={r.vlan}
                   onChange={(e) => updateVni(r.key, { vlan: e.target.value })}
@@ -502,9 +502,9 @@ export function VxlanFormModal({
 
         <div
           className="flex flex-col"
-          style={{ gap: 10, border: "1px solid var(--cds-alias-object-border-color)", borderRadius: 4, padding: 12 }}
+          style={{ gap: 10, border: "1px solid var(--cds-alias-object-border-color)", borderRadius: "var(--clr-base-border-radius-m)", padding: 12 }}
         >
-          <span className="clr-control-label" style={{ marginBottom: 0 }}>Advanced parameters</span>
+          <span className="clr-control-label" style={{ marginBottom: 0 }}>Advanced Parameters</span>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <Switch on={nolearning} onChange={setNolearning} />
             <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
 import { L2tpPool, applyL2tpPool, emptyL2tpPool } from "@/lib/l2tp";
 
 const monoSt = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
@@ -63,7 +64,12 @@ export function PoolFormModal({ initial, existingNames, onClose, onSaved }: {
           <input value={range} onChange={(e) => setRange(e.target.value)} placeholder="10.10.0.10-10.10.0.100" className="clr-input" style={monoSt} />
         </Field>
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <span className="alert-text">{error}</span>
+          </div>
+        )}
 
         <ModalFooter>
           <button type="button" onClick={onClose} className="btn btn-neutral">Cancel</button>

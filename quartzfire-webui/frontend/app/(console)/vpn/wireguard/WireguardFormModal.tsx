@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Button, IconButton } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { Switch } from "@/components/ui/Switch";
 import {
   WireguardInterface,
@@ -197,7 +198,7 @@ export function WireguardFormModal({ initial, existingNames, interfaces, onClose
 
         {/* Peers */}
         <div className="flex items-center justify-between mt-1">
-          <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--cds-alias-typography-color-400)" }}>Peers</span>
+          <span className="clr-smallcaption">Peers</span>
           <Button kind="ghost" size="sm" icon="plus" onClick={addPeer}>Add Peer</Button>
         </div>
 
@@ -207,7 +208,7 @@ export function WireguardFormModal({ initial, existingNames, interfaces, onClose
 
         <div className="flex flex-col gap-3">
           {peers.map((peer) => (
-            <div key={peer.key} className="flex flex-col gap-3" style={{ border: "1px solid var(--cds-alias-object-border-color)", borderRadius: 4, padding: "12px 16px" }}>
+            <div key={peer.key} className="flex flex-col gap-3" style={{ border: "1px solid var(--cds-alias-object-border-color)", borderRadius: "var(--clr-base-border-radius-m)", padding: "12px 16px" }}>
               <div className="flex items-center gap-2">
                 <input value={peer.name} onChange={(e) => updatePeer(peer.key, { name: e.target.value })} placeholder="peer name" className="clr-input flex-1" style={monoSt} />
                 <label className="flex items-center gap-1 text-[12px] whitespace-nowrap" style={{ color: "var(--cds-alias-typography-color-300)" }}>
@@ -240,7 +241,12 @@ export function WireguardFormModal({ initial, existingNames, interfaces, onClose
           ))}
         </div>
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <span className="alert-text">{error}</span>
+          </div>
+        )}
 
         <ModalFooter>
           <button type="button" onClick={onClose} className="btn btn-neutral">

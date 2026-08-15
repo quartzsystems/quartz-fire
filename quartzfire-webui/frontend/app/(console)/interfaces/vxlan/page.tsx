@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { StatePill } from "@/components/ui/Badge";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { MtuCell } from "@/components/dashboard/MtuCell";
@@ -20,13 +21,6 @@ function plane(r: VxlanInterface): Plane {
   return "—";
 }
 
-const PLANE_BADGE: Record<Plane, string> = {
-  EVPN: "badge-ok",
-  Static: "badge-info",
-  Multicast: "badge-info",
-  "—": "badge-muted",
-};
-
 const dash = (v: string | null) => (v && v.length ? v : "—");
 
 const columns: Column<VxlanInterface>[] = [
@@ -40,7 +34,7 @@ const columns: Column<VxlanInterface>[] = [
       const first = r.vnis[0];
       const label = first.vlan != null ? `${first.vni}→v${first.vlan}` : String(first.vni);
       return (
-        <span style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12 }}>
+        <span>
           {label}
           {r.vnis.length > 1 && (
             <span style={{ color: "var(--cds-alias-typography-color-200)" }}> +{r.vnis.length - 1}</span>
@@ -48,6 +42,7 @@ const columns: Column<VxlanInterface>[] = [
         </span>
       );
     },
+    mono: true,
     sortable: true,
     width: 130,
   },
@@ -55,7 +50,13 @@ const columns: Column<VxlanInterface>[] = [
     key: "plane",
     header: "Control Plane",
     value: (r) => plane(r),
-    render: (r) => <span className={`badge ${PLANE_BADGE[plane(r)]}`}>{plane(r)}</span>,
+    // Control plane is a category, not a status — every value gets the same
+    // neutral pill; "no plane" renders as a bare dash like other empty cells.
+    render: (r) => {
+      const p = plane(r);
+      if (p === "—") return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
+      return <span className="badge badge-muted">{p}</span>;
+    },
     sortable: true,
     width: 130,
   },
@@ -79,9 +80,7 @@ const columns: Column<VxlanInterface>[] = [
     key: "status",
     header: "Status",
     value: (r) => (r.enabled ? "enabled" : "disabled"),
-    render: (r) => (
-      <span className={r.enabled ? "badge badge-ok" : "badge badge-muted"}>{r.enabled ? "Enabled" : "Disabled"}</span>
-    ),
+    render: (r) => <StatePill enabled={r.enabled} />,
     sortable: true,
     width: 110,
   },

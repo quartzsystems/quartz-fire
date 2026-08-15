@@ -288,7 +288,8 @@ export default function DevicesPage() {
                   <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
                     {formatBytes(usageSeries.bytes_in + usageSeries.bytes_out)}
                     <span className="mx-1">·</span>
-                    {formatBytes(usageSeries.bytes_in)} ↓ / {formatBytes(usageSeries.bytes_out)} ↑
+                    {formatBytes(usageSeries.bytes_in)} <Icon shape="arrow" dir="down" size={10} /> /{" "}
+                    {formatBytes(usageSeries.bytes_out)} <Icon shape="arrow" dir="up" size={10} />
                   </span>
                 )}
               </div>
@@ -359,7 +360,7 @@ export default function DevicesPage() {
       )}
 
       {/* Table */}
-      <div className="mt-4 rounded-md overflow-x-auto" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
+      <div className="mt-4 rounded-lg overflow-x-auto" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ tableLayout: resize.tableLayout, width: "100%" }}>
           <colgroup>
             <col style={{ width: 34 }} />
@@ -502,21 +503,10 @@ function DeviceRowView({
   > = {
     status: {
       style: ELLIPSIS,
-      node: (
-        <span className="inline-flex items-center gap-[7px]">
-          <span
-            className="flex-shrink-0"
-            style={{
-              width: 9,
-              height: 9,
-              borderRadius: 999,
-              background: device.online ? "var(--cds-alias-status-success)" : "var(--qz-ink-7)",
-            }}
-          />
-          <span className={device.online ? "text-[var(--qz-fg-1)]" : "text-[var(--qz-fg-4)]"}>
-            {device.online ? "Online" : "Offline"}
-          </span>
-        </span>
+      node: device.online ? (
+        <span className="badge badge-ok">Online</span>
+      ) : (
+        <span className="badge badge-muted">Offline</span>
       ),
     },
     description: {
@@ -543,7 +533,8 @@ function DeviceRowView({
         <div className="flex flex-col leading-tight">
           <span className="text-[13px] text-[var(--qz-fg-1)]">{formatBytes(down + up)}</span>
           <span className="text-[11px] text-[var(--qz-fg-4)]">
-            {formatBytes(down)} ↓ / {formatBytes(up)} ↑
+            {formatBytes(down)} <Icon shape="arrow" dir="down" size={10} /> / {formatBytes(up)}{" "}
+            <Icon shape="arrow" dir="up" size={10} />
           </span>
         </div>
       ),
@@ -585,7 +576,7 @@ function DeviceRowView({
             type="button"
             onClick={onToggle}
             aria-label={expanded ? "Collapse" : "Expand"}
-            className="text-[var(--qz-fg-4)] hover:text-[var(--qz-fg-1)] bg-transparent border-0 p-0 cursor-pointer align-middle"
+            className="btn btn-sm btn-link-neutral btn-icon align-middle"
           >
             <Icon shape="angle" dir={expanded ? "down" : "right"} size={14} />
           </button>
@@ -668,13 +659,12 @@ function DescriptionCell({
           maxLength={128}
           placeholder={device.hostname ?? device.mac}
           disabled={saving}
-          className="flex-1 min-w-0 rounded-md px-2 py-[4px] text-[13px] text-[var(--qz-fg-1)] outline-none"
-          style={{ background: "var(--qz-input-bg)", border: "1px solid var(--cds-alias-interaction-action)" }}
+          className="clr-input flex-1 min-w-0"
         />
-        <button type="button" onClick={save} disabled={saving} title="Save" className="bg-transparent border-0 p-0 cursor-pointer" style={{ color: "var(--cds-alias-status-success)" }}>
+        <button type="button" onClick={save} disabled={saving} title="Save" className="btn btn-sm btn-link-neutral btn-icon">
           <Icon shape="check" size={14} />
         </button>
-        <button type="button" onClick={() => setEditing(false)} title="Cancel" className="text-[var(--qz-fg-4)] hover:text-[var(--qz-fg-1)] bg-transparent border-0 p-0 cursor-pointer">
+        <button type="button" onClick={() => setEditing(false)} title="Cancel" className="btn btn-sm btn-link-neutral btn-icon">
           <Icon shape="times" size={14} />
         </button>
       </span>
@@ -694,7 +684,7 @@ function DescriptionCell({
         onClick={begin}
         title="Edit description"
         aria-label="Edit description"
-        className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--qz-fg-4)] hover:text-[var(--qz-accent)] bg-transparent border-0 p-0 cursor-pointer flex-shrink-0"
+        className="btn btn-sm btn-link-neutral btn-icon opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
       >
         <Icon shape="pencil" size={12} />
       </button>
@@ -769,15 +759,15 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
     ["MAC address", <span className="mono" key="mac">{detail.mac}</span>],
     ["Vendor (OUI)", detail.vendor ?? "Unknown"],
     ["Interface", mono(detail.interface)],
-    ["VLAN", detail.vlan ?? dash],
+    ["VLAN", detail.vlan != null ? <span className="mono" key="vlan">{detail.vlan}</span> : dash],
     ["Neighbor state", detail.neigh_state ?? dash],
     [
       "IPv4 assignment",
       detail.dhcp_static === true ? "Static reservation" : detail.dhcp_static === false ? "Dynamic DHCP lease" : "Not from DHCP",
     ],
-    ["Lease expiry", detail.lease_expiry ? formatTimestamp(detail.lease_expiry) : dash],
-    ["First seen", <span title={formatTimestamp(detail.first_seen)} key="fs">{formatRelative(detail.first_seen)}</span>],
-    ["Last seen", <span title={formatTimestamp(detail.last_seen)} key="ls">{formatRelative(detail.last_seen)}</span>],
+    ["Lease expiry", detail.lease_expiry ? <span className="mono" key="le">{formatTimestamp(detail.lease_expiry)}</span> : dash],
+    ["First seen", <span className="mono" title={formatTimestamp(detail.first_seen)} key="fs">{formatRelative(detail.first_seen)}</span>],
+    ["Last seen", <span className="mono" title={formatTimestamp(detail.last_seen)} key="ls">{formatRelative(detail.last_seen)}</span>],
   ];
 
   return (
@@ -789,7 +779,8 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
           <span className="text-[12px] text-[var(--qz-fg-2)]">
             {formatBytes(detail.bytes_in + detail.bytes_out)}
             <span className="mx-1 text-[var(--qz-fg-4)]">·</span>
-            {formatBytes(detail.bytes_in)} ↓ / {formatBytes(detail.bytes_out)} ↑
+            {formatBytes(detail.bytes_in)} <Icon shape="arrow" dir="down" size={10} /> /{" "}
+            {formatBytes(detail.bytes_out)} <Icon shape="arrow" dir="up" size={10} />
           </span>
         </div>
         <UsageChart points={detail.usage} windowSecs={WINDOW_SECS[usageWindow]} nowSecs={detail.now} height={170} />

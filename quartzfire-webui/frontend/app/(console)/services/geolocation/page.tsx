@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 
 /** Resizable columns of the Actions tab table (trailing edit cell fixed). */
 const GEO_ACTION_COLS = [
@@ -62,7 +63,6 @@ import {
   fetchGeoCountries,
   fetchGeolocation,
   fetchGeoStatus,
-  flagEmoji,
   GEO_DIRECTION_LABEL,
   GEO_MODE_LABEL,
   GeoAction,
@@ -87,6 +87,38 @@ const dash = <span className="text-[var(--cds-alias-typography-color-200)]">—<
 
 const time = (ts: number | null | undefined) =>
   ts ? new Date(ts * 1000).toLocaleString(undefined, { hour12: false }) : "never";
+
+// ── themed confirm (mirrors the Content Filtering page) ───────────────────────
+
+function ConfirmModal({
+  title, confirmLabel, onCancel, onConfirm, children,
+}: {
+  title: string; confirmLabel: string;
+  onCancel: () => void; onConfirm: () => Promise<void>; children: React.ReactNode;
+}) {
+  const [working, setWorking] = useState(false);
+  const close = () => { if (!working) onCancel(); };
+  const run = async () => { setWorking(true); try { await onConfirm(); } finally { setWorking(false); } };
+  return (
+    <ModalShell onClose={close} maxWidth={460}>
+      <ModalHeader title={title} onClose={close} />
+      <div className="flex flex-col gap-4">
+        <div className="alert alert-danger">
+          <Icon shape="exclamation-triangle" size={16} className="alert-icon" />
+          <div className="alert-text flex flex-col gap-2 [&_p]:m-0">{children}</div>
+        </div>
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={close} disabled={working}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-danger" onClick={run} disabled={working}>
+            {working ? "Working…" : confirmLabel}
+          </button>
+        </ModalFooter>
+      </div>
+    </ModalShell>
+  );
+}
 
 // ── status card ───────────────────────────────────────────────────────────────
 
@@ -127,9 +159,12 @@ function LookupTool() {
         (result.error ? (
           <span className="text-[12px] text-[var(--cds-alias-status-danger)]">{result.error}</span>
         ) : result.country ? (
-          <span className="text-[13px] text-[var(--cds-alias-typography-color-450)]">
-            {flagEmoji(result.country)} {result.country_name ?? result.country}
-            <span className="text-[var(--cds-alias-typography-color-200)] mono text-[12px]"> · {result.network}</span>
+          <span className="text-[13px] text-[var(--cds-alias-typography-color-450)] inline-flex items-baseline gap-[6px]">
+            <span className="mono text-[12px] uppercase">{result.country}</span>
+            <span>
+              {result.country_name ?? result.country}
+              <span className="text-[var(--cds-alias-typography-color-200)] mono text-[12px]"> · {result.network}</span>
+            </span>
           </span>
         ) : (
           <span className="text-[13px] text-[var(--cds-alias-typography-color-300)]">
@@ -169,7 +204,7 @@ function StatusCard({
 
   const item = (label: string, value: React.ReactNode) => (
     <div className="flex flex-col gap-[2px]">
-      <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">{label}</span>
+      <span className="clr-smallcaption">{label}</span>
       <span className="text-[13px] text-[var(--cds-alias-typography-color-450)]">{value}</span>
     </div>
   );
@@ -247,6 +282,7 @@ function ActionsTab({
   const { setToast } = useDashboard();
   const [editing, setEditing] = useState<GeoAction | null>(null);
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<GeoAction | null>(null);
   const resize = useColumnResize("geo-actions", GEO_ACTION_COLS);
 
   const hits = status?.counters?.actions ?? {};
@@ -272,7 +308,7 @@ function ActionsTab({
     }
   };
 
-  const remove = async (a: GeoAction) => {
+  const remove = (a: GeoAction) => {
     const uses = actionUsage(config.policies, a.name);
     if (uses.length > 0) {
       setToast(
@@ -280,7 +316,10 @@ function ActionsTab({
       );
       return;
     }
-    if (!window.confirm(`Delete geolocation action "${a.name}"?`)) return;
+    setDeleting(a);
+  };
+
+  const confirmRemove = async (a: GeoAction) => {
     try {
       await deleteGeoAction(a.name);
       setToast("Action deleted — confirm the change in the banner.");
@@ -310,7 +349,7 @@ function ActionsTab({
         </Button>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {GEO_ACTION_COLS.map((c) => (
@@ -398,6 +437,24 @@ function ActionsTab({
           onCancel={() => { setEditing(null); setCreating(false); }}
           onSave={save}
         />
+      )}
+
+      {deleting && (
+        <ConfirmModal
+          title="Delete Action"
+          confirmLabel="Delete"
+          onCancel={() => setDeleting(null)}
+          onConfirm={async () => {
+            const a = deleting;
+            setDeleting(null);
+            await confirmRemove(a);
+          }}
+        >
+          <p>
+            Delete geolocation action <strong>{deleting.name}</strong>? This removes the action from
+            the configuration — the change still has to be confirmed in the banner.
+          </p>
+        </ConfirmModal>
       )}
     </div>
   );
@@ -591,7 +648,7 @@ function PoliciesTab({
         .
       </p>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {GEO_RULE_COLS.map((c) => (
@@ -642,11 +699,8 @@ function PoliciesTab({
                       )}
                       {disabled && <span className="badge badge-muted ml-2">Disabled</span>}
                       {error && (
-                        <span
-                          className="inline-flex items-center gap-1 ml-2 text-[12px] text-[var(--cds-alias-status-danger)]"
-                          title={error}
-                        >
-                          <Icon shape="exclamation-triangle" size={12} /> not enforced
+                        <span className="badge badge-warn ml-2" title={error}>
+                          Not Enforced
                         </span>
                       )}
                     </td>
@@ -716,7 +770,7 @@ function PoliciesTab({
               and the device still tries to enforce them. Remove them here.
             </div>
           </div>
-          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+          <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
             <table ref={orphanResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: orphanResize.tableLayout }}>
               <colgroup>
                 {GEO_ORPHAN_COLS.map((c) => (
@@ -746,8 +800,9 @@ function PoliciesTab({
                         {actionNames.includes(p.action) ? (
                           <span className="text-[var(--cds-alias-typography-color-400)]">{p.action}</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[var(--cds-alias-status-danger)]" title="Action no longer exists">
-                            <Icon shape="exclamation-triangle" size={12} /> {p.action}
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-[var(--cds-alias-typography-color-400)]">{p.action}</span>
+                            <span className="badge badge-crit" title="Action no longer exists">Missing</span>
                           </span>
                         )}
                         {!p.enabled && <span className="badge badge-muted ml-2">Disabled</span>}
@@ -940,8 +995,8 @@ function AlertsTab() {
         if (geo === undefined) return <span className="text-[var(--cds-alias-typography-color-200)]">…</span>;
         if (!geo?.country) return dash;
         return (
-          <span className="inline-flex items-center gap-[6px]">
-            <span>{flagEmoji(geo.country)}</span>
+          <span className="inline-flex items-baseline gap-[6px]">
+            <span className="mono text-[11px] uppercase text-[var(--cds-alias-typography-color-200)]">{geo.country}</span>
             <span>{geo.country_name ?? geo.country}</span>
           </span>
         );
@@ -1010,7 +1065,7 @@ function AlertsTab() {
         </div>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={alertResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: alertResize.tableLayout }}>
           <colgroup>
             {cols.map((c) => (

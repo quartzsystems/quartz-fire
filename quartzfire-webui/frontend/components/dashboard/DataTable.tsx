@@ -69,7 +69,7 @@ export function DataTable<T>({
   storageKey?: string;
   /** Double-clicking a row opens it (usually its edit modal). */
   onRowOpen?: (row: T) => void;
-  /** Enables "Delete selected" in the selection action bar. */
+  /** Enables "Delete Selected" in the selection action bar. */
   onDeleteSelected?: (ids: string[]) => void | Promise<void>;
   /** Extra note in the datagrid footer (interaction hints, caveats). */
   footerHint?: React.ReactNode;
@@ -457,7 +457,7 @@ export function DataTable<T>({
             </Button>
             {menuOpen && (
               <div className="dropdown-menu right" style={{ minWidth: 200 }}>
-                <div className="dropdown-header">Show columns</div>
+                <div className="dropdown-header">Show Columns</div>
                 {orderedKeys.map((k) => {
                   const c = byKey.get(k);
                   if (!c) return null;
@@ -493,7 +493,7 @@ export function DataTable<T>({
                   }}
                 >
                   <Icon shape="undo" size={13} />
-                  Reset layout
+                  Reset Layout
                 </button>
               </div>
             )}
@@ -533,7 +533,7 @@ export function DataTable<T>({
                 onClick={() => void deleteSelected()}
               >
                 <Icon shape="trash" size={12} />
-                {deleting ? "Deleting…" : "Delete selected"}
+                {deleting ? "Deleting…" : "Delete Selected"}
               </button>
             )}
           </div>

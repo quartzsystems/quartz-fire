@@ -168,7 +168,7 @@ function CommitDiffModal({ revision, onClose }: { revision: number; onClose: () 
       )}
       {state.status === "ready" && (
         <pre
-          className="m-0 rounded-md p-3 overflow-auto"
+          className="m-0 rounded-lg p-3 overflow-auto"
           style={{
             fontFamily: "var(--qz-font-mono)",
             fontSize: 12,

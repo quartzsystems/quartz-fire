@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
+import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
 import { applyNatRule, NatRule, NatSection } from "@/lib/nat";
 import { ALIAS_GROUP, FirewallAlias, InterfaceAlias } from "@/lib/firewall";
@@ -20,10 +21,23 @@ const PROTOCOLS = ["all", "tcp", "udp", "tcp_udp", "icmp", "esp", "gre"];
 const NET_PREFIX = "network:";
 
 /// Clarity field: label + control + optional helper sentence.
-function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <div className="clr-form-control" style={{ marginTop: 0 }}>
-      <label className="clr-control-label">{label}</label>
+      <label className="clr-control-label">
+        {label}
+        {required && <span className="clr-required">*</span>}
+      </label>
       {children}
       {hint && <div className="clr-subtext">{hint}</div>}
     </div>
@@ -207,7 +221,7 @@ export function NatRuleFormModal({
         </datalist>
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Rule Number">
+          <Field label="Rule Number" required>
             <input
               type="number"
               min={1}
@@ -278,18 +292,15 @@ export function NatRuleFormModal({
             }
           >
             <div className="flex gap-2">
-              <div style={{ width: 104, flexShrink: 0 }}>
-                <div className="clr-select-wrapper" style={wide}>
-                  <select
-                    value={sourceMode}
-                    onChange={(e) => setSourceMode(e.target.value as "address" | "alias")}
-                    className="clr-select"
-                    style={wide}
-                  >
-                    <option value="address">Address</option>
-                    <option value="alias">Alias</option>
-                  </select>
-                </div>
+              <div style={{ flexShrink: 0 }}>
+                <Segmented
+                  items={[
+                    { value: "address", label: "Address" },
+                    { value: "alias", label: "Alias" },
+                  ]}
+                  value={sourceMode}
+                  onChange={(v) => setSourceMode(v as "address" | "alias")}
+                />
               </div>
               <div className="flex-1 min-w-0">
                 {sourceMode === "address" ? (
@@ -312,7 +323,7 @@ export function NatRuleFormModal({
                         {hasAliasOptions ? "Select alias…" : "No aliases defined"}
                       </option>
                       {builtinOptions.length > 0 && (
-                        <optgroup label="Interface networks">
+                        <optgroup label="Interface Networks">
                           {builtinOptions.map((o) => (
                             <option key={o.value} value={o.value}>
                               {o.label}
@@ -380,6 +391,7 @@ export function NatRuleFormModal({
           <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 12 }}>
             <Field
               label={isSource ? "Translation Address" : "Forward-to Address"}
+              required
               hint="An IP, CIDR block, or range (192.168.1.10-192.168.1.20)."
             >
               <input

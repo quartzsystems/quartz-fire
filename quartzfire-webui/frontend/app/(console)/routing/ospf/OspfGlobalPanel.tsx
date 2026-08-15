@@ -112,13 +112,13 @@ export function OspfGlobalPanel({ live, onSaved }: { live: OspfGlobal; onSaved: 
           <Field label="Router ID" hint="Usually a loopback address.">
             <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Reference bandwidth" hint="auto-cost reference-bandwidth (Mbit/s).">
+          <Field label="Reference Bandwidth" hint="auto-cost reference-bandwidth (Mbit/s).">
             <input value={refBw} onChange={(e) => setRefBw(e.target.value)} placeholder="100" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Administrative distance" hint="distance global (1–255).">
+          <Field label="Administrative Distance" hint="distance global (1–255).">
             <input value={distance} onChange={(e) => setDistance(e.target.value)} placeholder="110" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Maximum paths" hint="ECMP width (1–64).">
+          <Field label="Maximum Paths" hint="ECMP width (1–64).">
             <input value={maxPaths} onChange={(e) => setMaxPaths(e.target.value)} placeholder="4" className="clr-input" style={monoStyle} />
           </Field>
         </div>
@@ -139,7 +139,7 @@ export function OspfGlobalPanel({ live, onSaved }: { live: OspfGlobal; onSaved: 
             <Field label="Metric">
               <input value={diMetric} onChange={(e) => setDiMetric(e.target.value)} placeholder="20" className="clr-input" style={monoStyle} />
             </Field>
-            <Field label="Metric type">
+            <Field label="Metric Type">
               <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
                 <select value={diMetricType} onChange={(e) => setDiMetricType(e.target.value as "1" | "2" | "")} className="clr-select" style={inputStyle}>
                   <option value="">Default (2)</option>

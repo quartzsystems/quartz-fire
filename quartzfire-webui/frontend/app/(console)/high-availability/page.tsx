@@ -18,7 +18,7 @@ export default function HighAvailabilityPage() {
       <div className="card">
         <div className="card-block flex flex-col items-center justify-center gap-3 py-16 text-center">
           <Icon shape="cluster" size={28} style={{ color: "var(--cds-alias-typography-color-200)" }} />
-          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--cds-alias-typography-color-400)" }}>Coming soon</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: "var(--cds-alias-typography-color-400)" }}>Coming Soon</div>
           <p className="clr-secondary max-w-[420px] m-0">
             High Availability isn&apos;t available yet. Use Config Sync and VRRP under this
             section as they come online.

@@ -14,7 +14,8 @@ export function RowActions({
   /** Accessible name of the row, e.g. `alias LAN-NET` or `rule 20`. */
   label: string;
   onEdit: () => void;
-  onDelete: () => Promise<unknown>;
+  /** Omit for edit-only rows — no delete button is rendered. */
+  onDelete?: () => Promise<unknown>;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [working, setWorking] = useState(false);
@@ -30,17 +31,19 @@ export function RowActions({
       >
         <Icon shape="pencil" size={14} />
       </button>
-      <button
-        type="button"
-        title={`Delete ${label}`}
-        aria-label="Delete"
-        onClick={() => setConfirming(true)}
-        className="btn btn-sm btn-link-neutral btn-icon"
-      >
-        <Icon shape="trash" size={14} />
-      </button>
+      {onDelete && (
+        <button
+          type="button"
+          title={`Delete ${label}`}
+          aria-label="Delete"
+          onClick={() => setConfirming(true)}
+          className="btn btn-sm btn-link-neutral btn-icon"
+        >
+          <Icon shape="trash" size={14} />
+        </button>
+      )}
 
-      {confirming && (
+      {confirming && onDelete && (
         <ModalShell onClose={() => setConfirming(false)} maxWidth={420}>
           <ModalHeader title="Confirm Delete" onClose={() => setConfirming(false)} />
           <p style={{ fontSize: 14, color: "var(--cds-alias-typography-color-400)" }}>
@@ -57,7 +60,7 @@ export function RowActions({
               onClick={async () => {
                 setWorking(true);
                 try {
-                  await onDelete();
+                  await onDelete?.();
                 } finally {
                   setWorking(false);
                   setConfirming(false);

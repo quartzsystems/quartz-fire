@@ -105,7 +105,7 @@ export function ColumnsMenu({ vis }: { vis: ColumnVisibility }) {
       </Button>
       {open && (
         <div className="dropdown-menu right" style={{ minWidth: 200 }}>
-          <div className="dropdown-header">Show columns</div>
+          <div className="dropdown-header">Show Columns</div>
           {vis.columns.map((c) => {
             const visible = vis.isVisible(c.key);
             const lastVisible = visible && vis.visibleCount === 1;
@@ -139,7 +139,7 @@ export function ColumnsMenu({ vis }: { vis: ColumnVisibility }) {
             }}
           >
             <Icon shape="undo" size={13} />
-            Reset layout
+            Reset Layout
           </button>
         </div>
       )}

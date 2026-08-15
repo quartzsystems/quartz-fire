@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { Switch } from "@/components/ui/Switch";
 import { applyIpsecInterfaces } from "@/lib/ipsec";
 
@@ -53,7 +54,7 @@ export function InterfacesPanel({ live, interfaces, onSaved }: {
 
         {names.length === 0 && <p className="text-[13px] m-0" style={{ color: "var(--cds-alias-typography-color-200)" }}>No interfaces available.</p>}
 
-        <div className="flex flex-col" style={{ border: "1px solid var(--cds-alias-object-border-subtle)", borderRadius: 4 }}>
+        <div className="flex flex-col" style={{ border: "1px solid var(--cds-alias-object-border-subtle)", borderRadius: "var(--clr-base-border-radius-m)" }}>
           {names.map((name, i) => (
             <label key={name} className="flex items-center justify-between px-3 py-[10px] cursor-pointer select-none" style={{ borderTop: i === 0 ? undefined : "1px solid var(--cds-alias-object-border-subtle)" }}>
               <span className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-450)", fontFamily: "var(--qz-font-mono)" }}>{name}</span>
@@ -62,7 +63,12 @@ export function InterfacesPanel({ live, interfaces, onSaved }: {
           ))}
         </div>
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <span className="alert-text">{error}</span>
+          </div>
+        )}
       </div>
       <div className="card-footer">
         <Button kind="primary" size="sm" onClick={apply} disabled={saving || !dirty}>

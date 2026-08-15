@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Button, IconButton } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { Segmented } from "@/components/ui/Segmented";
 import {
   AuthMode,
@@ -175,7 +176,7 @@ export function PeerFormModal({ initial, existingNames, ikeGroups, espGroups, on
         </div>
 
         {/* Authentication */}
-        <span className="text-[12px] font-semibold uppercase tracking-wide mt-1" style={{ color: "var(--cds-alias-typography-color-400)" }}>Authentication</span>
+        <span className="clr-smallcaption mt-1">Authentication</span>
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Mode">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
@@ -202,7 +203,7 @@ export function PeerFormModal({ initial, existingNames, ikeGroups, espGroups, on
 
         {/* Design: policy vs route (VTI) */}
         <div className="flex items-center gap-3 mt-1">
-          <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--cds-alias-typography-color-400)" }}>Tunnels</span>
+          <span className="clr-smallcaption">Tunnels</span>
           <Segmented
             items={[{ value: "policy", label: "Policy-based" }, { value: "route", label: "Route-based (VTI)" }]}
             value={design}
@@ -217,7 +218,7 @@ export function PeerFormModal({ initial, existingNames, ikeGroups, espGroups, on
         ) : (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
-              <span className="text-[11px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Traffic selectors — local ↔ remote prefixes.</span>
+              <span className="text-[11px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Traffic selectors — local → remote prefixes.</span>
               <Button kind="ghost" size="sm" icon="plus" onClick={addTunnel}>Add Tunnel</Button>
             </div>
             {tunnels.length === 0 && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-typography-color-300)" }}>No tunnels — a policy-based peer needs at least one.</p>}
@@ -225,7 +226,7 @@ export function PeerFormModal({ initial, existingNames, ikeGroups, espGroups, on
               <div key={t.key} className="flex items-center gap-2">
                 <input value={t.seq} onChange={(e) => updateTunnel(t.key, { seq: e.target.value })} placeholder="#" className="clr-input text-center" style={{ ...monoSt, width: 52, flex: "none" }} />
                 <input value={t.local_prefix} onChange={(e) => updateTunnel(t.key, { local_prefix: e.target.value })} placeholder="192.168.0.0/24" className="clr-input flex-1" style={monoSt} />
-                <span className="text-[12px]" style={{ color: "var(--cds-alias-typography-color-200)" }}>↔</span>
+                <span className="text-[12px]" style={{ color: "var(--cds-alias-typography-color-200)" }}>→</span>
                 <input value={t.remote_prefix} onChange={(e) => updateTunnel(t.key, { remote_prefix: e.target.value })} placeholder="192.168.1.0/24" className="clr-input flex-1" style={monoSt} />
                 <IconButton icon="trash" onClick={() => removeTunnel(t.key)} label="Remove tunnel" />
               </div>
@@ -233,7 +234,12 @@ export function PeerFormModal({ initial, existingNames, ikeGroups, espGroups, on
           </div>
         )}
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <span className="alert-text">{error}</span>
+          </div>
+        )}
 
         <ModalFooter>
           <button type="button" onClick={onClose} className="btn btn-neutral">Cancel</button>

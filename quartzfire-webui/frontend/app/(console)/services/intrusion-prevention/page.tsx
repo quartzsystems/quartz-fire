@@ -170,90 +170,104 @@ function SettingsTab({
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)] w-[100px]">Scan Mode:</span>
-            <Segmented
-              items={[
-                { value: "full", label: "Full Scan" },
-                { value: "fast", label: "Fast Scan" },
-              ]}
-              value={draft.scan_mode}
-              onChange={(v) => setDraft((d) => ({ ...d, scan_mode: v as ScanMode }))}
-            />
-            <span className="text-[12px] text-[var(--cds-alias-typography-color-200)]">
-              {draft.scan_mode === "full"
-                ? "Inspect entire flows."
-                : "Stop inspecting long and encrypted flows early — faster, less thorough."}
-            </span>
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <label className="clr-control-label">Scan Mode</label>
+            <div className="flex items-center gap-4">
+              <Segmented
+                items={[
+                  { value: "full", label: "Full Scan" },
+                  { value: "fast", label: "Fast Scan" },
+                ]}
+                value={draft.scan_mode}
+                onChange={(v) => setDraft((d) => ({ ...d, scan_mode: v as ScanMode }))}
+              />
+              <span className="text-[12px] text-[var(--cds-alias-typography-color-200)]">
+                {draft.scan_mode === "full"
+                  ? "Inspect entire flows."
+                  : "Stop inspecting long and encrypted flows early — faster, less thorough."}
+              </span>
+            </div>
           </div>
 
           {/* Threat level policy table */}
           <div>
-            <div
-              className="grid items-center gap-3 py-[6px] text-[12px] font-semibold text-[var(--cds-alias-typography-color-300)]"
-              style={{ gridTemplateColumns: "16px 110px 160px 70px 70px 1fr" }}
-            >
-              <span />
-              <span>Threat Level</span>
-              <span>Action</span>
-              <span className="text-center">Alarm</span>
-              <span className="text-center">Log</span>
-              <span className="text-right">Signatures</span>
-            </div>
-            {THREAT_LEVELS.map(({ level, label, color }) => {
-              const pol = draft[level];
-              return (
-                <div
-                  key={level}
-                  className="grid items-center gap-3 py-[8px]"
-                  style={{
-                    gridTemplateColumns: "16px 110px 160px 70px 70px 1fr",
-                    borderTop: "1px solid var(--cds-alias-object-border-subtle)",
-                  }}
-                >
-                  <span
-                    className="inline-block w-[10px] h-[18px] rounded-[3px]"
-                    style={{ background: color }}
-                  />
-                  <span className="text-[13px] text-[var(--cds-alias-typography-color-450)]">{label}</span>
-                  <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
-                    <select
-                      value={pol.action}
-                      onChange={(e) => setLevel(level, { action: e.target.value as LevelAction })}
-                      className="clr-select"
-                      style={{ maxWidth: "none" }}
-                    >
-                      {(Object.keys(LEVEL_ACTION_LABEL) as LevelAction[]).map((a) => (
-                        <option key={a} value={a}>
-                          {LEVEL_ACTION_LABEL[a]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <span className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={pol.alarm}
-                      disabled={pol.action === "disable"}
-                      onChange={(e) => setLevel(level, { alarm: e.target.checked })}
-                      aria-label={`Alarm on ${label}`}
-                    />
-                  </span>
-                  <span className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={pol.log}
-                      disabled={pol.action === "disable"}
-                      onChange={(e) => setLevel(level, { log: e.target.checked })}
-                      aria-label={`Log ${label}`}
-                    />
-                  </span>
-                  <span className="text-right text-[12px] text-[var(--cds-alias-typography-color-200)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
-                    {counts?.[level] ?? "—"}
-                  </span>
-                </div>
-              );
-            })}
+            <table className="table table-noborder table-compact" style={{ tableLayout: "fixed" }}>
+              <colgroup>
+                <col style={{ width: 140 }} />
+                <col style={{ width: 172 }} />
+                <col style={{ width: 70 }} />
+                <col style={{ width: 70 }} />
+                <col />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Threat Level</th>
+                  <th>Action</th>
+                  <th style={{ textAlign: "center" }}>Alarm</th>
+                  <th style={{ textAlign: "center" }}>Log</th>
+                  <th style={{ textAlign: "right" }}>Signatures</th>
+                </tr>
+              </thead>
+              <tbody>
+                {THREAT_LEVELS.map(({ level, label, color }) => {
+                  const pol = draft[level];
+                  return (
+                    <tr key={level}>
+                      <td>
+                        <span className="inline-flex items-center gap-2">
+                          <span
+                            className="inline-block w-[10px] h-[18px] rounded-[3px] flex-shrink-0"
+                            style={{ background: color }}
+                          />
+                          <span className="text-[13px] text-[var(--cds-alias-typography-color-450)]">{label}</span>
+                        </span>
+                      </td>
+                      <td>
+                        <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+                          <select
+                            value={pol.action}
+                            onChange={(e) => setLevel(level, { action: e.target.value as LevelAction })}
+                            className="clr-select"
+                            style={{ maxWidth: "none" }}
+                          >
+                            {(Object.keys(LEVEL_ACTION_LABEL) as LevelAction[]).map((a) => (
+                              <option key={a} value={a}>
+                                {LEVEL_ACTION_LABEL[a]}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={pol.alarm}
+                            disabled={pol.action === "disable"}
+                            onChange={(e) => setLevel(level, { alarm: e.target.checked })}
+                            aria-label={`Alarm on ${label}`}
+                          />
+                        </span>
+                      </td>
+                      <td>
+                        <span className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={pol.log}
+                            disabled={pol.action === "disable"}
+                            onChange={(e) => setLevel(level, { log: e.target.checked })}
+                            aria-label={`Log ${label}`}
+                          />
+                        </span>
+                      </td>
+                      <td className="text-right text-[12px] text-[var(--cds-alias-typography-color-200)]" style={{ textAlign: "right", fontFamily: "var(--qz-font-mono)" }}>
+                        {counts?.[level] ?? "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
             <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] mt-2 mb-0">
               Drop blocks matching traffic inline; Allow only records it; Disabled removes the level&apos;s
               signatures. Alarm and Log control the Alerts view. Levels map from signature priority
@@ -262,9 +276,9 @@ function SettingsTab({
           </div>
 
           {/* Exceptions */}
-          <div className="flex items-start gap-4">
-            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)] w-[100px] pt-[7px] flex-shrink-0">Exceptions:</span>
-            <div className="flex-1 flex flex-col gap-2">
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <label className="clr-control-label">Exceptions</label>
+            <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <input
                   value={newSid}
@@ -285,7 +299,7 @@ function SettingsTab({
                 </Button>
               </div>
               {draft.exceptions.length > 0 && (
-                <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+                <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
                   {draft.exceptions.map((sid, i) => {
                     const name = sigNames[sid];
                     return (
@@ -339,18 +353,20 @@ function SettingsTab({
       <section className="card">
         <div className="card-header">Signature Updates</div>
         <div className="card-block flex flex-col gap-3">
-          <div className="flex items-center gap-4">
-            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)] w-[100px] flex-shrink-0">Update Server:</span>
-            <input
-              value={draft.update_url ?? ""}
-              onChange={(e) => setDraft((d) => ({ ...d, update_url: e.target.value || null }))}
-              placeholder="Default (Emerging Threats Open)"
-              className="clr-input flex-1"
-              style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }}
-            />
-            <Button kind="secondary" onClick={updateNow} disabled={updating || !status.settings.enabled}>
-              {updating ? "Requesting…" : "Update Now"}
-            </Button>
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <label className="clr-control-label">Update Server</label>
+            <div className="flex items-center gap-4">
+              <input
+                value={draft.update_url ?? ""}
+                onChange={(e) => setDraft((d) => ({ ...d, update_url: e.target.value || null }))}
+                placeholder="Default (Emerging Threats Open)"
+                className="clr-input flex-1"
+                style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }}
+              />
+              <Button kind="secondary" onClick={updateNow} disabled={updating || !status.settings.enabled}>
+                {updating ? "Requesting…" : "Update Now"}
+              </Button>
+            </div>
           </div>
           <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0">
             {lastUpdate
@@ -461,7 +477,7 @@ function PoliciesTab() {
         </Button>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={rulesResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: rulesResize.tableLayout }}>
           <colgroup>
             {IPS_RULE_COLS.map((c) => (
@@ -512,9 +528,11 @@ function PoliciesTab() {
                     {r.action === "accept" ? (
                       <div className="flex items-center gap-2">
                         <Switch on={r.ips} onChange={(v) => !busy && toggle([{ rule: r, enabled: v }])} />
-                        <span className={`text-[12px] ${r.ips ? "text-[var(--cds-alias-interaction-action)]" : "text-[var(--cds-alias-typography-color-200)]"}`}>
-                          {r.ips ? "Enabled" : "Disabled"}
-                        </span>
+                        {r.ips ? (
+                          <span className="badge badge-ok">Enabled</span>
+                        ) : (
+                          <span className="badge badge-muted">Disabled</span>
+                        )}
                       </div>
                     ) : (
                       <span className="text-[12px] text-[var(--cds-alias-typography-color-200)]">n/a</span>
@@ -582,7 +600,7 @@ function ipsAlertCell(key: string, r: AlertRow, alarm: boolean): React.ReactNode
     case "level":
       return (
         <span className="inline-flex items-center gap-[5px]">
-          {alarm && <Icon shape="shield-x" size={13} className="text-[var(--cds-alias-status-danger)]" />}
+          {alarm && <span className="badge badge-crit">Alarm</span>}
           <LevelPill level={r.level} />
         </span>
       );
@@ -791,7 +809,7 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
         </div>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {cols.map((c) => (

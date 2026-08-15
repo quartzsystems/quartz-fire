@@ -177,7 +177,7 @@ export function BridgeFormModal({
     <ModalShell onClose={onClose}>
       <ModalHeader
         title={isEdit ? "Edit Bridge" : "Create Bridge"}
-        subtitle={isEdit ? initial!.name : "Layer 2 bridge interface"}
+        subtitle={isEdit ? <span className="mono">{initial!.name}</span> : "Layer 2 bridge interface"}
         onClose={onClose}
       />
 
@@ -216,7 +216,7 @@ export function BridgeFormModal({
                 gap: 6,
                 maxHeight: 170,
                 border: "1px solid var(--cds-alias-object-border-color)",
-                borderRadius: 4,
+                borderRadius: "var(--clr-base-border-radius-m)",
                 padding: "10px 12px",
               }}
             >
@@ -275,7 +275,7 @@ export function BridgeFormModal({
 
         <div
           className="flex flex-col gap-3"
-          style={{ border: "1px solid var(--cds-alias-object-border-color)", borderRadius: 4, padding: 12 }}
+          style={{ border: "1px solid var(--cds-alias-object-border-color)", borderRadius: "var(--clr-base-border-radius-m)", padding: 12 }}
         >
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <Switch on={vlanAware} onChange={setVlanAware} />
@@ -294,7 +294,7 @@ export function BridgeFormModal({
           {vlanAware && (
             <div className="clr-form-control" style={{ marginTop: 0 }}>
               <div className="flex items-center justify-between">
-                <label className="clr-control-label" style={{ marginBottom: 0 }}>VLAN sub-interfaces (VIFs)</label>
+                <label className="clr-control-label" style={{ marginBottom: 0 }}>VLAN Sub-Interfaces (VIFs)</label>
                 <button type="button" onClick={addVif} className="btn btn-sm btn-link-neutral">
                   <Icon shape="plus" size={12} /> Add VIF
                 </button>

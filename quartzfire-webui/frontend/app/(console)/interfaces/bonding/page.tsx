@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { StatePill } from "@/components/ui/Badge";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { MtuCell } from "@/components/dashboard/MtuCell";
+import { RowActions } from "@/components/dashboard/RowActions";
 import {
   BondInterface,
   BridgeInterface,
@@ -17,10 +19,6 @@ import {
 } from "@/lib/interfaces";
 import { useDashboard } from "@/lib/DashboardContext";
 import { BondFormModal } from "./BondFormModal";
-
-function StatePill({ enabled }: { enabled: boolean }) {
-  return <span className={enabled ? "badge badge-ok" : "badge badge-muted"}>{enabled ? "Enabled" : "Disabled"}</span>;
-}
 
 const columns: Column<BondInterface>[] = [
   { key: "name", header: "Interface", value: (r) => r.name, mono: true, sortable: true, width: 120 },
@@ -62,61 +60,6 @@ const filters: FilterDef<BondInterface>[] = [
     predicate: (r, v) => (v === "enabled" ? r.enabled : !r.enabled),
   },
 ];
-
-/// Per-row edit/delete. Delete asks for inline confirmation before applying.
-function BondRowActions({ row, onEdit, onDelete }: { row: BondInterface; onEdit: () => void; onDelete: () => Promise<unknown> }) {
-  const [confirming, setConfirming] = useState(false);
-  const [working, setWorking] = useState(false);
-
-  return (
-    <div className="inline-flex items-center gap-1 justify-end">
-      {confirming ? (
-        <>
-          <button
-            type="button"
-            disabled={working}
-            onClick={async () => {
-              setWorking(true);
-              try {
-                await onDelete();
-              } finally {
-                setWorking(false);
-                setConfirming(false);
-              }
-            }}
-            className="btn btn-sm btn-danger"
-          >
-            {working ? "…" : "Confirm"}
-          </button>
-          <button type="button" onClick={() => setConfirming(false)} className="btn btn-sm btn-neutral">
-            Cancel
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            title={`Edit ${row.name}`}
-            aria-label="Edit"
-            onClick={onEdit}
-            className="btn btn-sm btn-link-neutral btn-icon"
-          >
-            <Icon shape="pencil" size={14} />
-          </button>
-          <button
-            type="button"
-            title={`Delete ${row.name}`}
-            aria-label="Delete"
-            onClick={() => setConfirming(true)}
-            className="btn btn-sm btn-link-neutral btn-icon"
-          >
-            <Icon shape="trash" size={14} />
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
 
 export default function BondingPage() {
   const { setToast } = useDashboard();
@@ -217,8 +160,8 @@ export default function BondingPage() {
             </Button>
           }
           actions={(row) => (
-            <BondRowActions
-              row={row}
+            <RowActions
+              label={row.name}
               onEdit={() => openModal(row)}
               onDelete={() => removeBond(row)}
             />

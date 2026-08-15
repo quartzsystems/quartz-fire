@@ -142,7 +142,7 @@ export function VlanFormModal({
     <ModalShell onClose={onClose}>
       <ModalHeader
         title={isEdit ? "Edit VLAN" : "Create VLAN"}
-        subtitle={isEdit ? initial!.name : "802.1Q VLAN sub-interface"}
+        subtitle={isEdit ? <span className="mono">{initial!.name}</span> : "802.1Q VLAN sub-interface"}
         onClose={onClose}
       />
 

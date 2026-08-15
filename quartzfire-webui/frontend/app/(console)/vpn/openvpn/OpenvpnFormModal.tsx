@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
 import {
@@ -47,7 +48,7 @@ function MonoSelect({ value, onChange, children }: {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <span className="text-[12px] font-semibold uppercase tracking-wide mt-1" style={{ color: "var(--cds-alias-typography-color-400)" }}>{children}</span>;
+  return <span className="clr-smallcaption mt-1">{children}</span>;
 }
 
 const numOrNull = (s: string) => {
@@ -327,7 +328,12 @@ export function OpenvpnFormModal({ initial, existingNames, onClose, onSaved }: {
           </label>
         </div>
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <span className="alert-text">{error}</span>
+          </div>
+        )}
 
         <ModalFooter>
           <button type="button" onClick={onClose} className="btn btn-neutral">

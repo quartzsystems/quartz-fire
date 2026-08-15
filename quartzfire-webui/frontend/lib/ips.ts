@@ -15,14 +15,15 @@ export type ThreatLevel = "critical" | "high" | "medium" | "low" | "information"
 export type LevelAction = "allow" | "drop" | "disable";
 export type ScanMode = "full" | "fast";
 
-/// Threat levels, most severe first, with the UI color chip. Levels derive
-/// from signature priority (1→critical … 4→low, unclassified→information).
+/// Threat levels, most severe first, with the UI color chip (DS severity
+/// tokens). Levels derive from signature priority (1→critical … 4→low,
+/// unclassified→information).
 export const THREAT_LEVELS: { level: ThreatLevel; label: string; color: string }[] = [
-  { level: "critical", label: "Critical", color: "#e5484d" },
-  { level: "high", label: "High", color: "#f76b15" },
-  { level: "medium", label: "Medium", color: "#f5d90a" },
-  { level: "low", label: "Low", color: "#0ac5e5" },
-  { level: "information", label: "Information", color: "#46a758" },
+  { level: "critical", label: "Critical", color: "var(--cds-alias-viz-severity-critical)" },
+  { level: "high", label: "High", color: "var(--cds-alias-viz-severity-immediate)" },
+  { level: "medium", label: "Medium", color: "var(--cds-alias-viz-severity-warning)" },
+  { level: "low", label: "Low", color: "var(--cds-alias-status-info)" },
+  { level: "information", label: "Information", color: "var(--cds-alias-viz-severity-success)" },
 ];
 
 export const LEVEL_ACTION_LABEL: Record<LevelAction, string> = {

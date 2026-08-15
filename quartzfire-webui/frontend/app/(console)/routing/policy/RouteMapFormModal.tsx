@@ -234,7 +234,7 @@ export function RouteMapFormModal({
 
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="clr-form-control" style={{ marginTop: 0 }}>
-          <label className="clr-control-label">Name <span style={{ color: "var(--cds-alias-status-danger)" }}>*</span></label>
+          <label className="clr-control-label">Name <span className="clr-required">*</span></label>
           <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="RM-EVPN-IN" className="clr-input" style={monoStyle} />
         </div>
 

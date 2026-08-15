@@ -99,6 +99,11 @@ body {
 }
 .palette .dropdown-item { width: 100%; }
 
+/* Technical values (IDs, paths, timestamps, literals) in JetBrains Mono.
+   Pages use `className="mono"` on spans/cells; keep this global so it works
+   outside .qz-table too. */
+.mono { font-family: var(--cds-alias-typography-monospace-font-family); }
+
 /* --- Scrollbars --- */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--qz-ink-5); border-radius: 999px; }

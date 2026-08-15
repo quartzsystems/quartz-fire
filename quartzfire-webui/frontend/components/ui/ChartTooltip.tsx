@@ -39,7 +39,7 @@ export function ChartTooltip({
 
   return (
     <div
-      className="absolute pointer-events-none rounded-md p-2 z-10 text-[11px]"
+      className="absolute pointer-events-none rounded-lg p-2 z-10 text-[11px]"
       style={{
         left,
         top,

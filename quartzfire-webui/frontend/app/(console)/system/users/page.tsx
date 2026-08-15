@@ -48,6 +48,7 @@ const columns: Column<SystemUser>[] = [
     key: "keys",
     header: "SSH Keys",
     value: (r) => r.keys.length,
+    mono: true,
     render: (r) =>
       r.keys.length > 0 ? (
         <span className="inline-flex items-center gap-[6px]">
@@ -165,10 +166,9 @@ export default function UsersPage() {
                     </button>
                     <span
                       className="px-1"
-                      style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}
                       title={row.name === currentUser ? "You can't delete the account you're signed in as." : "The last account can't be deleted."}
                     >
-                      {row.name === currentUser ? "you" : "last"}
+                      {row.name === currentUser ? <Pill>You</Pill> : <Pill>Last</Pill>}
                     </span>
                   </div>
                 );

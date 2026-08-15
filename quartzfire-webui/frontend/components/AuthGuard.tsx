@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, fetchMe, getCurrentUser } from "@/lib/api";
+import { Icon } from "@/components/ui/Icon";
 
 /// Auth gate for protected pages. The session is an httpOnly cookie (invisible
 /// to JS), so we confirm it with the backend via /auth/me. The server enforces
@@ -48,9 +49,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         className="min-h-screen flex flex-col items-center justify-center gap-4"
         style={{ background: "var(--cds-alias-object-app-background)" }}
       >
-        <p style={{ fontSize: 13, margin: 0, color: "var(--cds-alias-status-danger)" }}>
-          Cannot reach the QuartzFire backend. It may be restarting.
-        </p>
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <span className="alert-text">Cannot reach the QuartzFire backend. It may be restarting.</span>
+        </div>
         <button
           type="button"
           className="btn btn-primary"

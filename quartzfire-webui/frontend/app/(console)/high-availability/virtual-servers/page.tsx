@@ -15,14 +15,14 @@ function columns(): Column<VirtualServer>[] {
   return [
     { key: "id", header: "Virtual Server", value: (r) => r.id, mono: true, sortable: true },
     { key: "port", header: "Port", value: (r) => r.port ?? "", render: (r) => dash(r.port?.toString() ?? null), mono: true, width: 90 },
-    { key: "protocol", header: "Protocol", value: (r) => r.protocol ?? "", render: (r) => dash(r.protocol ? r.protocol.toUpperCase() : null), width: 100 },
-    { key: "algorithm", header: "Algorithm", value: (r) => r.algorithm ?? "", render: (r) => dash(r.algorithm), width: 200 },
-    { key: "forward", header: "Forward", value: (r) => r.forward_method ?? "", render: (r) => dash(r.forward_method ? r.forward_method.toUpperCase() : null), width: 110 },
+    { key: "protocol", header: "Protocol", value: (r) => r.protocol ?? "", render: (r) => dash(r.protocol ? r.protocol.toUpperCase() : null), mono: true, width: 100 },
+    { key: "algorithm", header: "Algorithm", value: (r) => r.algorithm ?? "", render: (r) => dash(r.algorithm), mono: true, width: 200 },
+    { key: "forward", header: "Forward", value: (r) => r.forward_method ?? "", render: (r) => dash(r.forward_method ? r.forward_method.toUpperCase() : null), mono: true, width: 110 },
     {
       key: "reals",
       header: "Real Servers",
       value: (r) => r.real_servers.length,
-      render: (r) => <span className="badge badge-info">{r.real_servers.length}</span>,
+      mono: true,
       width: 120,
     },
   ];

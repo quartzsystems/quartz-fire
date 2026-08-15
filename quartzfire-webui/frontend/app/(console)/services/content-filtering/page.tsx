@@ -144,7 +144,7 @@ function GroupEditor({
             land here. It needs no source subnets.
           </p>
         ) : (
-          <ListEditor label="Source subnets (clients mapped to this group)" items={g.sourceAddress}
+          <ListEditor label="Source Subnets (clients mapped to this group)" items={g.sourceAddress}
             onChange={(v) => set("sourceAddress", v)} placeholder="10.0.20.0/24" validate={validateCidr} />
         )}
 
@@ -152,7 +152,7 @@ function GroupEditor({
           g.blanketBlock, (v) => set("blanketBlock", v))}
 
         <div className="flex flex-col gap-1">
-          <span className={fieldLabel}>Blocked categories ({g.categories.length} selected)</span>
+          <span className={fieldLabel}>Blocked Categories ({g.categories.length} selected)</span>
           <div className="flex items-center gap-2 my-1">
             <Icon shape="search" size={13} className="text-[var(--cds-alias-typography-color-200)]" />
             <input value={catSearch} placeholder="Search categories…"
@@ -160,7 +160,7 @@ function GroupEditor({
               className="clr-input flex-1" style={{ maxWidth: "none" }} />
           </div>
           <div
-            className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto rounded-md p-1"
+            className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto rounded-lg p-1"
             style={{ background: "var(--cds-alias-object-container-background)", border: "1px solid var(--cds-alias-object-border-color)" }}
           >
             {shownCats.length === 0 && (
@@ -178,11 +178,11 @@ function GroupEditor({
           </div>
         </div>
 
-        <ListEditor label="Custom blocked domains" items={g.blockDomains} onChange={(v) => set("blockDomains", v)}
+        <ListEditor label="Custom Blocked Domains" items={g.blockDomains} onChange={(v) => set("blockDomains", v)}
           placeholder="ads.example.com" validate={validateDomain} />
-        <ListEditor label="Allowed / bypass domains (override blocks)" items={g.allowDomains} onChange={(v) => set("allowDomains", v)}
+        <ListEditor label="Allowed / Bypass Domains (override blocks)" items={g.allowDomains} onChange={(v) => set("allowDomains", v)}
           placeholder="safe.example.com" validate={validateDomain} />
-        <ListEditor label="Blocked URL regexes" items={g.blockUrlRegex} onChange={(v) => set("blockUrlRegex", v)}
+        <ListEditor label="Blocked URL Regexes" items={g.blockUrlRegex} onChange={(v) => set("blockUrlRegex", v)}
           placeholder="/tracker/.*" />
 
         {toggleRow("Safe search", "Google / Bing / DuckDuckGo + YouTube Restricted.",
@@ -191,15 +191,15 @@ function GroupEditor({
           g.phraseFiltering, (v) => set("phraseFiltering", v))}
         {g.phraseFiltering && (
           <div className="flex flex-col gap-1">
-            <span className={fieldLabel}>Naughtyness limit: {g.naughtynessLimit} (lower = stricter)</span>
+            <span className={fieldLabel}>Naughtyness Limit: {g.naughtynessLimit} (lower = stricter)</span>
             <input type="range" min={50} max={500} step={10} value={g.naughtynessLimit}
-              onChange={(e) => set("naughtynessLimit", Number(e.target.value))} className="w-full mt-1" />
+              onChange={(e) => set("naughtynessLimit", Number(e.target.value))} className="clr-range w-full mt-1" />
           </div>
         )}
 
-        <ListEditor label="Blocked file extensions" items={g.blockFileExtensions} onChange={(v) => set("blockFileExtensions", v)}
+        <ListEditor label="Blocked File Extensions" items={g.blockFileExtensions} onChange={(v) => set("blockFileExtensions", v)}
           placeholder=".exe" />
-        <ListEditor label="Blocked MIME types" items={g.blockMimeTypes} onChange={(v) => set("blockMimeTypes", v)}
+        <ListEditor label="Blocked MIME Types" items={g.blockMimeTypes} onChange={(v) => set("blockMimeTypes", v)}
           placeholder="application/x-dosexec" />
       </div>
       <ModalFooter>
@@ -229,7 +229,7 @@ function NameModal({ existing, onCreate, onClose }: {
       <ModalHeader title="New Action" subtitle="Clients are mapped to an action by source subnet." onClose={onClose} />
       <div className="flex flex-col gap-3">
         <div className="clr-form-control" style={{ marginTop: 0 }}>
-          <label className={fieldLabel}>Action name</label>
+          <label className={fieldLabel}>Action Name</label>
           <input autoFocus value={name} placeholder="engineering"
             onChange={(e) => { setName(e.target.value); setErr(null); }}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), submit())}
@@ -538,7 +538,7 @@ export default function ContentFilteringPage() {
                 </p>
                 <Button kind="primary" size="sm" icon="plus" onClick={() => setAddingGroup(true)}>Add Action</Button>
               </div>
-              <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
                 <table ref={groupResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: groupResize.tableLayout }}>
                   <colgroup>
                     {CF_GROUP_COLS.map((c) => (
@@ -626,7 +626,7 @@ export default function ContentFilteringPage() {
                       className="clr-input" style={{ maxWidth: "none" }} placeholder="it@example.com" />
                   </div>
                   <div className="clr-form-control" style={{ marginTop: 0 }}>
-                    <label className={fieldLabel}>Access log level</label>
+                    <label className={fieldLabel}>Access Log Level</label>
                     <Segmented value={draft.logLevel}
                       onChange={(v) => setDraft({ ...draft, logLevel: v as LogLevel })}
                       items={[
@@ -639,8 +639,9 @@ export default function ContentFilteringPage() {
               </section>
               <section className="card" style={{ minHeight: 200 }}>
                 <div className="card-block">
-                  <div className={`${fieldLabel} mb-2`}>Live preview</div>
-                  <div className="rounded-md p-4 text-center" style={{ background: "#0f1115", color: "#e6e8ec" }}>
+                  <div className={`${fieldLabel} mb-2`}>Live Preview</div>
+                  {/* Mirrors the real e2guardian block page — its colors and radius are intentional. */}
+                  <div className="p-4 text-center" style={{ background: "#0f1115", color: "#e6e8ec", borderRadius: 14 }}>
                     <div className="text-[15px] font-semibold" style={{ color: "#ff5c5c" }}>Access blocked</div>
                     <p className="text-[12px] mt-1" style={{ color: "#c3c8d1" }}>
                       {draft.blockPage.message || "This site is blocked by QuartzFire Content Filtering."}
@@ -675,7 +676,7 @@ export default function ContentFilteringPage() {
                   <span className="text-[11px] text-[var(--cds-alias-typography-color-200)]">auto-refresh · {logs.length} shown</span>
                 </div>
               </div>
-              <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+              <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
                 <table ref={logResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: logResize.tableLayout }}>
                   <colgroup>
                     {logCols.map((c) => (
@@ -784,8 +785,8 @@ function TestUrlWidget({ groups, setToast }: { groups: FilterGroup[]; setToast: 
         {verdict && (
           <div className="flex items-center gap-2 text-[13px]">
             {verdict.action === "blocked"
-              ? <span className="badge badge-warn">Blocked</span>
-              : <span className="badge badge-ok inline-flex items-center gap-1"><Icon shape="shield-check" size={13} /> Allowed</span>}
+              ? <span className="badge badge-crit">Blocked</span>
+              : <span className="badge badge-ok">Allowed</span>}
             <span className="text-[var(--cds-alias-typography-color-200)]">
               {verdict.matched ? `matched ${verdict.matched}` : verdict.reason}{verdict.category ? ` (${verdict.category})` : ""}
             </span>

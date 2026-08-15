@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import {
   IpsecAuthMode,
   L2TP_AUTH_PROTOCOLS,
@@ -160,7 +161,12 @@ export function GeneralPanel({ live, pools, onSaved }: {
         </div>
       </Section>
 
-      {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
+      {error && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <span className="alert-text">{error}</span>
+        </div>
+      )}
 
       <div className="flex justify-end">
         <Button kind="primary" icon="check" onClick={save} disabled={saving}>

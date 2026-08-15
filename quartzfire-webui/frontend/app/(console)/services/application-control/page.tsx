@@ -153,7 +153,7 @@ function ActionsTab({
         </Button>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {AC_ACTION_COLS.map((c) => (
@@ -376,7 +376,7 @@ function ActionEditor({
         </div>
 
         <div
-          className="rounded-md overflow-auto"
+          className="rounded-lg overflow-auto"
           style={{ border: "1px solid var(--cds-alias-object-border-color)", maxHeight: "42vh" }}
         >
           {visibleGroups.length === 0 ? (
@@ -451,9 +451,9 @@ function ActionEditor({
           )}
         </div>
 
-        <div className="flex items-center gap-5 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)]">When application does not match:</span>
+        <div className="flex items-start gap-5 flex-wrap">
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <label className="clr-control-label">When Application Does Not Match</label>
             <Segmented
               items={[
                 { value: "allow", label: "Allow" },
@@ -463,8 +463,8 @@ function ActionEditor({
               onChange={(v) => setAction((a) => ({ ...a, default_action: v as Verdict }))}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)]">Block mode:</span>
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <label className="clr-control-label">Block Mode</label>
             <Segmented
               items={[
                 { value: "drop", label: "Drop" },
@@ -612,7 +612,7 @@ function PoliciesTab({
         {saving ? " · Saving…" : ""}).
       </p>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {AC_RULE_COLS.map((c) => (
@@ -884,7 +884,7 @@ function AlertsTab() {
         </div>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={alertResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: alertResize.tableLayout }}>
           <colgroup>
             {cols.map((c) => (
@@ -1014,10 +1014,10 @@ export default function ApplicationControlPage() {
         trailing={
           status?.status?.policy_last_error || status?.apply?.ok === false ? (
             <span
-              className="inline-flex items-center gap-[6px] text-[12px] text-[var(--cds-alias-status-danger)]"
+              className="badge badge-crit"
               title={status?.status?.policy_last_error || status?.apply?.error}
             >
-              <Icon shape="exclamation-triangle" size={13} /> Last apply rejected
+              Apply Rejected
             </span>
           ) : status?.running ? (
             <span className="badge badge-ok">qfappd running</span>

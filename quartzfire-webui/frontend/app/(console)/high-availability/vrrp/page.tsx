@@ -63,11 +63,7 @@ function syncColumns(): Column<VrrpSyncGroup>[] {
       value: (r) => r.members.join(", "),
       render: (r) =>
         r.members.length ? (
-          <span className="inline-flex gap-1 flex-wrap">
-            {r.members.map((m) => (
-              <span key={m} className="badge badge-info">{m}</span>
-            ))}
-          </span>
+          <span className="font-mono text-[12px]">{r.members.join(", ")}</span>
         ) : (
           <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
         ),

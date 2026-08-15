@@ -772,7 +772,7 @@ export default function TrafficFlowPage() {
                 onDragStart={() => (dragId.current = id)}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => dropOn(id)}
-                className="inline-flex items-center gap-[4px] pl-[6px] pr-[4px] py-[4px] rounded-md text-[12px] font-medium border cursor-grab select-none"
+                className="inline-flex items-center gap-[4px] pl-[6px] pr-[4px] py-[4px] rounded-full text-[12px] font-medium border cursor-grab select-none"
                 style={{
                   background: "var(--qz-accent-soft)",
                   borderColor: "color-mix(in oklab, var(--qz-accent) 30%, transparent)",
@@ -785,7 +785,7 @@ export default function TrafficFlowPage() {
                   type="button"
                   onClick={() => move(id, -1)}
                   disabled={i === 0}
-                  className="p-[1px] rounded disabled:opacity-25 cursor-pointer text-[var(--qz-fg-3)]"
+                  className="btn btn-sm btn-link-neutral btn-icon"
                   title="Move left"
                 >
                   <Icon shape="angle" dir="left" size={12} />
@@ -794,7 +794,7 @@ export default function TrafficFlowPage() {
                   type="button"
                   onClick={() => move(id, 1)}
                   disabled={i === order.length - 1}
-                  className="p-[1px] rounded disabled:opacity-25 cursor-pointer text-[var(--qz-fg-3)]"
+                  className="btn btn-sm btn-link-neutral btn-icon"
                   title="Move right"
                 >
                   <Icon shape="angle" dir="right" size={12} />
@@ -803,7 +803,7 @@ export default function TrafficFlowPage() {
                   type="button"
                   onClick={() => remove(id)}
                   disabled={order.length <= 2}
-                  className="p-[1px] rounded disabled:opacity-25 cursor-pointer text-[var(--qz-fg-3)]"
+                  className="btn btn-sm btn-link-neutral btn-icon"
                   title={order.length <= 2 ? "At least two columns" : "Remove column"}
                 >
                   <Icon shape="times" size={12} />
@@ -815,8 +815,7 @@ export default function TrafficFlowPage() {
                 key={f.id}
                 type="button"
                 onClick={() => add(f.id)}
-                className="inline-flex items-center gap-[4px] px-[8px] py-[4px] rounded-md text-[12px] border cursor-pointer"
-                style={{ borderStyle: "dashed", borderColor: "var(--qz-border)", color: "var(--qz-fg-4)", background: "transparent" }}
+                className="btn btn-sm"
                 title="Add column"
               >
                 <Icon shape="plus" size={12} />
@@ -830,28 +829,21 @@ export default function TrafficFlowPage() {
             <div className="flex items-center gap-2 flex-wrap text-[12px]">
               <span className="text-[var(--qz-fg-4)]">Filtered to:</span>
               {activeFilterChips.map((c) => (
-                <button
-                  key={`${c.facet}:${c.key}`}
-                  type="button"
-                  onClick={() => toggleFilter(c.facet, c.key)}
-                  className="inline-flex items-center gap-[4px] px-[8px] py-[3px] rounded-full border cursor-pointer"
-                  style={{
-                    background: "var(--qz-accent-soft)",
-                    borderColor: "color-mix(in oklab, var(--qz-accent) 30%, transparent)",
-                    color: "var(--qz-fg-1)",
-                  }}
-                  title="Remove this filter"
-                >
+                <span key={`${c.facet}:${c.key}`} className="label label-accent">
                   {FACET_BY_ID.get(c.facet)!.label}: {c.label}
-                  <Icon shape="times" size={11} />
-                </button>
+                  <button
+                    type="button"
+                    className="label-dismiss"
+                    onClick={() => toggleFilter(c.facet, c.key)}
+                    title="Remove this filter"
+                    aria-label="Remove this filter"
+                  >
+                    ✕
+                  </button>
+                </span>
               ))}
               {activeFilterChips.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setFilters(new Map())}
-                  className="text-[var(--qz-fg-4)] underline cursor-pointer bg-transparent border-0 p-0"
-                >
+                <button type="button" onClick={() => setFilters(new Map())} className="btn btn-sm btn-link">
                   Clear
                 </button>
               )}
@@ -988,7 +980,7 @@ export default function TrafficFlowPage() {
 
           {/* Top flows (table view of the same data) */}
           {topFlows.length > 0 && (
-            <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
+            <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
               <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
                 <colgroup>
                   {TOP_FLOW_COLS.map((c) => (
@@ -1014,10 +1006,9 @@ export default function TrafficFlowPage() {
                         <td className="mono text-[12px]">{r.in_if ?? "—"}</td>
                         <td className="text-[12px]">
                           <span className="inline-flex items-center gap-[6px]">
-                            <span
-                              className="inline-block w-[7px] h-[7px] rounded-full flex-shrink-0"
-                              style={{ background: VERDICT_META[v].color, opacity: v === "none" ? 0.5 : 1 }}
-                            />
+                            <span className={`badge ${v === "allow" ? "badge-ok" : v === "block" ? "badge-crit" : "badge-muted"} flex-shrink-0`}>
+                              {VERDICT_META[v].label}
+                            </span>
                             {r.chain
                               ? r.rule !== undefined
                                 ? ruleNames.get(`${r.chain}:${r.rule}`) ?? `Rule ${r.rule}`

@@ -227,22 +227,26 @@ export default function ConfigSyncPage() {
                   <span className="inline-flex items-center gap-[6px]" style={{ fontSize: 12 }}>
                     {testResult.authenticated ? (
                       <>
-                        <Icon shape="check-circle" size={15} style={{ color: "var(--cds-alias-status-success)" }} />
-                        <span style={{ color: "var(--cds-alias-typography-color-400)" }}>
-                          Authenticated{testResult.version ? ` — ${testResult.version}` : ""}
-                        </span>
+                        <span className="badge badge-ok">Authenticated</span>
+                        {testResult.version && (
+                          <span style={{ color: "var(--cds-alias-typography-color-400)" }}>
+                            <span className="mono">{testResult.version}</span>
+                          </span>
+                        )}
                       </>
                     ) : testResult.reachable ? (
                       <>
-                        <Icon shape="exclamation-circle" size={15} style={{ color: "var(--cds-alias-status-danger)" }} />
-                        <span style={{ color: "var(--cds-alias-typography-color-400)" }}>
-                          Reachable but key rejected{testResult.error ? ` — ${testResult.error}` : ""}
-                        </span>
+                        <span className="badge badge-warn">Key Rejected</span>
+                        {testResult.error && (
+                          <span style={{ color: "var(--cds-alias-typography-color-400)" }}>{testResult.error}</span>
+                        )}
                       </>
                     ) : (
                       <>
-                        <Icon shape="exclamation-circle" size={15} style={{ color: "var(--cds-alias-status-danger)" }} />
-                        <span style={{ color: "var(--cds-alias-typography-color-400)" }}>{testResult.error ?? "Unreachable"}</span>
+                        <span className="badge badge-crit">Unreachable</span>
+                        {testResult.error && (
+                          <span style={{ color: "var(--cds-alias-typography-color-400)" }}>{testResult.error}</span>
+                        )}
                       </>
                     )}
                   </span>

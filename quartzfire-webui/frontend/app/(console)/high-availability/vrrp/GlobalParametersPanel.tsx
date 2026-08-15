@@ -58,7 +58,7 @@ export function GlobalParametersPanel({
           </Field>
         </div>
 
-        <div style={{ fontSize: 12, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}>
+        <div className="clr-smallcaption">
           Gratuitous ARP
         </div>
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>

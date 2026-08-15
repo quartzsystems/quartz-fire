@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { StatePill } from "@/components/ui/Badge";
 import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
+import { RowActions } from "@/components/dashboard/RowActions";
 import { deleteNatRule, deleteStaticNat, fetchNat44, Nat44Config, NatRule, NatSection, StaticNatMapping } from "@/lib/nat";
 import { fetchFirewall, FirewallAlias, InterfaceAlias, interfaceAliases } from "@/lib/firewall";
 import { fetchEthernet, fetchInterfaceDescriptions, fetchVlans } from "@/lib/interfaces";
@@ -14,10 +16,6 @@ import { NatRuleFormModal } from "./NatRuleFormModal";
 import { StaticNatFormModal } from "./StaticNatFormModal";
 
 type Tab = NatSection | "static";
-
-function StatePill({ enabled }: { enabled: boolean }) {
-  return <span className={enabled ? "badge badge-ok" : "badge badge-muted"}>{enabled ? "Enabled" : "Disabled"}</span>;
-}
 
 const dash = (v: string | null) => (v && v.length ? v : "—");
 // An unset match address means "any" in VyOS NAT — surface that rather than a blank dash.
@@ -63,61 +61,6 @@ const staticColumns: Column<StaticNatMapping>[] = [
     width: 110,
   },
 ];
-
-/// Per-row edit/delete. Delete asks for inline confirmation before applying.
-function NatRowActions({ ruleNum, onEdit, onDelete }: { ruleNum: number; onEdit: () => void; onDelete: () => Promise<unknown> }) {
-  const [confirming, setConfirming] = useState(false);
-  const [working, setWorking] = useState(false);
-
-  return (
-    <div className="inline-flex items-center gap-1 justify-end">
-      {confirming ? (
-        <>
-          <button
-            type="button"
-            disabled={working}
-            onClick={async () => {
-              setWorking(true);
-              try {
-                await onDelete();
-              } finally {
-                setWorking(false);
-                setConfirming(false);
-              }
-            }}
-            className="btn btn-sm btn-danger"
-          >
-            {working ? "…" : "Confirm"}
-          </button>
-          <button type="button" onClick={() => setConfirming(false)} className="btn btn-sm btn-neutral">
-            Cancel
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            title={`Edit rule ${ruleNum}`}
-            aria-label="Edit"
-            onClick={onEdit}
-            className="btn btn-sm btn-link-neutral btn-icon"
-          >
-            <Icon shape="pencil" size={14} />
-          </button>
-          <button
-            type="button"
-            title={`Delete rule ${ruleNum}`}
-            aria-label="Delete"
-            onClick={() => setConfirming(true)}
-            className="btn btn-sm btn-link-neutral btn-icon"
-          >
-            <Icon shape="trash" size={14} />
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
 
 export default function Nat44Page() {
   const { setToast } = useDashboard();
@@ -239,8 +182,8 @@ export default function Nat44Page() {
                 </Button>
               }
               actions={(row) => (
-                <NatRowActions
-                  ruleNum={row.rule}
+                <RowActions
+                  label={`rule ${row.rule}`}
                   onEdit={() => setStaticModal({ mapping: row })}
                   onDelete={() => removeStatic(row)}
                 />
@@ -262,8 +205,8 @@ export default function Nat44Page() {
                 </Button>
               }
               actions={(row) => (
-                <NatRowActions
-                  ruleNum={row.rule}
+                <RowActions
+                  label={`rule ${row.rule}`}
                   onEdit={() => setModal({ section: tab as NatSection, rule: row })}
                   onDelete={() => removeRule(tab as NatSection, row)}
                 />
