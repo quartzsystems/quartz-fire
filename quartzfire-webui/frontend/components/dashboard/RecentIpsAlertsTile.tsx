@@ -10,17 +10,22 @@ import {
   fetchIpsAlertHistory,
   fetchIpsStatus,
 } from "@/lib/ips";
-import { LiveButton } from "./LiveButton";
 
 const MAX_ROWS = 50;
 
 type AlertRow = IpsAlert & { id: number };
 
-/// Compact alert time: clock for today, day + clock for older history rows.
+/// Compact alert time — 24-hour clock per the DC reference ("14:03:11"), with a
+/// day prefix for history rows older than today.
 function alertTime(ts: number): string {
   const d = new Date(ts);
   const sameDay = new Date().toDateString() === d.toDateString();
-  const clock = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const clock = d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
   return sameDay ? clock : `${d.toLocaleDateString([], { month: "short", day: "numeric" })} ${clock}`;
 }
 
@@ -28,8 +33,6 @@ export function RecentIpsAlertsTile() {
   const rowsRef = useRef<AlertRow[]>([]);
   const nextId = useRef(0);
   const [rows, setRows] = useState<AlertRow[]>([]);
-  const [paused, setPaused] = useState(false);
-  const pausedRef = useRef(false);
   const [settings, setSettings] = useState<IpsSettings | null>(null);
   const [running, setRunning] = useState<boolean | null>(null);
 
@@ -54,9 +57,7 @@ export function RecentIpsAlertsTile() {
   // trimmed for a tile (no filters, small cap).
   useEffect(() => {
     const es = new EventSource("/api/ips/alerts");
-    const push = () => {
-      if (!pausedRef.current) setRows([...rowsRef.current]);
-    };
+    const push = () => setRows([...rowsRef.current]);
     es.onmessage = (ev) => {
       try {
         const alert = JSON.parse(ev.data) as IpsAlert;
@@ -90,13 +91,6 @@ export function RecentIpsAlertsTile() {
     };
   }, []);
 
-  const togglePause = () =>
-    setPaused((p) => {
-      pausedRef.current = !p;
-      if (p) setRows([...rowsRef.current]);
-      return !p;
-    });
-
   // Hide levels whose Log flag is off, matching the Alerts tab.
   const visible = settings ? rows.filter((r) => settings[r.level]?.log ?? true) : rows;
 
@@ -104,15 +98,14 @@ export function RecentIpsAlertsTile() {
     <>
       <div className="card-header flex-shrink-0">
         IPS Alerts
-        <span className="ml-auto flex items-center gap-2">
+        <span className="ml-auto">
           <Link
             href="/services/intrusion-prevention?tab=alerts"
-            className="text-[12px] flex-shrink-0"
+            className="text-[12px]"
             style={{ fontWeight: 400 }}
           >
             View all →
           </Link>
-          <LiveButton paused={paused} onToggle={togglePause} />
         </span>
       </div>
 
@@ -128,7 +121,7 @@ export function RecentIpsAlertsTile() {
             No alerts yet — alerts appear when inspected traffic matches a signature.
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-y-auto -mx-2 flex flex-col gap-[4px]">
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {visible.map((r) => {
               const meta = THREAT_LEVELS.find((l) => l.level === r.level) ?? THREAT_LEVELS[4];
               const alarm = settings?.[r.level]?.alarm ?? false;
@@ -136,8 +129,9 @@ export function RecentIpsAlertsTile() {
               return (
                 <div
                   key={r.id}
-                  className="flex items-center gap-[8px] px-2 py-[6px] rounded-md text-[12px] flex-shrink-0"
+                  className="flex items-center gap-[8px] py-[6px] text-[12px] flex-shrink-0"
                   style={{
+                    borderTop: "1px solid var(--cds-alias-object-border-subtle)",
                     background: alarm
                       ? "color-mix(in oklab, var(--cds-alias-status-danger) 7%, transparent)"
                       : undefined,
@@ -164,14 +158,14 @@ export function RecentIpsAlertsTile() {
                       className="label label-danger flex-shrink-0"
                       style={{ fontFamily: "var(--qz-font-mono)", fontSize: 10, letterSpacing: "0.06em" }}
                     >
-                      Blocked
+                      BLOCKED
                     </span>
                   ) : (
                     <span
                       className="label label-success flex-shrink-0"
                       style={{ fontFamily: "var(--qz-font-mono)", fontSize: 10, letterSpacing: "0.06em" }}
                     >
-                      Allowed
+                      ALLOWED
                     </span>
                   )}
                   <span

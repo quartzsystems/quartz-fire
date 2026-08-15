@@ -42,12 +42,13 @@ export function formatTimestamp(unixSecs: number | null | undefined): string {
   return new Date(unixSecs * 1000).toLocaleString();
 }
 
-/// Network rate from bytes/sec, shown in bits/sec (the conventional "speed" unit).
+/// Network rate from bytes/sec, shown in bits/sec (the conventional "speed"
+/// unit). Unit style per the DC mock: "Mbit/s" / "Gbit/s", 1 decimal at Gbit.
 export function formatRate(bytesPerSec: number | null | undefined): string {
   if (bytesPerSec == null || !Number.isFinite(bytesPerSec)) return "—";
   const bits = bytesPerSec * 8;
-  if (bits >= 1e9) return `${(bits / 1e9).toFixed(2)} Gbps`;
-  if (bits >= 1e6) return `${(bits / 1e6).toFixed(2)} Mbps`;
-  if (bits >= 1e3) return `${(bits / 1e3).toFixed(1)} Kbps`;
-  return `${Math.round(bits)} bps`;
+  if (bits >= 1e9) return `${(bits / 1e9).toFixed(1)} Gbit/s`;
+  if (bits >= 1e6) return `${Math.round(bits / 1e6)} Mbit/s`;
+  if (bits >= 1e3) return `${Math.round(bits / 1e3)} kbit/s`;
+  return `${Math.round(bits)} bit/s`;
 }

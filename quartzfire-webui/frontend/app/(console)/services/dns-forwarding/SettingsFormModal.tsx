@@ -136,7 +136,7 @@ export function SettingsFormModal({
           </Field>
         </div>
 
-        <Field label="Upstream name servers" hint="One address per line. Leave empty to recurse from the roots or use system servers.">
+        <Field label="Upstream Servers" hint="One address per line. Leave empty to recurse from the roots or use system servers.">
           <textarea
             value={serversText}
             onChange={(e) => setServersText(e.target.value)}

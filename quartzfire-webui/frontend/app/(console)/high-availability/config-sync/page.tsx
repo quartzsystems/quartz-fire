@@ -144,12 +144,14 @@ export default function ConfigSyncPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h2>Config Sync</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Replicate chosen configuration sections from this firewall to its standby peer.
-        </p>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">Config Sync</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Replicate chosen configuration sections from this firewall to its standby peer.
+          </p>
+        </div>
       </div>
 
       {status === "loading" && <div className="clr-secondary">Loading config-sync…</div>}
@@ -165,104 +167,99 @@ export default function ConfigSyncPage() {
         </div>
       )}
       {status === "ready" && live && (
-        <div className="max-w-[680px] flex flex-col gap-5">
-          <div className="clr-form-control" style={{ marginTop: 0 }}>
-            <label className="clr-control-label">Sync mode</label>
-            <div className="flex flex-col gap-[6px]">
-              <div className="clr-radio-wrapper">
-                <input
-                  type="radio"
-                  id="sync-mode-load"
-                  name="sync-mode"
-                  checked={(form.mode ?? "load") === "load"}
-                  onChange={() => setForm((f) => ({ ...f, mode: "load" as SyncMode }))}
-                />
-                <label htmlFor="sync-mode-load">Load (replace)</label>
-              </div>
-              <div className="clr-radio-wrapper">
-                <input
-                  type="radio"
-                  id="sync-mode-set"
-                  name="sync-mode"
-                  checked={form.mode === "set"}
-                  onChange={() => setForm((f) => ({ ...f, mode: "set" as SyncMode }))}
-                />
-                <label htmlFor="sync-mode-set">Set (merge)</label>
+        <div className="card" style={{ maxWidth: 720 }}>
+          <div className="card-block flex flex-col gap-4">
+            <div className="clr-form-control" style={{ marginTop: 0 }}>
+              <label className="clr-control-label">Sync mode</label>
+              <div className="flex flex-col gap-[6px]">
+                <div className="clr-radio-wrapper">
+                  <input
+                    type="radio"
+                    id="sync-mode-load"
+                    name="sync-mode"
+                    checked={(form.mode ?? "load") === "load"}
+                    onChange={() => setForm((f) => ({ ...f, mode: "load" as SyncMode }))}
+                  />
+                  <label htmlFor="sync-mode-load">load — replace the section on the secondary</label>
+                </div>
+                <div className="clr-radio-wrapper">
+                  <input
+                    type="radio"
+                    id="sync-mode-set"
+                    name="sync-mode"
+                    checked={form.mode === "set"}
+                    onChange={() => setForm((f) => ({ ...f, mode: "set" as SyncMode }))}
+                  />
+                  <label htmlFor="sync-mode-set">set — merge, overwriting conflicting values</label>
+                </div>
               </div>
             </div>
-            <div className="clr-subtext">
-              load = replace the section on the secondary; set = merge (overwrite conflicting values).
-            </div>
-          </div>
 
-          <div className="card">
-            <div className="card-header">Secondary</div>
-            <div className="card-block flex flex-col gap-4">
-              <div className="grid gap-4" style={{ gridTemplateColumns: "2fr 1fr 1fr" }}>
-                <Field label="Address" hint="IPv4/IPv6/FQDN">
-                  <TextInput value={form.secondary.address ?? ""} onChange={(v) => setSecondary({ address: v || null })} placeholder="192.0.2.112" mono />
-                </Field>
-                <Field label="Port" hint="default 443">
-                  <TextInput value={form.secondary.port?.toString() ?? ""} onChange={(v) => setSecondary({ port: numOrNull(v) })} placeholder="443" mono />
-                </Field>
-                <Field label="Timeout (s)" hint="default 60">
-                  <TextInput value={form.secondary.timeout?.toString() ?? ""} onChange={(v) => setSecondary({ timeout: numOrNull(v) })} placeholder="60" mono />
-                </Field>
-              </div>
-              <Field
-                label="API key"
-                hint={
-                  form.secondary.has_key
-                    ? "A key is configured. Leave blank to keep it; enter a value to replace it (required to test)."
-                    : "The secondary needs `service https api keys id <id> key '<key>'` matching this value."
-                }
-              >
-                <TextInput value={form.secondary.key ?? ""} onChange={(v) => setSecondary({ key: v || null })} placeholder={form.secondary.has_key ? "•••••••• (unchanged)" : "shared-secret"} mono />
+            <div className="grid gap-3" style={{ gridTemplateColumns: "2fr 1fr 1fr" }}>
+              <Field label="Secondary address" hint="IPv4, IPv6, or FQDN.">
+                <TextInput value={form.secondary.address ?? ""} onChange={(v) => setSecondary({ address: v || null })} placeholder="192.0.2.112" mono />
               </Field>
-              <div className="flex items-center gap-3">
-                <Button kind="secondary" icon="connect" onClick={runTest} disabled={testing}>
-                  {testing ? "Testing…" : "Test Connection"}
-                </Button>
-                {testResult && (
-                  <span className="inline-flex items-center gap-[6px]" style={{ fontSize: 12 }}>
-                    {testResult.authenticated ? (
-                      <>
-                        <span className="badge badge-ok">Authenticated</span>
-                        {testResult.version && (
-                          <span style={{ color: "var(--cds-alias-typography-color-400)" }}>
-                            <span className="mono">{testResult.version}</span>
-                          </span>
-                        )}
-                      </>
-                    ) : testResult.reachable ? (
-                      <>
-                        <span className="badge badge-warn">Key Rejected</span>
-                        {testResult.error && (
-                          <span style={{ color: "var(--cds-alias-typography-color-400)" }}>{testResult.error}</span>
-                        )}
-                      </>
-                    ) : (
-                      <>
-                        <span className="badge badge-crit">Unreachable</span>
-                        {testResult.error && (
-                          <span style={{ color: "var(--cds-alias-typography-color-400)" }}>{testResult.error}</span>
-                        )}
-                      </>
-                    )}
-                  </span>
-                )}
-              </div>
+              <Field label="Port">
+                <TextInput value={form.secondary.port?.toString() ?? ""} onChange={(v) => setSecondary({ port: numOrNull(v) })} placeholder="443" mono />
+              </Field>
+              <Field label="Timeout (s)">
+                <TextInput value={form.secondary.timeout?.toString() ?? ""} onChange={(v) => setSecondary({ timeout: numOrNull(v) })} placeholder="60" mono />
+              </Field>
             </div>
+
+            <Field
+              label="API key"
+              hint={
+                form.secondary.has_key
+                  ? "A key is configured. Leave blank to keep it; enter a value to replace it (required to test)."
+                  : "The secondary needs `service https api keys id <id> key '<key>'` matching this value."
+              }
+            >
+              <TextInput value={form.secondary.key ?? ""} onChange={(v) => setSecondary({ key: v || null })} placeholder={form.secondary.has_key ? "•••••••• (unchanged)" : "shared-secret"} mono />
+            </Field>
+            <div className="flex items-center gap-3">
+              <Button kind="secondary" icon="connect" onClick={runTest} disabled={testing}>
+                {testing ? "Testing…" : "Test Connection"}
+              </Button>
+              {testResult && (
+                <span className="inline-flex items-center gap-[6px]" style={{ fontSize: 12 }}>
+                  {testResult.authenticated ? (
+                    <>
+                      <span className="badge badge-ok">Authenticated</span>
+                      {testResult.version && (
+                        <span style={{ color: "var(--cds-alias-typography-color-400)" }}>
+                          <span className="mono">{testResult.version}</span>
+                        </span>
+                      )}
+                    </>
+                  ) : testResult.reachable ? (
+                    <>
+                      <span className="badge badge-warn">Key Rejected</span>
+                      {testResult.error && (
+                        <span style={{ color: "var(--cds-alias-typography-color-400)" }}>{testResult.error}</span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="badge badge-crit">Unreachable</span>
+                      {testResult.error && (
+                        <span style={{ color: "var(--cds-alias-typography-color-400)" }}>{testResult.error}</span>
+                      )}
+                    </>
+                  )}
+                </span>
+              )}
+            </div>
+
+            <Field label="Sections to sync" hint="Pick a top-level section, and optionally one sub-element (e.g. protocols → ospf).">
+              <SectionsEditor sections={form.sections} onChange={(s) => setForm((f) => ({ ...f, sections: s }))} />
+            </Field>
+
+            <ErrorText msg={errorMsg} />
           </div>
-
-          <Field label="Sections to sync" hint="Pick a top-level section and, optionally, a single sub-element (e.g. protocols → ospf).">
-            <SectionsEditor sections={form.sections} onChange={(s) => setForm((f) => ({ ...f, sections: s }))} />
-          </Field>
-
-          <ErrorText msg={errorMsg} />
-          <div className="flex items-center gap-2">
+          <div className="card-footer">
             <Button kind="primary" onClick={save} disabled={saving}>
-              {saving ? "Applying…" : "Apply Config-Sync"}
+              {saving ? "Applying…" : "Save Sync Settings"}
             </Button>
             <Button kind="ghost" icon="refresh" onClick={load}>Reload</Button>
           </div>

@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
-import { StatePill } from "@/components/ui/Badge";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { MtuCell } from "@/components/dashboard/MtuCell";
@@ -21,7 +20,17 @@ function plane(r: VxlanInterface): Plane {
   return "—";
 }
 
-const dash = (v: string | null) => (v && v.length ? v : "—");
+/// Clarity status pill (mono uppercase), per the design reference.
+const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" } as const;
+const dim = (t: string) => <span style={{ color: "var(--cds-alias-typography-color-200)" }}>{t}</span>;
+
+function StatusPill({ enabled }: { enabled: boolean }) {
+  return (
+    <span className={`label${enabled ? " label-success" : ""}`} style={pillStyle}>
+      {enabled ? "ENABLED" : "DISABLED"}
+    </span>
+  );
+}
 
 const columns: Column<VxlanInterface>[] = [
   { key: "name", header: "Interface", value: (r) => r.name, mono: true, sortable: true, width: 120 },
@@ -30,7 +39,7 @@ const columns: Column<VxlanInterface>[] = [
     header: "VNIs",
     value: (r) => r.vnis.map((m) => m.vni).join(", "),
     render: (r) => {
-      if (r.vnis.length === 0) return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
+      if (r.vnis.length === 0) return dim("—");
       const first = r.vnis[0];
       const label = first.vlan != null ? `${first.vni}→v${first.vlan}` : String(first.vni);
       return (
@@ -50,12 +59,16 @@ const columns: Column<VxlanInterface>[] = [
     key: "plane",
     header: "Control plane",
     value: (r) => plane(r),
-    // Control plane is a category, not a status — every value gets the same
-    // neutral pill; "no plane" renders as a bare dash like other empty cells.
+    // Per the design reference: EVPN gets the success pill, the self-contained
+    // planes get info; "no plane" renders as a dimmed dash like other empty cells.
     render: (r) => {
       const p = plane(r);
-      if (p === "—") return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
-      return <span className="badge badge-muted">{p}</span>;
+      if (p === "—") return dim("—");
+      return (
+        <span className={p === "EVPN" ? "label label-success" : "label label-info"} style={pillStyle}>
+          {p.toUpperCase()}
+        </span>
+      );
     },
     sortable: true,
     width: 130,
@@ -64,14 +77,18 @@ const columns: Column<VxlanInterface>[] = [
     key: "source",
     header: "VTEP source",
     value: (r) => r.source_address ?? r.source_interface ?? "",
-    render: (r) => dash(r.source_address ?? r.source_interface),
+    render: (r) => {
+      const v = r.source_address ?? r.source_interface;
+      return v && v.length ? v : dim("—");
+    },
     mono: true,
   },
   {
     key: "peers",
     header: "Remotes / group",
     value: (r) => [...r.remotes, r.group ?? ""].join(", "),
-    render: (r) => (r.remotes.length ? r.remotes.join(", ") : dash(r.group)),
+    render: (r) =>
+      r.remotes.length ? r.remotes.join(", ") : r.group && r.group.length ? r.group : dim("—"),
     mono: true,
   },
   { key: "port", header: "Port", value: (r) => r.port ?? 8472, mono: true, width: 80 },
@@ -80,7 +97,7 @@ const columns: Column<VxlanInterface>[] = [
     key: "status",
     header: "Status",
     value: (r) => (r.enabled ? "enabled" : "disabled"),
-    render: (r) => <StatePill enabled={r.enabled} />,
+    render: (r) => <StatusPill enabled={r.enabled} />,
     sortable: true,
     width: 110,
   },

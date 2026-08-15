@@ -13,7 +13,6 @@ import {
   fetchRuleCounters,
   FirewallConfig,
   FirewallRule,
-  PROTOCOL_LABEL,
   RuleCounter,
   ruleKey,
   ruleSelection,
@@ -30,7 +29,7 @@ import { RuleFormModal } from "./RuleFormModal";
 
 /** Resizable columns of the rules table (the trailing Actions cell is fixed). */
 const RULE_COLS = [
-  { key: "order", header: "Order", width: 70 },
+  { key: "order", header: "Order", width: 84 },
   { key: "action", header: "Action", width: 100 },
   { key: "name", header: "Name" },
   { key: "from", header: "From" },
@@ -218,6 +217,19 @@ export default function FirewallRulesPage() {
     dragIndex.current = over;
   };
 
+  /// Move-by-one chevrons in the Order column (per the DC mock) — they edit
+  /// the same pending order the row drag does; Apply Order commits either way.
+  const move = (index: number, dir: -1 | 1) => {
+    setOrder((prev) => {
+      const j = index + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(index, 1);
+      next.splice(j, 0, moved);
+      return next;
+    });
+  };
+
   const commitOrder = async () => {
     setApplyingOrder(true);
     try {
@@ -311,7 +323,7 @@ export default function FirewallRulesPage() {
           {p && (
             <span className="text-[var(--cds-alias-typography-color-200)]">
               {" "}
-              · {PROTOCOL_LABEL[p.protocol].toLowerCase()}:{p.ports.join(",")}
+              — {p.protocol === "tcp_udp" ? "tcp+udp" : p.protocol}:{p.ports.join(",")}
             </span>
           )}
         </span>
@@ -365,8 +377,8 @@ export default function FirewallRulesPage() {
                   className="clr-select"
                   style={{ width: "auto", minWidth: 100, fontFamily: "var(--qz-font-mono)" }}
                 >
-                  <option value="drop">Deny</option>
                   <option value="accept">Allow</option>
+                  <option value="drop">Deny</option>
                 </select>
               </span>
             </span>
@@ -417,12 +429,17 @@ export default function FirewallRulesPage() {
                 Application Control bindings and Geolocation policies.
               </div>
               <div className="alert-actions" style={{ display: "flex", gap: 8 }}>
-                <Button kind="secondary" size="sm" icon="undo" onClick={() => setOrder(data.rules.map(ruleKey))} disabled={applyingOrder}>
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => setOrder(data.rules.map(ruleKey))}
+                  disabled={applyingOrder}
+                >
                   Reset
-                </Button>
-                <Button kind="primary" size="sm" icon="check" onClick={commitOrder} disabled={applyingOrder}>
+                </button>
+                <button type="button" className="btn btn-primary" onClick={commitOrder} disabled={applyingOrder}>
                   {applyingOrder ? "Applying…" : "Apply Order"}
-                </Button>
+                </button>
               </div>
             </div>
           )}
@@ -477,26 +494,37 @@ export default function FirewallRulesPage() {
                           dragIndex.current = null;
                           setDragging(false);
                         }}
-                        style={{
-                          opacity: r.enabled ? 1 : 0.55,
-                          cursor: dragEnabled ? (dragging ? "grabbing" : "grab") : "default",
-                        }}
+                        style={{ cursor: dragEnabled ? (dragging ? "grabbing" : "grab") : "default" }}
                       >
                         <td className="mono">
-                          <span className="inline-flex items-center gap-[6px]">
+                          <span className="inline-flex items-center gap-[2px]">
+                            <span style={{ width: 18 }}>{position}</span>
                             {dragEnabled && (
-                              <Icon
-                                shape="drag-handle"
-                                size={13}
-                                className="flex-shrink-0"
-                                style={{ color: "var(--cds-alias-typography-color-200)" }}
-                              />
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-link-neutral"
+                                  title="Move up"
+                                  style={{ margin: 0, minWidth: 0, padding: "0 3px" }}
+                                  onClick={() => move(position - 1, -1)}
+                                >
+                                  <Icon shape="angle" dir="up" size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-link-neutral"
+                                  title="Move down"
+                                  style={{ margin: 0, minWidth: 0, padding: "0 3px" }}
+                                  onClick={() => move(position - 1, 1)}
+                                >
+                                  <Icon shape="angle" dir="down" size={12} />
+                                </button>
+                              </>
                             )}
-                            {position}
                           </span>
                         </td>
                         <td>
-                          <span className="inline-flex items-center gap-[5px]">
+                          <span className="inline-flex items-center gap-1">
                             <ActionPill action={r.action} />
                             {r.ips && (
                               <span className="badge badge-warn" title="Matches are inspected by the IPS engine">
@@ -506,7 +534,12 @@ export default function FirewallRulesPage() {
                           </span>
                         </td>
                         <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {r.name ?? <span className="text-[var(--cds-alias-typography-color-200)]">—</span>}
+                          {/* Disabled rules dim the name only, per the DC mock — the Status pill says DISABLED. */}
+                          {r.name ? (
+                            <span style={{ opacity: r.enabled ? 1 : 0.55 }}>{r.name}</span>
+                          ) : (
+                            <span className="text-[var(--cds-alias-typography-color-200)]">—</span>
+                          )}
                         </td>
                         <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           <EndpointCell rule={r} side="from" config={data} descriptions={ifaceDescriptions} />

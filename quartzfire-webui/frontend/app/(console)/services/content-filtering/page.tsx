@@ -129,7 +129,7 @@ function GroupEditor({
 
   return (
     <ModalShell onClose={onClose} maxWidth={720}>
-      <ModalHeader title={`Action: ${g.name}`} onClose={onClose} />
+      <ModalHeader title="Content Filtering Action" subtitle={g.name} onClose={onClose} />
       <div className="flex flex-col gap-4">
         <div className="clr-form-control" style={{ marginTop: 0 }}>
           <label className={fieldLabel}>Description</label>
@@ -432,9 +432,9 @@ export default function ContentFilteringPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start gap-3">
-        <div style={{ marginRight: "auto" }}>
-          <h2>Content Filtering</h2>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">Content Filtering</h2>
           <p className="clr-secondary" style={{ marginTop: 4 }}>
             URL and category filtering — clients are mapped to an action by source subnet.
           </p>
@@ -446,8 +446,49 @@ export default function ContentFilteringPage() {
           <span aria-disabled={saving} style={{ opacity: saving ? 0.5 : 1 }}>
             <Switch on={live.enabled} onChange={onToggleRequest} />
           </span>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              reloadConfig();
+              reloadStatus();
+            }}
+          >
+            Refresh
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setTab("groups");
+              setAddingGroup(true);
+            }}
+          >
+            New Action
+          </button>
         </span>
       </div>
+
+      {sslReadError !== null ? (
+        <div className="alert alert-warning">
+          <Icon shape="exclamation-triangle" size={16} className="alert-icon" />
+          <div className="alert-text">
+            <b>Couldn&apos;t read the SSL Inspection status.</b> Content Filtering needs SSL Inspection
+            enabled, but this page couldn&apos;t confirm its state ({sslReadError}). Check the{" "}
+            <Link href="/services/ssl-inspection" className="underline" style={{ color: "var(--cds-alias-typography-link-color)" }}>SSL Inspection</Link>{" "}
+            page — if it&apos;s enabled there, you can still enable Content Filtering here.
+          </div>
+        </div>
+      ) : !ssl.enabled && (
+        <div className="alert alert-warning">
+          <Icon shape="exclamation-triangle" size={16} className="alert-icon" />
+          <div className="alert-text">
+            <b>SSL Inspection is disabled.</b> Content Filtering has no decrypted traffic to inspect and the
+            commit will be refused. Enable it on the{" "}
+            <Link href="/services/ssl-inspection" className="underline" style={{ color: "var(--cds-alias-typography-link-color)" }}>SSL Inspection</Link> page first.
+          </div>
+        </div>
+      )}
 
       <Tabs
         value={tab} onChange={setTab}
@@ -468,27 +509,6 @@ export default function ContentFilteringPage() {
 
       <div>
         <div className="max-w-[1000px] flex flex-col gap-4">
-          {sslReadError !== null ? (
-            <div className="alert alert-warning">
-              <Icon shape="exclamation-triangle" size={16} className="alert-icon" />
-              <div className="alert-text">
-                <b>Couldn&apos;t read the SSL Inspection status.</b> Content Filtering needs SSL Inspection
-                enabled, but this page couldn&apos;t confirm its state ({sslReadError}). Check the{" "}
-                <Link href="/services/ssl-inspection" className="underline" style={{ color: "var(--cds-alias-typography-link-color)" }}>SSL Inspection</Link>{" "}
-                page — if it&apos;s enabled there, you can still enable Content Filtering here.
-              </div>
-            </div>
-          ) : !ssl.enabled && (
-            <div className="alert alert-warning">
-              <Icon shape="exclamation-triangle" size={16} className="alert-icon" />
-              <div className="alert-text">
-                <b>SSL Inspection is disabled.</b> Content Filtering has no decrypted traffic to inspect and the
-                commit will be refused. Enable it on the{" "}
-                <Link href="/services/ssl-inspection" className="underline" style={{ color: "var(--cds-alias-typography-link-color)" }}>SSL Inspection</Link> page first.
-              </div>
-            </div>
-          )}
-
           {tab === "overview" && (
             <div className="grid md:grid-cols-2 gap-4">
               <section className="card">
@@ -530,14 +550,6 @@ export default function ContentFilteringPage() {
 
           {tab === "groups" && (
             <div className="flex flex-col gap-4">
-              <div className="flex items-center gap-3">
-                <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0 flex-1">
-                  An action decides what a set of clients can reach — blocked categories, custom allow/block
-                  lists, and content scanning. Clients are mapped to an action by source subnet; the first
-                  action is the default that unmatched clients fall to.
-                </p>
-                <Button kind="primary" size="sm" onClick={() => setAddingGroup(true)}>Add Action</Button>
-              </div>
               <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
                 <table ref={groupResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: groupResize.tableLayout }}>
                   <colgroup>
@@ -605,6 +617,12 @@ export default function ContentFilteringPage() {
                     )}
                   </tbody>
                 </table>
+              </div>
+
+              <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+                An action decides what a set of clients can reach — blocked categories, custom allow/block
+                lists, and content scanning. Clients are mapped to an action by source subnet; the first
+                action is the default that unmatched clients fall to.
               </div>
             </div>
           )}

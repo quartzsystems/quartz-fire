@@ -71,7 +71,7 @@ function interfaceColumns(): Column<OspfInterface>[] {
     { key: "network", header: "Network type", value: (r) => r.network_type ?? "", render: (r) => dash(r.network_type), mono: true, width: 160 },
     {
       key: "timers",
-      header: "Hello / Dead",
+      header: "Hello / dead",
       value: (r) => `${r.hello_interval ?? ""}/${r.dead_interval ?? ""}`,
       render: (r) => (r.hello_interval == null && r.dead_interval == null ? "—" : `${r.hello_interval ?? "—"} / ${r.dead_interval ?? "—"}`),
       mono: true,
@@ -101,6 +101,7 @@ export default function OspfPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [section, setSection] = useState<Section>("global");
+  const [refreshing, setRefreshing] = useState(false);
 
   const [areaModal, setAreaModal] = useState<{ area?: OspfArea } | null>(null);
   const [ifaceModal, setIfaceModal] = useState<{ iface?: OspfInterface } | null>(null);
@@ -121,6 +122,16 @@ export default function OspfPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const saved = (msg: string) => {
     setAreaModal(null);
@@ -155,86 +166,89 @@ export default function OspfPage() {
     ["status", "Status", null],
   ];
 
+  // Header "Add" control follows the active tab (DC pattern: one primary
+  // button in the page-header row whose label tracks the tab).
+  const addAction =
+    section === "areas"
+      ? { label: "Add Area", onClick: () => setAreaModal({}) }
+      : { label: "Add Interface", onClick: () => setIfaceModal({}) };
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h2 style={{ margin: 0 }}>OSPF</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Open Shortest Path First (OSPFv2) — link-state IGP for the IPv4 underlay.
-        </p>
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">OSPF</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Open Shortest Path First (OSPFv2) — link-state IGP for the IPv4 underlay.
+          </p>
+        </div>
+        {status === "ready" && (
+          <>
+            <Button kind="outline" onClick={refresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            <Button kind="primary" onClick={addAction.onClick}>{addAction.label}</Button>
+          </>
+        )}
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="clr-secondary">Loading OSPF configuration…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="alert alert-danger alert-sm">
-              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
-              <div className="alert-text">{errorMsg}</div>
-            </div>
-            <div>
-              <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading OSPF configuration…</div>}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">{errorMsg}</div>
           </div>
-        )}
-        {status === "ready" && cfg && (
-          <div className="flex flex-col gap-5">
-            <Tabs
-              items={tabs.map(([id, label, count]) => ({ value: id, label, count: count ?? undefined }))}
-              value={section}
-              onChange={(v) => setSection(v as Section)}
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
+          </div>
+        </div>
+      )}
+      {status === "ready" && cfg && (
+        <>
+          <Tabs
+            items={tabs.map(([id, label, count]) => ({ value: id, label, count: count ?? undefined }))}
+            value={section}
+            onChange={(v) => setSection(v as Section)}
+          />
+
+          {section === "global" && (
+            <OspfGlobalPanel live={cfg.global} onSaved={(msg) => { setToast(msg); load("refresh"); }} />
+          )}
+
+          {section === "status" && <OspfStatusPanel />}
+
+          {section === "areas" && (
+            <DataTable searchable={false}
+              rows={cfg.areas}
+              columns={areaColumns()}
+              rowId={(r) => r.area}
+              storageKey="routing-ospf-areas"
+              searchPlaceholder="Search areas…"
+              emptyMessage="No OSPF areas configured."
+              onRowOpen={(row) => setAreaModal({ area: row })}
+              actions={(row) => (
+                <RowActions label={`area ${row.area}`} onEdit={() => setAreaModal({ area: row })} onDelete={() => removeArea(row)} />
+              )}
             />
+          )}
 
-            {section === "global" && (
-              <OspfGlobalPanel live={cfg.global} onSaved={(msg) => { setToast(msg); load("refresh"); }} />
-            )}
-
-            {section === "status" && <OspfStatusPanel />}
-
-            {section === "areas" && (
-              <DataTable
-                rows={cfg.areas}
-                columns={areaColumns()}
-                rowId={(r) => r.area}
-                storageKey="routing-ospf-areas"
-                searchPlaceholder="Search areas…"
-                emptyMessage="No OSPF areas configured."
-                onRefresh={() => load("refresh")}
-                onRowOpen={(row) => setAreaModal({ area: row })}
-                toolbar={
-                  <Button kind="primary" size="sm" onClick={() => setAreaModal({})}>
-                    Add Area
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions label={`area ${row.area}`} onEdit={() => setAreaModal({ area: row })} onDelete={() => removeArea(row)} />
-                )}
-              />
-            )}
-
-            {section === "interfaces" && (
-              <DataTable
-                rows={cfg.interfaces}
-                columns={interfaceColumns()}
-                rowId={(r) => r.name}
-                storageKey="routing-ospf-interfaces"
-                searchPlaceholder="Search interfaces…"
-                emptyMessage="No OSPF interfaces configured."
-                onRefresh={() => load("refresh")}
-                onRowOpen={(row) => setIfaceModal({ iface: row })}
-                toolbar={
-                  <Button kind="primary" size="sm" onClick={() => setIfaceModal({})}>
-                    Add Interface
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions label={`interface ${row.name}`} onEdit={() => setIfaceModal({ iface: row })} onDelete={() => removeIface(row)} />
-                )}
-              />
-            )}
-          </div>
-        )}
-      </div>
+          {section === "interfaces" && (
+            <DataTable searchable={false}
+              rows={cfg.interfaces}
+              columns={interfaceColumns()}
+              rowId={(r) => r.name}
+              storageKey="routing-ospf-interfaces"
+              searchPlaceholder="Search interfaces…"
+              emptyMessage="No OSPF interfaces configured."
+              onRowOpen={(row) => setIfaceModal({ iface: row })}
+              actions={(row) => (
+                <RowActions label={`interface ${row.name}`} onEdit={() => setIfaceModal({ iface: row })} onDelete={() => removeIface(row)} />
+              )}
+            />
+          )}
+        </>
+      )}
 
       {areaModal && cfg && (
         <AreaFormModal

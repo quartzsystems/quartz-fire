@@ -254,7 +254,7 @@ export function BridgeFormModal({
                   <input
                     value={a.value}
                     onChange={(e) => updateAddr(a.key, e.target.value)}
-                    placeholder="10.0.0.1/24 or dhcp"
+                    placeholder="10.10.0.1/24"
                     className="clr-input"
                     style={wideMono}
                   />
@@ -286,8 +286,8 @@ export function BridgeFormModal({
           </label>
           <div className="clr-subtext" style={{ marginTop: -6 }}>
             <span>
-              VLAN filtering. Required before a VXLAN Single VXLAN Device (SVD) member can carry{" "}
-              <span style={mono}>vlan-to-vni</span> mappings, and before VLAN sub-interfaces.
+              Required before VLAN sub-interfaces, and before a Single VXLAN Device member can
+              carry <span style={mono}>vlan-to-vni</span> mappings.
             </span>
           </div>
 
@@ -308,31 +308,30 @@ export function BridgeFormModal({
                 </div>
               ) : (
                 <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
+                  {/* One line per VIF, per the DC reference: id · address(es) · description. */}
                   {vifs.map((v) => (
-                    <div key={v.key} className="flex items-start gap-2">
+                    <div key={v.key} className="flex items-center gap-2">
                       <input
                         value={v.vlan}
                         onChange={(e) => updateVif(v.key, { vlan: e.target.value })}
-                        placeholder="VLAN"
+                        placeholder="20"
                         className="clr-input"
-                        style={{ ...mono, maxWidth: 80 }}
+                        style={{ ...mono, maxWidth: 72 }}
                       />
-                      <div className="flex flex-col gap-2 flex-1">
-                        <input
-                          value={v.addresses}
-                          onChange={(e) => updateVif(v.key, { addresses: e.target.value })}
-                          placeholder="10.0.10.1/24 (comma-separated for several)"
-                          className="clr-input"
-                          style={wideMono}
-                        />
-                        <input
-                          value={v.description}
-                          onChange={(e) => updateVif(v.key, { description: e.target.value })}
-                          placeholder="Description (optional)"
-                          className="clr-input"
-                          style={wide}
-                        />
-                      </div>
+                      <input
+                        value={v.addresses}
+                        onChange={(e) => updateVif(v.key, { addresses: e.target.value })}
+                        placeholder="10.10.20.1/24"
+                        className="clr-input"
+                        style={{ ...wideMono, flex: 1 }}
+                      />
+                      <input
+                        value={v.description}
+                        onChange={(e) => updateVif(v.key, { description: e.target.value })}
+                        placeholder="Description"
+                        className="clr-input"
+                        style={{ ...wide, flex: 1 }}
+                      />
                       <button
                         type="button"
                         onClick={() => removeVif(v.key)}

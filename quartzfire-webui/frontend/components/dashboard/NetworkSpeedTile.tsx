@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { formatRate } from "@/lib/format";
 import { ChartTooltip, DOWN_COLOR, UP_COLOR } from "@/components/ui/ChartTooltip";
 import { useInterfaceStats } from "./useInterfaceStats";
 import { LiveButton } from "./LiveButton";
@@ -30,6 +29,17 @@ function formatRateShort(bits: number): string {
   if (bits >= 1e6) return `${(bits / 1e6).toFixed(0)} Mb/s`;
   if (bits >= 1e3) return `${(bits / 1e3).toFixed(0)} Kb/s`;
   return `${Math.round(bits)} b/s`;
+}
+
+/// Live-rate readout in the card header, per the DC reference ("88 Mbit/s",
+/// "1.9 Gbit/s"), extended downward for sub-Mbit links.
+function formatHeaderRate(bytesPerSec: number | null): string {
+  if (bytesPerSec == null || !Number.isFinite(bytesPerSec)) return "—";
+  const bits = bytesPerSec * 8;
+  if (bits >= 1e9) return `${(bits / 1e9).toFixed(1)} Gbit/s`;
+  if (bits >= 1e6) return `${Math.round(bits / 1e6)} Mbit/s`;
+  if (bits >= 1e3) return `${Math.round(bits / 1e3)} kbit/s`;
+  return `${Math.round(bits)} bit/s`;
 }
 
 /// Seconds-ago label, e.g. 90 → "1m30s", 0 → "now".
@@ -178,8 +188,8 @@ function SpeedGraph({ rx, tx }: { rx: number[]; tx: number[] }) {
           width={w}
           title={formatAge(hoverAge)}
           rows={[
-            { label: "Download", value: formatRate(rx[hover] ?? null), color: RX_COLOR },
-            { label: "Upload", value: formatRate(tx[hover] ?? null), color: TX_COLOR },
+            { label: "Download", value: formatHeaderRate(rx[hover] ?? null), color: RX_COLOR },
+            { label: "Upload", value: formatHeaderRate(tx[hover] ?? null), color: TX_COLOR },
           ]}
         />
       )}
@@ -254,14 +264,14 @@ export function NetworkSpeedTile() {
             style={{ color: RX_COLOR, fontFamily: "var(--qz-font-mono)" }}
             title="Download"
           >
-            ↓ {formatRate(curRx)}
+            ↓ {formatHeaderRate(curRx)}
           </span>
           <span
             className="text-[12px] font-semibold"
             style={{ color: TX_COLOR, fontFamily: "var(--qz-font-mono)" }}
             title="Upload"
           >
-            ↑ {formatRate(curTx)}
+            ↑ {formatHeaderRate(curTx)}
           </span>
           <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
         </span>

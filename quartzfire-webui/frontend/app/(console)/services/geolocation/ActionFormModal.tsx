@@ -128,8 +128,8 @@ export function ActionFormModal({
   return (
     <ModalShell onClose={onCancel} maxWidth={720}>
       <ModalHeader
-        title={initial ? `Edit Action — ${initial.name}` : "New Geolocation Action"}
-        subtitle="A reusable country policy; attach it to firewall rules on the Policies tab."
+        title="Geolocation Action"
+        subtitle={initial ? initial.name : "A reusable country policy; attach it to firewall rules on the Policies tab."}
         onClose={onCancel}
       />
 
@@ -258,7 +258,7 @@ export function ActionFormModal({
 
         <div className="flex items-end gap-6 flex-wrap">
           <div className="clr-form-control" style={{ marginTop: 0 }}>
-            <label className="clr-control-label">Unclassified (unknown) IPs</label>
+            <label className="clr-control-label">IPs with no country</label>
             <Segmented
               items={[
                 { value: "allow", label: "Allow" },

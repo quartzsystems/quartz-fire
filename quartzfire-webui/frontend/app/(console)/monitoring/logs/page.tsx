@@ -334,7 +334,7 @@ export default function UnifiedLogsPage() {
   const resize = useColumnResize("logs", cols.map((c) => ({ key: c.key, width: c.width })));
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div>
         <h2>Logs</h2>
         <p className="clr-secondary" style={{ marginTop: 4 }}>
@@ -344,7 +344,8 @@ export default function UnifiedLogsPage() {
 
       <div>
         <div className="flex flex-col gap-3">
-          {/* Controls */}
+          {/* Controls — DC row order: filter input · source tabs, stream
+              controls right-aligned. The action filter is an extra. */}
           <div className="flex items-center gap-3 flex-wrap">
             <input
               value={query}
@@ -353,6 +354,25 @@ export default function UnifiedLogsPage() {
               className="clr-input"
               style={{ width: 240, maxWidth: 240 }}
             />
+
+            {/* Source toggles — the mock's source-tab strip */}
+            <div className="btn-group">
+              {ALL_SOURCES.map((s) => {
+                const on = sources.has(s);
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => toggleSource(s)}
+                    className={`btn btn-sm${on ? " active" : ""}`}
+                    title={on ? "Hide this source" : "Show this source"}
+                  >
+                    <SourcePill source={s} />
+                    <span style={{ opacity: 0.75 }}>{counts[s]}</span>
+                  </button>
+                );
+              })}
+            </div>
 
             <Segmented
               items={[
@@ -390,27 +410,6 @@ export default function UnifiedLogsPage() {
                 {" · "}
                 {visible.length} {visible.length === 1 ? "entry" : "entries"}
               </span>
-            </div>
-          </div>
-
-          {/* Source toggles */}
-          <div className="flex items-center flex-wrap">
-            <div className="btn-group">
-              {ALL_SOURCES.map((s) => {
-                const on = sources.has(s);
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => toggleSource(s)}
-                    className={`btn btn-sm${on ? " active" : ""}`}
-                    title={on ? "Hide this source" : "Show this source"}
-                  >
-                    <SourcePill source={s} />
-                    <span style={{ opacity: 0.75 }}>{counts[s]}</span>
-                  </button>
-                );
-              })}
             </div>
           </div>
 
@@ -461,7 +460,7 @@ export default function UnifiedLogsPage() {
             </table>
           </div>
 
-          <p className="clr-secondary m-0">
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
             The newest {MAX_ROWS} events are kept. Firewall traffic streams live; Content Filtering is polled every {CF_POLL_MS / 1000}s.
             SSL-intercepted HTTPS appears under Content Filtering, not Firewall.
           </p>

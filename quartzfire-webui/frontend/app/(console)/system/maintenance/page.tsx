@@ -29,7 +29,7 @@ import { useDashboard } from "@/lib/DashboardContext";
 const monoSt = { fontFamily: "var(--qz-font-mono)", maxWidth: "none" } as const;
 
 /// Clarity status pill — mono uppercase label.
-function Pill({ tone, children }: { tone?: "success" | "info"; children: React.ReactNode }) {
+function Pill({ tone, children }: { tone?: "success" | "info" | "danger"; children: React.ReactNode }) {
   return (
     <span
       className={`label${tone ? ` label-${tone}` : ""}`}
@@ -182,9 +182,9 @@ function ScheduleRebootModal({
           />
         </div>
         <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
-          The time is interpreted in the firewall&apos;s timezone (System → General). The schedule
-          survives WebUI sessions and can be cancelled here any time before it fires; users logged in
-          at the console are warned by the system shortly before the reboot.
+          The time is interpreted in the firewall&apos;s timezone (System → General). A scheduled reboot
+          survives this console — cancel it here or with <span className="mono">shutdown -c</span> at the
+          keyboard.
         </p>
         {error && (
           <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
@@ -330,7 +330,7 @@ function AddImageModal({
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://example.com/quartzfire-1.5-rolling.iso"
+            placeholder="https://images.quartz.systems/quartzfire-0.1.2.iso"
             disabled={working || file !== null}
             className="clr-input"
             style={monoSt}
@@ -338,75 +338,78 @@ function AddImageModal({
         </div>
 
         {/* Upload alternative: drag & drop or pick a local ISO. */}
-        <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            if (!working) setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOver(false);
-            if (!working) pickFile(e.dataTransfer.files?.[0] ?? null);
-          }}
-          onClick={() => !working && isoInput.current?.click()}
-          role="button"
-          aria-label="Upload an ISO file"
-          className="rounded-lg px-4 py-4 text-center cursor-pointer select-none"
-          style={{
-            border: `1px dashed ${dragOver ? "var(--cds-alias-interaction-action)" : "var(--cds-alias-object-border-color)"}`,
-            background: dragOver
-              ? "var(--qz-accent-soft)"
-              : "var(--cds-alias-object-container-background-shade)",
-            opacity: working ? 0.6 : 1,
-          }}
-        >
-          {file ? (
-            <div
-              className="flex items-center justify-center gap-2"
-              style={{ fontSize: 13, color: "var(--cds-alias-typography-color-450)" }}
-            >
-              <span style={{ fontFamily: "var(--qz-font-mono)" }}>{file.name}</span>
-              <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
-                {(file.size / (1024 * 1024)).toFixed(0)} MB
-              </span>
-              {!working && (
-                <button
-                  type="button"
-                  aria-label="Remove selected file"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    pickFile(null);
-                  }}
-                  className="btn btn-sm btn-link-neutral btn-icon"
-                  style={{ margin: 0 }}
-                >
-                  <Icon shape="trash" size={13} />
-                </button>
-              )}
-            </div>
-          ) : (
-            <p className="m-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-300)" }}>
-              …or drop a QuartzFire <span style={{ fontFamily: "var(--qz-font-mono)" }}>.iso</span> here
-              (or click to browse)
-            </p>
-          )}
-          <input
-            ref={isoInput}
-            type="file"
-            accept=".iso"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              e.target.value = "";
-              if (f) pickFile(f);
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <label className="clr-control-label">Or upload</label>
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              if (!working) setDragOver(true);
             }}
-          />
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              if (!working) pickFile(e.dataTransfer.files?.[0] ?? null);
+            }}
+            onClick={() => !working && isoInput.current?.click()}
+            role="button"
+            aria-label="Upload an ISO file"
+            className="rounded-lg px-4 py-4 text-center cursor-pointer select-none"
+            style={{
+              border: `1px dashed ${dragOver ? "var(--cds-alias-interaction-action)" : "var(--cds-alias-object-border-color)"}`,
+              background: dragOver
+                ? "var(--qz-accent-soft)"
+                : "var(--cds-alias-object-container-background-shade)",
+              opacity: working ? 0.6 : 1,
+            }}
+          >
+            {file ? (
+              <div
+                className="flex items-center justify-center gap-2"
+                style={{ fontSize: 13, color: "var(--cds-alias-typography-color-450)" }}
+              >
+                <span style={{ fontFamily: "var(--qz-font-mono)" }}>{file.name}</span>
+                <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+                  {(file.size / (1024 * 1024)).toFixed(0)} MB
+                </span>
+                {!working && (
+                  <button
+                    type="button"
+                    aria-label="Remove selected file"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      pickFile(null);
+                    }}
+                    className="btn btn-sm btn-link-neutral btn-icon"
+                    style={{ margin: 0 }}
+                  >
+                    <Icon shape="trash" size={13} />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="m-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-300)" }}>
+                …or drop a QuartzFire <span style={{ fontFamily: "var(--qz-font-mono)" }}>.iso</span> here
+                (or click to browse)
+              </p>
+            )}
+            <input
+              ref={isoInput}
+              type="file"
+              accept=".iso"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                e.target.value = "";
+                if (f) pickFile(f);
+              }}
+            />
+          </div>
         </div>
 
-        <p className="clr-subtext" style={{ margin: 0 }}>
-          The image installs next to the current one, so the running system is untouched until you reboot —
-          and the previous image stays available as a rollback boot entry.
+        <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+          The image installs alongside the running one and becomes the default boot — reboot to move to
+          it. Rolling back is booting the old image.
         </p>
 
         {phase === "uploading" && (
@@ -553,12 +556,17 @@ function RestoreConfigModal({
           Every current setting — interfaces, firewall, NAT, users, services — is replaced by the
           uploaded file, which must be a config.boot-style backup (the format the download produces).
         </p>
+        <div className="alert alert-warning alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">
+            The restored configuration applies under commit-confirm — unless you confirm it in the banner
+            within 2 minutes, the previous configuration is back automatically.
+          </div>
+        </div>
         <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
-          The restore applies under commit-confirm: unless you confirm it in the banner within 2 minutes,
-          the current configuration is restored automatically. Plain VyOS config.boot files (migrating
-          from a stock VyOS box) work too — this WebUI&apos;s own access settings
-          (<span className="mono">service https</span>) are preserved from the running configuration,
-          so a restore can never lock the UI out.
+          Plain VyOS config.boot files (migrating from a stock VyOS box) work too — this WebUI&apos;s own
+          access settings (<span className="mono">service https</span>) are preserved from the running
+          configuration, so a restore can never lock the UI out.
         </p>
         {error && (
           <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
@@ -626,10 +634,15 @@ function FactoryResetModal({
         onClose={onClose}
       />
       <div className="flex flex-col gap-4">
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">
+            This erases all configuration and reboots to defaults. It cannot be undone from this console.
+          </div>
+        </div>
         <p className="m-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
-          This replaces the boot configuration with the factory default and reboots. Every setting —
-          interfaces, firewall, NAT, users, services, this WebUI&apos;s own API access — is erased.
-          The firewall comes back with the default <span className="mono">vyos</span>/<span className="mono">vyos</span>{" "}
+          Every setting — interfaces, firewall, NAT, users, services, this WebUI&apos;s own API access — is
+          erased. The firewall comes back with the default <span className="mono">vyos</span>/<span className="mono">vyos</span>{" "}
           login, reachable only at the console until it&apos;s reconfigured. There is no undo and no
           auto-revert.
         </p>
@@ -725,63 +738,57 @@ export default function MaintenancePage() {
         </p>
       </div>
 
-      <div className="flex flex-col gap-4">
-        {/* Configuration backup / restore */}
+      {/* Configuration + Power side by side, per the DC reference. */}
+      <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr", alignItems: "start" }}>
         <div className="card">
           <div className="card-header">Configuration</div>
-          <div className="card-block">
-            <p className="clr-secondary" style={{ marginTop: 0, marginBottom: 16 }}>
-              Download the running configuration as a config.boot file, or restore one. A restore replaces
-              the entire configuration and must be confirmed within 2 minutes or it reverts automatically —
-              per-commit rollback lives on the Audit Log page.
-            </p>
-            <div className="flex gap-2">
-              <Button
-                kind="secondary"
-                icon="download"
-                disabled={downloading}
-                onClick={async () => {
-                  setDownloading(true);
-                  try {
-                    await downloadConfigBackup();
-                  } catch (e) {
-                    setToast(e instanceof Error ? e.message : "Backup download failed.");
-                  } finally {
-                    setDownloading(false);
-                  }
-                }}
-              >
-                {downloading ? "Preparing…" : "Download Backup"}
-              </Button>
-              <Button kind="secondary" icon="upload" onClick={() => fileInput.current?.click()}>
-                Restore from Backup…
-              </Button>
-              <input
-                ref={fileInput}
-                type="file"
-                accept=".boot,.conf,.cfg,.txt,text/plain"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0] ?? null;
-                  // Reset so picking the same file again re-fires onChange.
-                  e.target.value = "";
-                  if (f) setRestoreFile(f);
-                }}
-              />
-            </div>
+          <div className="card-block" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-300)" }}>
+            Download the running configuration as a backup, or restore one — a restore applies under
+            commit-confirm. Per-commit rollback lives on the Audit Log page.
+          </div>
+          <div className="card-footer" style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="btn"
+              disabled={downloading}
+              onClick={async () => {
+                setDownloading(true);
+                try {
+                  await downloadConfigBackup();
+                } catch (e) {
+                  setToast(e instanceof Error ? e.message : "Backup download failed.");
+                } finally {
+                  setDownloading(false);
+                }
+              }}
+            >
+              {downloading ? "Preparing…" : "Download Backup"}
+            </button>
+            <button type="button" className="btn" onClick={() => fileInput.current?.click()}>
+              Restore…
+            </button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".boot,.conf,.cfg,.txt,text/plain"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0] ?? null;
+                // Reset so picking the same file again re-fires onChange.
+                e.target.value = "";
+                if (f) setRestoreFile(f);
+              }}
+            />
           </div>
         </div>
 
-        {/* Power */}
         <div className="card">
           <div className="card-header">Power</div>
-          <div className="card-block">
-            <p className="clr-secondary" style={{ marginTop: 0, marginBottom: 16 }}>
-              Both actions interrupt all traffic through the firewall. Configuration is already saved to the
-              boot config after every apply, so nothing is lost by rebooting.
-            </p>
+          <div className="card-block" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-300)" }}>
+            A scheduled reboot is held by the system, not by this console — cancel it here or at the
+            keyboard.
             {schedule?.scheduled && (
-              <div className="alert alert-warning alert-sm" style={{ marginBottom: 16 }}>
+              <div className="alert alert-warning alert-sm" style={{ marginTop: 12 }}>
                 <Icon shape="history" size={14} className="alert-icon" />
                 <div className="alert-text">
                   {schedule.mode === "poweroff" ? "Shutdown" : "Reboot"} scheduled for{" "}
@@ -810,108 +817,103 @@ export default function MaintenancePage() {
                 </div>
               </div>
             )}
-            <div className="flex gap-2">
-              <button type="button" className="btn btn-warning-outline" onClick={() => setPowerModal("reboot")}>
-                <Icon shape="refresh" size={16} />
-                Reboot
-              </button>
-              <Button kind="secondary" icon="history" onClick={() => setScheduleModal(true)}>
-                Schedule Reboot…
-              </Button>
-              <button type="button" className="btn btn-danger-outline" onClick={() => setPowerModal("shutdown")}>
-                Shut Down
-              </button>
-            </div>
+          </div>
+          <div className="card-footer" style={{ display: "flex", gap: 8 }}>
+            <button type="button" className="btn btn-warning-outline" onClick={() => setPowerModal("reboot")}>
+              Reboot…
+            </button>
+            <button type="button" className="btn" onClick={() => setScheduleModal(true)}>
+              Schedule Reboot…
+            </button>
+            <button type="button" className="btn btn-danger-outline" onClick={() => setPowerModal("shutdown")}>
+              Shut Down
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* Factory reset */}
-        <div className="card">
-          <div className="card-header">Factory Reset</div>
-          <div className="card-block">
-            <p className="clr-secondary" style={{ marginTop: 0, marginBottom: 16 }}>
-              Erase the entire configuration and reboot to factory defaults. The firewall comes back at the
-              default <span className="mono">vyos</span>/<span className="mono">vyos</span> login, reachable
-              only at the console until reconfigured — there is no undo. Download a configuration backup
-              first if you might want any of it back.
-            </p>
-            <div className="flex gap-2">
-              <button type="button" className="btn btn-danger-outline" onClick={() => setResetModal(true)}>
-                Reset to Factory Defaults…
-              </button>
-            </div>
-          </div>
+      {/* System images */}
+      <div className="card">
+        <div className="card-header">
+          System Images
+          <span style={{ marginLeft: "auto" }}>
+            <Button kind="primary" size="sm" onClick={() => setAddModal(true)}>
+              Add System Image
+            </Button>
+          </span>
         </div>
-
-        {/* System images */}
-        <div className="card">
-          <div className="card-header">
-            System Images
-            <span style={{ marginLeft: "auto" }}>
-              <Button kind="primary" size="sm" icon="plus" onClick={() => setAddModal(true)}>
-                Add Image
-              </Button>
-            </span>
+        {loading ? (
+          <div className="card-block clr-secondary">Loading images…</div>
+        ) : images && images.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="table table-noborder table-compact">
+              <thead>
+                <tr>
+                  <th>Image</th>
+                  <th style={{ width: 130 }}>Default boot</th>
+                  <th style={{ width: 110 }}>Running</th>
+                  {/* Actions column carries no header label, per the DC reference. */}
+                  <th className="right" style={{ width: 150 }} aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {images.map((img) => (
+                  <tr key={img.name}>
+                    <td className="mono">{img.name}</td>
+                    <td>
+                      {img.default_boot ? (
+                        <Pill tone="success">Default</Pill>
+                      ) : (
+                        <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
+                      )}
+                    </td>
+                    <td>
+                      {img.running ? (
+                        <Pill tone="info">Running</Pill>
+                      ) : (
+                        <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
+                      )}
+                    </td>
+                    <td className="right">
+                      {img.running ? (
+                        <span title="The running image can't delete itself.">
+                          <Pill tone="info">In Use</Pill>
+                        </span>
+                      ) : (
+                        <DeleteImageAction name={img.name} onDelete={() => removeImage(img)} />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div className="card-block">
-            <p className="clr-secondary" style={{ marginTop: 0, marginBottom: 16 }}>
-              QuartzFire is image-based: upgrades install a whole new image next to the running one, and a
-              reboot switches over. The previous image stays installed as a rollback boot entry.
-            </p>
-
-            {loading ? (
-              <div className="clr-secondary">Loading images…</div>
-            ) : images && images.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="table table-noborder table-compact">
-                  <thead>
-                    <tr>
-                      <th>Image</th>
-                      <th style={{ width: 130 }}>Default boot</th>
-                      <th style={{ width: 110 }}>Running</th>
-                      <th className="right" style={{ width: 150 }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {images.map((img) => (
-                      <tr key={img.name}>
-                        <td className="mono">{img.name}</td>
-                        <td>
-                          {img.default_boot ? (
-                            <Pill tone="success">Default</Pill>
-                          ) : (
-                            <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
-                          )}
-                        </td>
-                        <td>
-                          {img.running ? (
-                            <Pill tone="info">Running</Pill>
-                          ) : (
-                            <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
-                          )}
-                        </td>
-                        <td className="right">
-                          {img.running ? (
-                            <span title="The running image can't delete itself.">
-                              <Pill tone="info">In Use</Pill>
-                            </span>
-                          ) : (
-                            <DeleteImageAction name={img.name} onDelete={() => removeImage(img)} />
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 clr-secondary">
-                <Icon shape="exclamation-triangle" size={14} />
-                Could not read the installed images (older or non-image installs don&apos;t report them). Adding an
-                image and power actions still work.
-              </div>
-            )}
+        ) : (
+          <div className="card-block flex items-center gap-2 clr-secondary">
+            <Icon shape="exclamation-triangle" size={14} />
+            Could not read the installed images (older or non-image installs don&apos;t report them). Adding an
+            image and power actions still work.
           </div>
+        )}
+      </div>
+
+      {/* Factory reset */}
+      <div className="card">
+        <div className="card-header">
+          Factory Reset
+          <span style={{ marginLeft: "auto" }}>
+            <Pill tone="danger">Destructive</Pill>
+          </span>
+        </div>
+        <div className="card-block" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-300)" }}>
+          Erase all configuration and reboot to defaults. The firewall comes back at the default{" "}
+          <span className="mono">vyos</span>/<span className="mono">vyos</span> login, reachable only at the
+          console until reconfigured — there is no undo.
+        </div>
+        <div className="card-footer">
+          <button type="button" className="btn btn-danger-outline" onClick={() => setResetModal(true)}>
+            Factory Reset…
+          </button>
         </div>
       </div>
 

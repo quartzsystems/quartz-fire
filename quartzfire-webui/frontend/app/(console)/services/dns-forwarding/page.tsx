@@ -1,25 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { deleteDnsDomain, DnsForwardingConfig, DnsForwardingDomain, fetchDnsForwarding } from "@/lib/services";
 import { useDashboard } from "@/lib/DashboardContext";
 import { SettingsFormModal } from "./SettingsFormModal";
 import { DomainFormModal } from "./DomainFormModal";
-
-const domainColumns: Column<DnsForwardingDomain>[] = [
-  { key: "name", header: "Domain", value: (r) => r.name, mono: true, sortable: true },
-  {
-    key: "name_servers",
-    header: "Name servers",
-    value: (r) => r.name_servers.join(", "),
-    render: (r) => (r.name_servers.length ? r.name_servers.join(", ") : "—"),
-    mono: true,
-  },
-];
 
 /// One label/value line of the settings card.
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -78,12 +65,24 @@ export default function DnsForwardingPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h2>DNS Forwarding</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Recursive DNS forwarder and cache for the networks behind this firewall.
-        </p>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">DNS Forwarding</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Recursive DNS forwarder and cache for the networks behind this firewall.
+          </p>
+        </div>
+        {status === "ready" && data && (
+          <>
+            <button type="button" className="btn" onClick={() => setSettingsModal(true)}>
+              Edit Settings
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => setDomainModal({})}>
+              Add Domain
+            </button>
+          </>
+        )}
       </div>
 
       {status === "loading" && <p className="clr-secondary">Loading DNS forwarding…</p>}
@@ -99,23 +98,15 @@ export default function DnsForwardingPage() {
         </div>
       )}
       {status === "ready" && data && (
-        <div className="flex flex-col gap-7">
+        <>
           <div className="card">
-            <div className="card-header">
-              Forwarder Settings
-              <span style={{ marginLeft: "auto" }}>
-                <Button kind="secondary" size="sm" onClick={() => setSettingsModal(true)}>
-                  Edit Settings
-                </Button>
-              </span>
-            </div>
             <div
               className="card-block"
-              style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 24px", fontSize: 13 }}
+              style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 24px", fontSize: 13 }}
             >
               <InfoRow label="Listen addresses"><MonoList items={data.listen_addresses} /></InfoRow>
               <InfoRow label="Allow from"><MonoList items={data.allow_from} /></InfoRow>
-              <InfoRow label="Upstream name servers"><MonoList items={data.name_servers} /></InfoRow>
+              <InfoRow label="Upstream"><MonoList items={data.name_servers} /></InfoRow>
               <InfoRow label="Use system name servers">
                 <span className={data.system ? "badge badge-ok" : "badge badge-muted"}>{data.system ? "Yes" : "No"}</span>
               </InfoRow>
@@ -123,39 +114,57 @@ export default function DnsForwardingPage() {
                 <span style={{ fontFamily: "var(--qz-font-mono)" }}>{data.cache_size ?? "10000 (default)"}</span>
               </InfoRow>
               <InfoRow label="DNSSEC">
-                <span style={{ fontFamily: "var(--qz-font-mono)" }}>{data.dnssec ?? "process-no-validate (default)"}</span>
+                <span
+                  className={`label${data.dnssec ? " label-success" : ""}`}
+                  style={{
+                    fontFamily: "var(--qz-font-mono)",
+                    letterSpacing: "0.06em",
+                    textTransform: "uppercase",
+                    width: "fit-content",
+                  }}
+                >
+                  {data.dnssec ?? "process-no-validate"}
+                </span>
               </InfoRow>
             </div>
           </div>
 
-          <section className="flex flex-col gap-3">
-            <h3 className="clr-section" style={{ color: "var(--cds-alias-typography-color-450)" }}>
-              Conditional Domains
-            </h3>
-            <DataTable
-              rows={data.domains}
-              columns={domainColumns}
-              rowId={(r) => r.name}
-              storageKey="services-dns-domains"
-              searchPlaceholder="Search domains…"
-              emptyMessage="No conditional forwarding domains configured."
-              onRefresh={() => load("refresh")}
-              onRowOpen={(row) => setDomainModal({ domain: row })}
-              toolbar={
-                <Button kind="primary" size="sm" onClick={() => setDomainModal({})}>
-                  Create Domain
-                </Button>
-              }
-              actions={(row) => (
-                <RowActions
-                  label={`domain ${row.name}`}
-                  onEdit={() => setDomainModal({ domain: row })}
-                  onDelete={() => removeDomain(row)}
-                />
-              )}
-            />
-          </section>
-        </div>
+          <div className="card">
+            <div className="card-header">Per-Domain Forwarding</div>
+            <table className="table table-noborder" style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th>Domain</th>
+                  <th>Name servers</th>
+                  <th style={{ width: 90 }} aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {data.domains.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="text-center" style={{ color: "var(--cds-alias-typography-color-200)" }}>
+                      No per-domain forwarding configured.
+                    </td>
+                  </tr>
+                ) : (
+                  data.domains.map((d) => (
+                    <tr key={d.name} style={{ cursor: "pointer" }} onClick={() => setDomainModal({ domain: d })}>
+                      <td className="mono">{d.name}</td>
+                      <td className="mono">{d.name_servers.length ? d.name_servers.join(", ") : "—"}</td>
+                      <td className="text-right" onClick={(e) => e.stopPropagation()}>
+                        <RowActions
+                          label={`domain ${d.name}`}
+                          onEdit={() => setDomainModal({ domain: d })}
+                          onDelete={() => removeDomain(d)}
+                        />
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {settingsModal && data && (

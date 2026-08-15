@@ -1,28 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
-import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { addDhcpRelayEntries, addDhcpRelayEntry, deleteDhcpRelayEntry, DhcpRelayConfig, fetchDhcpRelay } from "@/lib/services";
 import { fetchInterfaceDescriptions } from "@/lib/interfaces";
 import { fetchInterfaceStats } from "@/lib/vyos";
 import { useDashboard } from "@/lib/DashboardContext";
 
 type EntryKind = "interface" | "server";
-
-interface NameRow {
-  value: string;
-}
-
-const interfaceColumns: Column<NameRow>[] = [
-  { key: "value", header: "Interface", value: (r) => r.value, mono: true, sortable: true },
-];
-
-const serverColumns: Column<NameRow>[] = [
-  { key: "value", header: "Upstream server", value: (r) => r.value, mono: true, sortable: true },
-];
 
 /// Delete-only row action with inline confirmation (relay entries are single
 /// values — there is nothing to edit).
@@ -79,7 +65,7 @@ function DeleteAction({ label, onDelete }: { label: string; onDelete: () => Prom
 
 const KIND_META: Record<EntryKind, { title: string; label: string; hint: string; placeholder: string }> = {
   interface: {
-    title: "Add Listen Interfaces",
+    title: "Add Listening Interfaces",
     label: "Interfaces",
     hint: "The relay listens for DHCP requests on the selected interfaces.",
     placeholder: "eth1",
@@ -296,6 +282,7 @@ export default function DhcpRelayPage() {
   const [ifaceDescriptions, setIfaceDescriptions] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const [modal, setModal] = useState<EntryKind | null>(null);
 
   const load = useCallback(async (mode: "load" | "refresh" = "load") => {
@@ -332,16 +319,69 @@ export default function DhcpRelayPage() {
     }
   };
 
-  const interfaceRows: NameRow[] = useMemo(() => data.interfaces.map((value) => ({ value })), [data]);
-  const serverRows: NameRow[] = useMemo(() => data.servers.map((value) => ({ value })), [data]);
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  /// One side of the DC layout: a card with the add button in its header and a
+  /// compact borderless table of single values below.
+  const relayCard = (title: string, addLabel: string, kind: EntryKind, colHeader: string, values: string[], emptyText: string) => (
+    <div className="card">
+      <div className="card-header">
+        {title}
+        <span style={{ marginLeft: "auto" }}>
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => setModal(kind)}>
+            {addLabel}
+          </button>
+        </span>
+      </div>
+      <table className="table table-noborder table-compact" style={{ width: "100%" }}>
+        <thead>
+          <tr>
+            <th>{colHeader}</th>
+            <th style={{ width: 60 }} aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {values.length === 0 ? (
+            <tr>
+              <td colSpan={2} className="text-center" style={{ color: "var(--cds-alias-typography-color-200)" }}>
+                {emptyText}
+              </td>
+            </tr>
+          ) : (
+            values.map((v) => (
+              <tr key={v}>
+                <td className="mono">{v}</td>
+                <td className="text-right">
+                  <DeleteAction label={`${kind} ${v}`} onDelete={() => remove(kind, v)} />
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h2>DHCP Relay</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Forward DHCP requests from listening interfaces to upstream servers.
-        </p>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">DHCP Relay</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Forward DHCP requests from listening interfaces to upstream servers.
+          </p>
+        </div>
+        <button type="button" className="btn" onClick={refresh} disabled={refreshing}>
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
       </div>
 
       {status === "loading" && <p className="clr-secondary">Loading DHCP relay…</p>}
@@ -357,52 +397,23 @@ export default function DhcpRelayPage() {
         </div>
       )}
       {status === "ready" && (
-        <div className="flex flex-col gap-7">
-          <section className="flex flex-col gap-3">
-            <h3 className="clr-section" style={{ color: "var(--cds-alias-typography-color-450)" }}>
-              Listen Interfaces
-            </h3>
-            <DataTable
-              rows={interfaceRows}
-              columns={interfaceColumns}
-              rowId={(r) => r.value}
-              storageKey="services-dhcp-relay-interfaces"
-              searchPlaceholder="Search interfaces…"
-              emptyMessage="No relay interfaces configured."
-              onRefresh={() => load("refresh")}
-              toolbar={
-                <Button kind="primary" size="sm" onClick={() => setModal("interface")}>
-                  Add Interfaces
-                </Button>
-              }
-              actions={(row) => (
-                <DeleteAction label={`interface ${row.value}`} onDelete={() => remove("interface", row.value)} />
-              )}
-            />
-          </section>
-
-          <section className="flex flex-col gap-3">
-            <h3 className="clr-section" style={{ color: "var(--cds-alias-typography-color-450)" }}>
-              Upstream Servers
-            </h3>
-            <DataTable
-              rows={serverRows}
-              columns={serverColumns}
-              rowId={(r) => r.value}
-              storageKey="services-dhcp-relay-servers"
-              searchPlaceholder="Search servers…"
-              emptyMessage="No upstream servers configured."
-              onRefresh={() => load("refresh")}
-              toolbar={
-                <Button kind="primary" size="sm" onClick={() => setModal("server")}>
-                  Add Server
-                </Button>
-              }
-              actions={(row) => (
-                <DeleteAction label={`server ${row.value}`} onDelete={() => remove("server", row.value)} />
-              )}
-            />
-          </section>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
+          {relayCard(
+            "Listening Interfaces",
+            "Add Interface",
+            "interface",
+            "Interface",
+            data.interfaces,
+            "No relay interfaces configured.",
+          )}
+          {relayCard(
+            "Upstream Servers",
+            "Add Server",
+            "server",
+            "Upstream server",
+            data.servers,
+            "No upstream servers configured.",
+          )}
         </div>
       )}
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
-import { applyPolicy, FirewallPolicy, FirewallRule, PolicyProtocol, PROTOCOL_LABEL } from "@/lib/firewall";
+import { applyPolicy, FirewallPolicy, FirewallRule, PolicyProtocol } from "@/lib/firewall";
 
 const monoFont = { fontFamily: "var(--qz-font-mono)" } as const;
 
@@ -142,10 +142,11 @@ export function PolicyFormModal({
           hint={locked ? "Changing the protocol updates every rule using this policy." : undefined}
         >
           <Segmented
-            items={(Object.keys(PROTOCOL_LABEL) as PolicyProtocol[]).map((p) => ({
-              value: p,
-              label: PROTOCOL_LABEL[p],
-            }))}
+            items={[
+              { value: "tcp", label: "TCP" },
+              { value: "udp", label: "UDP" },
+              { value: "tcp_udp", label: "TCP + UDP" },
+            ]}
             value={protocol}
             onChange={(v) => setProtocol(v as PolicyProtocol)}
           />

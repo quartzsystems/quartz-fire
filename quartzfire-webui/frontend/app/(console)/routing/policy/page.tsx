@@ -59,6 +59,7 @@ export default function RoutingPolicyPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [tab, setTab] = useState<Tab>("prefix-lists");
+  const [refreshing, setRefreshing] = useState(false);
 
   const [prefixModal, setPrefixModal] = useState<{ list?: PrefixList } | null>(null);
   const [routeMapModal, setRouteMapModal] = useState<{ map?: RouteMap } | null>(null);
@@ -79,6 +80,16 @@ export default function RoutingPolicyPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const saved = (msg: string) => {
     setPrefixModal(null);
@@ -111,80 +122,83 @@ export default function RoutingPolicyPage() {
     ["route-maps", "Route Maps", routeMaps.length],
   ];
 
+  // Header create control follows the active tab (DC pattern: one primary
+  // button in the page-header row whose label tracks the tab).
+  const createAction =
+    tab === "prefix-lists"
+      ? { label: "Create Prefix-List", onClick: () => setPrefixModal({}) }
+      : { label: "Create Route-map", onClick: () => setRouteMapModal({}) };
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h2 style={{ margin: 0 }}>Routing Policy</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Prefix-lists and route-maps for filtering and shaping routes — referenced by BGP.
-        </p>
-      </div>
-
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="clr-secondary">Loading routing policy…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="alert alert-danger alert-sm">
-              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
-              <div className="alert-text">{errorMsg}</div>
-            </div>
-            <div>
-              <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
-            </div>
-          </div>
-        )}
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">Routing Policy</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Prefix-lists and route-maps for filtering and shaping routes — referenced by BGP.
+          </p>
+        </div>
         {status === "ready" && (
-          <div className="flex flex-col gap-5">
-            <Tabs
-              items={tabs.map(([id, label, count]) => ({ value: id, label, count }))}
-              value={tab}
-              onChange={(v) => setTab(v as Tab)}
-            />
-
-            {tab === "prefix-lists" && (
-              <DataTable
-                rows={prefixLists}
-                columns={prefixColumns}
-                rowId={(r) => `${r.family}|${r.name}`}
-                storageKey="routing-policy-prefix-lists"
-                searchPlaceholder="Search prefix-lists…"
-                emptyMessage="No prefix-lists configured."
-                onRefresh={() => load("refresh")}
-                onRowOpen={(row) => setPrefixModal({ list: row })}
-                toolbar={
-                  <Button kind="primary" size="sm" onClick={() => setPrefixModal({})}>
-                    Create Prefix-List
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions label={`prefix-list ${row.name}`} onEdit={() => setPrefixModal({ list: row })} onDelete={() => removePrefix(row)} />
-                )}
-              />
-            )}
-
-            {tab === "route-maps" && (
-              <DataTable
-                rows={routeMaps}
-                columns={routeMapColumns}
-                rowId={(r) => r.name}
-                storageKey="routing-policy-route-maps"
-                searchPlaceholder="Search route-maps…"
-                emptyMessage="No route-maps configured."
-                onRefresh={() => load("refresh")}
-                onRowOpen={(row) => setRouteMapModal({ map: row })}
-                toolbar={
-                  <Button kind="primary" size="sm" onClick={() => setRouteMapModal({})}>
-                    Create Route-Map
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions label={`route-map ${row.name}`} onEdit={() => setRouteMapModal({ map: row })} onDelete={() => removeRouteMap(row)} />
-                )}
-              />
-            )}
-          </div>
+          <>
+            <Button kind="outline" onClick={refresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            <Button kind="primary" onClick={createAction.onClick}>{createAction.label}</Button>
+          </>
         )}
       </div>
+
+      {status === "loading" && <div className="clr-secondary">Loading routing policy…</div>}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">{errorMsg}</div>
+          </div>
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
+          </div>
+        </div>
+      )}
+      {status === "ready" && (
+        <>
+          <Tabs
+            items={tabs.map(([id, label, count]) => ({ value: id, label, count }))}
+            value={tab}
+            onChange={(v) => setTab(v as Tab)}
+          />
+
+          {tab === "prefix-lists" && (
+            <DataTable searchable={false}
+              rows={prefixLists}
+              columns={prefixColumns}
+              rowId={(r) => `${r.family}|${r.name}`}
+              storageKey="routing-policy-prefix-lists"
+              searchPlaceholder="Search prefix-lists…"
+              emptyMessage="No prefix-lists configured."
+              onRowOpen={(row) => setPrefixModal({ list: row })}
+              actions={(row) => (
+                <RowActions label={`prefix-list ${row.name}`} onEdit={() => setPrefixModal({ list: row })} onDelete={() => removePrefix(row)} />
+              )}
+            />
+          )}
+
+          {tab === "route-maps" && (
+            <DataTable searchable={false}
+              rows={routeMaps}
+              columns={routeMapColumns}
+              rowId={(r) => r.name}
+              storageKey="routing-policy-route-maps"
+              searchPlaceholder="Search route-maps…"
+              emptyMessage="No route-maps configured."
+              onRowOpen={(row) => setRouteMapModal({ map: row })}
+              actions={(row) => (
+                <RowActions label={`route-map ${row.name}`} onEdit={() => setRouteMapModal({ map: row })} onDelete={() => removeRouteMap(row)} />
+              )}
+            />
+          )}
+        </>
+      )}
 
       {prefixModal && (
         <PrefixListFormModal

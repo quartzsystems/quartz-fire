@@ -40,7 +40,12 @@ const columns: Column<StaticRoute>[] = [
     key: "via",
     header: "Next hop",
     value: (r) => r.via ?? "",
-    render: (r) => (r.kind === "blackhole" ? "drop" : dash(r.via)),
+    render: (r) =>
+      r.kind === "blackhole" ? (
+        <span style={{ color: "var(--cds-alias-typography-color-200)" }}>drop</span>
+      ) : (
+        dash(r.via)
+      ),
     mono: true,
     sortable: true,
   },
@@ -112,63 +117,65 @@ export default function StaticRoutesPage() {
     ["ipv6", "IPv6", routes.filter((r) => r.family === "ipv6").length],
   ];
 
-  return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h2 style={{ margin: 0 }}>Static Routes</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Manually configured routes via a gateway, an interface, or a blackhole.
-        </p>
-      </div>
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">Static Routes</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Manually configured routes via a gateway, an interface, or a blackhole.
+      </p>
+    </div>
+  );
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && (
-          <div className="clr-secondary">Loading static routes…</div>
-        )}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="alert alert-danger alert-sm">
-              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
-              <div className="alert-text">{errorMsg}</div>
-            </div>
-            <div>
-              <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
-            </div>
+  return (
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      {status !== "ready" && headerBlock}
+
+      {status === "loading" && (
+        <div className="clr-secondary">Loading static routes…</div>
+      )}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">{errorMsg}</div>
           </div>
-        )}
-        {status === "ready" && (
-          <div className="flex flex-col gap-5">
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
+          </div>
+        </div>
+      )}
+      {status === "ready" && (
+        <DataTable
+          rows={rows}
+          columns={columns}
+          rowId={(r) => `${r.destination}|${r.kind}|${r.via ?? ""}`}
+          storageKey={`routing-static-${tab}`}
+          searchPlaceholder="Search routes…"
+          emptyMessage={`No ${tab === "ipv4" ? "IPv4" : "IPv6"} static routes configured.`}
+          onRefresh={() => load("refresh")}
+          onRowOpen={(row) => setModal({ route: row })}
+          headerLeft={headerBlock}
+          subHeader={
             <Tabs
               items={tabs.map(([id, label, count]) => ({ value: id, label, count }))}
               value={tab}
               onChange={(v) => setTab(v as RouteFamily)}
             />
-
-            <DataTable
-              rows={rows}
-              columns={columns}
-              rowId={(r) => `${r.destination}|${r.kind}|${r.via ?? ""}`}
-              storageKey={`routing-static-${tab}`}
-              searchPlaceholder="Search routes…"
-              emptyMessage={`No ${tab === "ipv4" ? "IPv4" : "IPv6"} static routes configured.`}
-              onRefresh={() => load("refresh")}
-              onRowOpen={(row) => setModal({ route: row })}
-              toolbar={
-                <Button kind="primary" size="sm" onClick={() => setModal({})}>
-                  Create Route
-                </Button>
-              }
-              actions={(row) => (
-                <RowActions
-                  label={`route ${row.destination}`}
-                  onEdit={() => setModal({ route: row })}
-                  onDelete={() => remove(row)}
-                />
-              )}
+          }
+          toolbar={
+            <Button kind="primary" onClick={() => setModal({})}>
+              Create Route
+            </Button>
+          }
+          actions={(row) => (
+            <RowActions
+              label={`route ${row.destination}`}
+              onEdit={() => setModal({ route: row })}
+              onDelete={() => remove(row)}
             />
-          </div>
-        )}
-      </div>
+          )}
+        />
+      )}
 
       {modal && (
         <StaticRouteFormModal

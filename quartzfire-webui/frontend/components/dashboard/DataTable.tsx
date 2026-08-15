@@ -43,6 +43,7 @@ export function DataTable<T>({
   columns,
   rowId,
   filters = [],
+  searchable = true,
   searchPlaceholder = "Search…",
   emptyMessage = "No rows.",
   headerLeft,
@@ -59,6 +60,9 @@ export function DataTable<T>({
   columns: Column<T>[];
   rowId: (row: T) => string;
   filters?: FilterDef<T>[];
+  /** The DC reference omits the search box on some grids (single-row tables,
+   *  grids nested in tab content) — set false to match. */
+  searchable?: boolean;
   searchPlaceholder?: string;
   emptyMessage?: string;
   /** Page title block (h2 + sub-line). When set, the toolbar renders as the
@@ -168,7 +172,10 @@ export function DataTable<T>({
     const measured: Record<string, number> = {};
     table.querySelectorAll<HTMLElement>("thead th[data-col-key]").forEach((th) => {
       const k = th.dataset.colKey!;
-      measured[k] = byKey.get(k)?.width ?? Math.round(th.getBoundingClientRect().width);
+      // Floor, not round: the fixed layout re-applies these as exact col widths,
+      // and widths rounded up can sum a few px past the container — leaving a
+      // permanent horizontal scrollbar that barely scrolls.
+      measured[k] = byKey.get(k)?.width ?? Math.floor(th.getBoundingClientRect().width);
     });
     setWidths((prev) => ({ ...measured, ...prev }));
     setSeeded(true);
@@ -264,6 +271,9 @@ export function DataTable<T>({
 
   // ── columns menu (visibility) ─────────────────────────────────────────────────
   const [menuOpen, setMenuOpen] = useState(false);
+  // Fixed-position anchor: the datagrid box is overflow:hidden, so an
+  // absolutely-positioned menu opening from its footer would be clipped.
+  const [menuPos, setMenuPos] = useState<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menuOpen) return;
@@ -421,13 +431,15 @@ export function DataTable<T>({
           title block left, controls right-aligned beside it. */}
       <div className={headerLeft ? "flex items-start gap-2 flex-wrap" : "flex items-center gap-3 flex-wrap"}>
         {headerLeft && <div className="mr-auto">{headerLeft}</div>}
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={searchPlaceholder}
-          className="clr-input"
-          style={{ width: 240, maxWidth: 240 }}
-        />
+        {searchable && (
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={searchPlaceholder}
+            className="clr-input"
+            style={{ width: 240, maxWidth: 240 }}
+          />
+        )}
 
         {filters.map((f) => (
           <div key={f.key} className="flex items-center gap-2">
@@ -453,55 +465,6 @@ export function DataTable<T>({
         ))}
 
         <div className={headerLeft ? "flex items-center gap-2" : "ml-auto flex items-center gap-2"}>
-          {/* Columns menu */}
-          <div className="clr-dropdown" ref={menuRef}>
-            <button type="button" className="btn" onClick={() => setMenuOpen((o) => !o)}>
-              Columns
-            </button>
-            {menuOpen && (
-              <div className="dropdown-menu right" style={{ minWidth: 200 }}>
-                <div className="dropdown-header">Show Columns</div>
-                {orderedKeys.map((k) => {
-                  const c = byKey.get(k);
-                  if (!c) return null;
-                  const visible = !hidden.has(k);
-                  const lastVisible = visible && visibleCols.length === 1;
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      className="dropdown-item"
-                      onClick={() => toggleColumn(k)}
-                      disabled={lastVisible}
-                    >
-                      <input
-                        type="checkbox"
-                        className="qz-check"
-                        checked={visible}
-                        readOnly
-                        tabIndex={-1}
-                        style={{ pointerEvents: "none" }}
-                      />
-                      {c.header}
-                    </button>
-                  );
-                })}
-                <hr className="dropdown-divider" />
-                <button
-                  type="button"
-                  className="dropdown-item"
-                  onClick={() => {
-                    resetLayout();
-                    setMenuOpen(false);
-                  }}
-                >
-                  <Icon shape="undo" size={13} />
-                  Reset Layout
-                </button>
-              </div>
-            )}
-          </div>
-
           {onRefresh && (
             <button type="button" className="btn" onClick={handleRefresh} disabled={refreshing}>
               {refreshing ? "Refreshing…" : "Refresh"}
@@ -704,8 +667,76 @@ export function DataTable<T>({
           </table>
         </div>
 
-        {/* Footer: interaction hint + row count */}
+        {/* Footer: column toggle (Clarity-style, bottom-left) + interaction hint + row count.
+            The DC page anatomy keeps the toolbar to search · filters · Refresh · primary
+            action, so column visibility lives in the datagrid chrome instead. */}
         <div className="datagrid-footer">
+          <div className="clr-dropdown" ref={menuRef}>
+            <button
+              type="button"
+              className="btn btn-sm btn-link-neutral"
+              style={{ margin: 0, minWidth: 0, padding: "0 4px" }}
+              title="Show / hide columns"
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setMenuPos({ left: r.left, bottom: window.innerHeight - r.top + 6 });
+                setMenuOpen((o) => !o);
+              }}
+            >
+              <Icon shape="view-columns" size={14} />
+            </button>
+            {menuOpen && (
+              <div
+                className="dropdown-menu"
+                style={{
+                  position: "fixed",
+                  top: "auto",
+                  left: menuPos.left,
+                  bottom: menuPos.bottom,
+                  minWidth: 200,
+                }}
+              >
+                <div className="dropdown-header">Show Columns</div>
+                {orderedKeys.map((k) => {
+                  const c = byKey.get(k);
+                  if (!c) return null;
+                  const visible = !hidden.has(k);
+                  const lastVisible = visible && visibleCols.length === 1;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      className="dropdown-item"
+                      onClick={() => toggleColumn(k)}
+                      disabled={lastVisible}
+                    >
+                      <input
+                        type="checkbox"
+                        className="qz-check"
+                        checked={visible}
+                        readOnly
+                        tabIndex={-1}
+                        style={{ pointerEvents: "none" }}
+                      />
+                      {c.header}
+                    </button>
+                  );
+                })}
+                <hr className="dropdown-divider" />
+                <button
+                  type="button"
+                  className="dropdown-item"
+                  onClick={() => {
+                    resetLayout();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <Icon shape="undo" size={13} />
+                  Reset Layout
+                </button>
+              </div>
+            )}
+          </div>
           <span className="datagrid-footer-description">
             {footerHint ??
               (onRowOpen

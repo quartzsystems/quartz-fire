@@ -175,7 +175,7 @@ export function VlanFormModal({
               />
             )}
           </Field>
-          <Field label="VLAN ID" required>
+          <Field label="VLAN ID" required hint="1–4094.">
             <input
               type="number"
               min={1}
@@ -193,7 +193,7 @@ export function VlanFormModal({
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Management VLAN"
+            placeholder="Guest Wi-Fi"
             className="clr-input"
             style={wide}
           />
@@ -217,7 +217,7 @@ export function VlanFormModal({
                   <input
                     value={a.value}
                     onChange={(e) => updateAddr(a.key, e.target.value)}
-                    placeholder="10.0.0.1/24"
+                    placeholder="10.0.40.1/24"
                     className="clr-input"
                     style={wideMono}
                   />

@@ -18,7 +18,6 @@ import {
   isBaseChain,
   nextRuleNumber,
   pairForChain,
-  PROTOCOL_LABEL,
   RuleAction,
   RuleChain,
   RulePolicyChoice,
@@ -64,6 +63,15 @@ const INLINE_PLACEHOLDER: Record<AliasType, string> = {
   iface: "", // interfaces are never typed inline (picker only)
 };
 
+/// Add-menu / kind-line casing per the DC mock (IPv4 host, Interface group) —
+/// ALIAS_GROUP keeps the short labels used by the inline-type select.
+const ALIAS_TYPE_DISPLAY: Record<AliasType, string> = {
+  host: "IPv4 host",
+  network: "IPv4 network",
+  fqdn: "FQDN",
+  iface: "Interface group",
+};
+
 /// Built-in policy sentinels for the policy select — values no port-group can
 /// be named (VyOS group names can't contain brackets). Ping writes `protocol
 /// icmp`; the others seed a real port-group of that name on first use.
@@ -97,7 +105,7 @@ function entryLabel(
   switch (e.kind) {
     case "alias": {
       const display = aliases.find((a) => a.type === e.type && a.name === e.name)?.display ?? e.name;
-      return { main: display, sub: ALIAS_GROUP[e.type].label };
+      return { main: display, sub: ALIAS_TYPE_DISPLAY[e.type] };
     }
     case "zone":
       return { main: zones.find((z) => z.name === e.name)?.display ?? e.name, sub: "Zone" };
@@ -106,7 +114,7 @@ function entryLabel(
       return desc ? { main: desc, sub: `${e.name} · Interface` } : { main: e.name, sub: "Interface" };
     }
     case "inline":
-      return { main: e.value, sub: `Custom ${ALIAS_GROUP[e.type].label}` };
+      return { main: e.value, sub: `Custom ${ALIAS_TYPE_DISPLAY[e.type]}` };
     case "firewall":
       return { main: "Firewall", sub: "This device" };
     case "ifgroup":
@@ -244,14 +252,14 @@ function EndpointField({
           border: "1px solid var(--cds-alias-object-border-color)",
           borderRadius: 4,
           ...monoFont,
-          minHeight: 96,
+          minHeight: 88,
           maxHeight: 160,
           padding: value.length ? "4px 0" : 0,
         }}
       >
         {value.length === 0 ? (
           <div
-            className="flex items-center justify-center h-[96px]"
+            className="flex items-center justify-center h-[88px]"
             style={{ fontSize: 13, color: "var(--cds-alias-typography-color-200)" }}
           >
             Any
@@ -324,7 +332,7 @@ function EndpointField({
             <optgroup label="Aliases">
               {addableAliases.map((a) => (
                 <option key={aliasKey(a.type, a.name)} value={aliasKey(a.type, a.name)}>
-                  {a.display} ({ALIAS_GROUP[a.type].label})
+                  {a.display} ({ALIAS_TYPE_DISPLAY[a.type]})
                 </option>
               ))}
             </optgroup>
@@ -368,7 +376,7 @@ function EndpointField({
               type="button"
               onClick={addInline}
               disabled={!inlineValue.trim()}
-              className="btn btn-neutral flex-shrink-0"
+              className="btn btn-sm flex-shrink-0"
               style={{ margin: 0 }}
             >
               Add
@@ -561,7 +569,8 @@ export function RuleFormModal({
   };
 
   return (
-    <ModalShell onClose={onClose} maxWidth={640}>
+    // The DC mock renders this modal at the DS lg size (--clr-modal-lg-width).
+    <ModalShell onClose={onClose} maxWidth={864}>
       <ModalHeader
         title={`${isEdit ? "Edit" : "Create"} Rule`}
         subtitle={isEdit ? `${chainLabel(initial!.chain, config)} rule ${initial!.rule}` : "New rules are added at the bottom — drag to reorder"}
@@ -569,27 +578,30 @@ export function RuleFormModal({
       />
 
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <Field label="Name">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Allow LAN to Web"
-            className="clr-input"
-            style={{ maxWidth: "none" }}
-          />
-        </Field>
+        {/* Name and Action share one row (name stretches, action hugs), per the DC mock. */}
+        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr auto", alignItems: "end" }}>
+          <Field label="Name">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Allow LAN to web"
+              className="clr-input"
+              style={{ maxWidth: "none" }}
+            />
+          </Field>
 
-        <Field label="Action">
-          <Segmented
-            items={[
-              { value: "accept", label: "Allow" },
-              { value: "drop", label: "Deny" },
-              { value: "reject", label: "Reject" },
-            ]}
-            value={action}
-            onChange={(v) => setAction(v as RuleAction)}
-          />
-        </Field>
+          <Field label="Action">
+            <Segmented
+              items={[
+                { value: "accept", label: "Allow" },
+                { value: "drop", label: "Deny" },
+                { value: "reject", label: "Reject" },
+              ]}
+              value={action}
+              onChange={(v) => setAction(v as RuleAction)}
+            />
+          </Field>
+        </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <EndpointField
@@ -616,16 +628,12 @@ export function RuleFormModal({
           />
         </div>
         <p className="m-0 -mt-2" style={{ fontSize: 11, lineHeight: "16px", color: "var(--cds-alias-typography-color-200)" }}>
-          Traffic matches any entry in a list; an empty list matches everything. Hosts, networks, and FQDNs can be
-          typed in directly or come from aliases, but one list holds a single kind — and interfaces can&apos;t be mixed
-          with addresses. The built-in Firewall entry matches this device itself — use it to control management
-          access, pings, and other traffic to or from the firewall.
+          Traffic matches any entry in a list; an empty list matches everything. One list holds a single kind — hosts,
+          networks, or FQDNs — and interfaces can&apos;t be mixed with addresses. The built-in Firewall entry matches
+          this device itself.
         </p>
 
-        <Field
-          label="Policy"
-          hint={policies.length === 0 ? "No policies defined yet — create them under Firewall → Policies." : "The ports and protocol this rule matches."}
-        >
+        <Field label="Policy" hint="The ports and protocol this rule matches. Manage sets under Firewall → Policies.">
           <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
             <select
               value={policyName}
@@ -640,12 +648,12 @@ export function RuleFormModal({
                 .filter(([n]) => !policies.some((p) => p.name === n))
                 .map(([n, b]) => (
                   <option key={builtinKey(n)} value={builtinKey(n)}>
-                    {n} — {PROTOCOL_LABEL[b.protocol].toLowerCase()}:{b.ports.join(",")}
+                    {n} — {b.protocol === "tcp_udp" ? "tcp+udp" : b.protocol}:{b.ports.join(",")}
                   </option>
                 ))}
               {policies.map((p) => (
                 <option key={p.name} value={p.name}>
-                  {p.name} — {PROTOCOL_LABEL[p.protocol].toLowerCase()}:{p.ports.join(",")}
+                  {p.name} — {p.protocol === "tcp_udp" ? "tcp+udp" : p.protocol}:{p.ports.join(",")}
                 </option>
               ))}
             </select>
@@ -667,20 +675,23 @@ export function RuleFormModal({
 
         {action === "accept" && (
           <div
-            className="flex flex-col gap-3 px-4 py-3"
+            className="flex flex-col gap-[10px] px-4 py-3"
             style={{ border: "1px solid var(--cds-alias-object-border-color)", borderRadius: 4 }}
           >
             <div className="flex items-center gap-2">
               <Icon shape="shield-check" size={14} style={{ color: "var(--cds-alias-typography-color-300)" }} />
               <span style={{ fontSize: 12, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}>
-                Security Services
+                Security services{" "}
+                <span style={{ fontWeight: 400, color: "var(--cds-alias-typography-color-200)" }}>
+                  — Allow rules only
+                </span>
               </span>
             </div>
             {/* IPS lives on the rule itself, so it's available on any Allow rule
                 (input/output/forward) — unlike the forward-only siblings below. */}
             <label className="flex items-center gap-3 cursor-pointer select-none">
               <span
-                className="w-[132px] flex-shrink-0"
+                className="w-[140px] flex-shrink-0"
                 style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}
               >
                 IPS
@@ -696,7 +707,7 @@ export function RuleFormModal({
                 {sslEligible && (
                 <div className="flex items-center gap-3">
                   <span
-                    className="w-[132px] flex-shrink-0"
+                    className="w-[140px] flex-shrink-0"
                     style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}
                   >
                     SSL Inspection
@@ -719,7 +730,7 @@ export function RuleFormModal({
                 {/* Geolocation — a named action plus a match direction. */}
                 <div className="flex items-center gap-3">
                   <span
-                    className="w-[132px] flex-shrink-0"
+                    className="w-[140px] flex-shrink-0"
                     style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}
                   >
                     Geolocation
@@ -765,7 +776,7 @@ export function RuleFormModal({
                 {acEligible && (
                 <div className="flex items-center gap-3">
                   <span
-                    className="w-[132px] flex-shrink-0"
+                    className="w-[140px] flex-shrink-0"
                     style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}
                   >
                     Application Control
@@ -788,15 +799,6 @@ export function RuleFormModal({
                 </div>
                 )}
 
-                {/* Say why the forward-only services aren't here, rather than
-                    leaving a rule that silently can't carry them. */}
-                {!sslEligible && (
-                  <p className="m-0" style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}>
-                    SSL Inspection isn&apos;t offered here: it decides what to decrypt before the route is chosen, so
-                    it can&apos;t tell one destination apart from another. It applies to rules between interfaces.
-                  </p>
-                )}
-
                 {(geoActions.length === 0 || (acEligible && acActions.length === 0)) && (
                   <p className="m-0" style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}>
                     Define actions on the Geolocation and Application Control pages to attach them here.
@@ -804,6 +806,11 @@ export function RuleFormModal({
                 )}
                 </div>
               ))}
+            {/* Standing scope explainer, per the DC mock. */}
+            <p className="m-0" style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}>
+              SSL Inspection decides what to decrypt before the route is chosen, so it applies only to rules between
+              interfaces or zones (forward). IPS follows the rule anywhere.
+            </p>
           </div>
         )}
 

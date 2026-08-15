@@ -156,7 +156,7 @@ export default function VrrpPage() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div className="flex items-start gap-2">
         <div className="mr-auto">
           <h2 className="m-0">VRRP</h2>
@@ -187,7 +187,7 @@ export default function VrrpPage() {
         </div>
       )}
       {status === "ready" && cfg && (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3">
           <Tabs
             items={[
               { value: "groups", label: "Groups", count: cfg.groups.length },
@@ -199,7 +199,7 @@ export default function VrrpPage() {
           />
 
           {section === "groups" && (
-            <DataTable
+            <DataTable searchable={false}
               rows={cfg.groups}
               columns={groupColumns()}
               rowId={(r) => r.name}
@@ -214,7 +214,7 @@ export default function VrrpPage() {
           )}
 
           {section === "sync-groups" && (
-            <DataTable
+            <DataTable searchable={false}
               rows={cfg.syncGroups}
               columns={syncColumns()}
               rowId={(r) => r.name}

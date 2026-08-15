@@ -17,7 +17,7 @@ export interface TileInstance {
 
 export const GRID_COLS = 12;
 const ROW_H = 76;
-const GAP = 20;
+const GAP = 12; // DC reference grid gap
 const MAX_ROWS = 16;
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));

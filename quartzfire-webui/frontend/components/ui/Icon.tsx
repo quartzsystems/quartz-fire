@@ -2,8 +2,9 @@
 
 import type { CSSProperties } from "react";
 
-/// Clarity icon wrapper. Sizes per the design system: 12 inline, 16 default,
-/// 20 nav, 24 page headers. Icons inherit currentColor.
+/// Clarity icon wrapper. Sizes per the design system: 12 inline, 14 nav
+/// collapse trigger, 16 default (incl. vertical-nav items), 20 header icon
+/// actions, 24 page headers. Icons inherit currentColor.
 export function Icon({
   shape,
   size = 16,

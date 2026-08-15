@@ -19,18 +19,6 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <div className="card" style={{ marginTop: 0 }}>
-      <div className="card-header">{title}</div>
-      <div className="card-block flex flex-col gap-4">
-        {subtitle && <p className="clr-secondary" style={{ margin: 0 }}>{subtitle}</p>}
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
   return (
     <label className="flex items-start gap-[10px] cursor-pointer select-none">
@@ -106,31 +94,29 @@ export function OspfGlobalPanel({ live, onSaved }: { live: OspfGlobal; onSaved: 
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-[720px]">
-      <Section title="Router" subtitle="Process identity and path selection.">
+    <div className="card" style={{ maxWidth: 720 }}>
+      <div className="card-block flex flex-col gap-4">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Router ID" hint="Usually a loopback address.">
             <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Reference bandwidth" hint="auto-cost reference-bandwidth (Mbit/s).">
-            <input value={refBw} onChange={(e) => setRefBw(e.target.value)} placeholder="100" className="clr-input" style={monoStyle} />
+            <input value={refBw} onChange={(e) => setRefBw(e.target.value)} placeholder="100000" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Administrative distance" hint="distance global (1–255).">
+          <Field label="Administrative distance">
             <input value={distance} onChange={(e) => setDistance(e.target.value)} placeholder="110" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Maximum paths" hint="ECMP width (1–64).">
             <input value={maxPaths} onChange={(e) => setMaxPaths(e.target.value)} placeholder="4" className="clr-input" style={monoStyle} />
           </Field>
         </div>
-        <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Toggle on={passiveDefault} onChange={setPassiveDefault} label="Passive by default" hint="Every interface passive unless it opts in." />
+
+        <div className="flex flex-col" style={{ gap: 8 }}>
+          <Toggle on={passiveDefault} onChange={setPassiveDefault} label="Passive by default — every interface passive unless it opts in" />
           <Toggle on={logChanges} onChange={setLogChanges} label="Log adjacency changes" />
           {logChanges && <Toggle on={logDetail} onChange={setLogDetail} label="…with detail" />}
+          <Toggle on={di} onChange={setDi} label="Originate default route" />
         </div>
-      </Section>
-
-      <Section title="Originated Default Route" subtitle="default-information originate — advertise a default into the area.">
-        <Toggle on={di} onChange={setDi} label="Originate default route" />
         {di && (
           <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
             <div className="flex items-end">
@@ -150,35 +136,34 @@ export function OspfGlobalPanel({ live, onSaved }: { live: OspfGlobal; onSaved: 
             </Field>
           </div>
         )}
-      </Section>
 
-      <Section title="Redistribution" subtitle="Inject routes from other protocols into OSPF.">
-        <div className="flex flex-wrap gap-4">
-          {OSPF_REDISTRIBUTE.map((proto) => (
-            <div key={proto} className="clr-checkbox-wrapper">
-              <input
-                type="checkbox"
-                id={`ospf-redist-${proto}`}
-                checked={redist.includes(proto)}
-                onChange={() => toggleRedist(proto)}
-              />
-              <label htmlFor={`ospf-redist-${proto}`} style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</label>
-            </div>
-          ))}
-        </div>
+        <Field label="Redistribute">
+          <div className="flex flex-wrap gap-4">
+            {OSPF_REDISTRIBUTE.map((proto) => (
+              <div key={proto} className="clr-checkbox-wrapper">
+                <input
+                  type="checkbox"
+                  id={`ospf-redist-${proto}`}
+                  checked={redist.includes(proto)}
+                  onChange={() => toggleRedist(proto)}
+                />
+                <label htmlFor={`ospf-redist-${proto}`} style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</label>
+              </div>
+            ))}
+          </div>
+        </Field>
         <Field label="Default metric" hint="Metric applied to redistributed routes with none of their own.">
           <input value={defaultMetric} onChange={(e) => setDefaultMetric(e.target.value)} placeholder="20" className="clr-input" style={{ ...monoStyle, maxWidth: 160 }} />
         </Field>
-      </Section>
 
-      {error && (
-        <div className="alert alert-danger alert-sm">
-          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
-          <div className="alert-text">{error}</div>
-        </div>
-      )}
-
-      <div className="flex justify-end">
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
+        )}
+      </div>
+      <div className="card-footer">
         <Button kind="primary" onClick={save} disabled={saving}>
           {saving ? "Applying…" : "Save OSPF Settings"}
         </Button>

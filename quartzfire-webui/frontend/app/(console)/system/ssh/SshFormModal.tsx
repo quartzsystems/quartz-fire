@@ -36,7 +36,7 @@ export function SshFormModal({
 }) {
   const [enabled, setEnabled] = useState(live.enabled);
   const [portsText, setPortsText] = useState(live.ports.join(", "));
-  const [listenText, setListenText] = useState(live.listen_addresses.join("\n"));
+  const [listenText, setListenText] = useState(live.listen_addresses.join(", "));
   const [keysOnly, setKeysOnly] = useState(live.password_auth_disabled);
 
   const [error, setError] = useState("");
@@ -47,7 +47,7 @@ export function SshFormModal({
     setError("");
 
     const ports = portsText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
-    const listen = listenText.split("\n").map((s) => s.trim()).filter(Boolean);
+    const listen = listenText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
 
     if (enabled) {
       const badPort = ports.find((p) => !/^\d+$/.test(p) || Number(p) < 1 || Number(p) > 65535);
@@ -93,7 +93,7 @@ export function SshFormModal({
       <form onSubmit={submit} className="flex flex-col gap-4">
         <label className="flex items-center gap-[10px] cursor-pointer select-none">
           <Switch on={enabled} onChange={setEnabled} />
-          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>SSH service enabled</span>
+          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>SSH Service enabled</span>
         </label>
         {!enabled && live.enabled && (
           <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-warning)" }}>
@@ -103,26 +103,27 @@ export function SshFormModal({
 
         {enabled && (
           <>
-            <Field label="Ports" hint="Comma-separated. Defaults to 22 when empty.">
-              <input
-                value={portsText}
-                onChange={(e) => setPortsText(e.target.value)}
-                placeholder="22"
-                className="clr-input"
-                style={monoSt}
-              />
-            </Field>
+            <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+              <Field label="Ports" hint="Comma-separated. Defaults to 22 when empty.">
+                <input
+                  value={portsText}
+                  onChange={(e) => setPortsText(e.target.value)}
+                  placeholder="22"
+                  className="clr-input"
+                  style={monoSt}
+                />
+              </Field>
 
-            <Field label="Listen addresses" hint="One address per line. Empty = listen on all addresses.">
-              <textarea
-                value={listenText}
-                onChange={(e) => setListenText(e.target.value)}
-                placeholder={"192.168.1.1"}
-                rows={3}
-                className="clr-textarea resize-y"
-                style={monoSt}
-              />
-            </Field>
+              <Field label="Listen addresses" hint="Empty = listen on all addresses.">
+                <input
+                  value={listenText}
+                  onChange={(e) => setListenText(e.target.value)}
+                  placeholder="192.168.1.1"
+                  className="clr-input"
+                  style={monoSt}
+                />
+              </Field>
+            </div>
 
             <label className="flex items-center gap-[10px] cursor-pointer select-none">
               <Switch on={keysOnly} onChange={setKeysOnly} />

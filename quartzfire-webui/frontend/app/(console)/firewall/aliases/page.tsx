@@ -27,13 +27,22 @@ const TYPE_BADGE: Record<AliasType, string> = {
   network: "badge-ok",
   fqdn: "badge-warn",
   // Interface-flavored rows read muted like the built-in interface aliases —
-  // the label ("Interface Group" vs "Interface") tells them apart; red/amber
+  // the label ("Interface group" vs "Interface") tells them apart; red/amber
   // would miscue severity.
   iface: "badge-muted",
 };
 
+/// Pill/filter casing per the DC mock (IPV4 HOST, INTERFACE GROUP once the
+/// badge uppercases) — ALIAS_GROUP keeps the short labels used in messages.
+const TYPE_LABEL: Record<AliasType, string> = {
+  host: "IPv4 host",
+  network: "IPv4 network",
+  fqdn: "FQDN",
+  iface: "Interface group",
+};
+
 function TypePill({ type }: { type: AliasType }) {
-  return <span className={`badge ${TYPE_BADGE[type]}`}>{ALIAS_GROUP[type].label}</span>;
+  return <span className={`badge ${TYPE_BADGE[type]}`}>{TYPE_LABEL[type]}</span>;
 }
 
 /// Table row: a user-defined alias, or a built-in one derived from a
@@ -162,7 +171,7 @@ export default function FirewallAliasesPage() {
       key: "type",
       label: "Type",
       options: [
-        ...(Object.keys(ALIAS_GROUP) as AliasType[]).map((t) => ({ value: t, label: ALIAS_GROUP[t].label })),
+        ...(Object.keys(ALIAS_GROUP) as AliasType[]).map((t) => ({ value: t, label: TYPE_LABEL[t] })),
         { value: "interface", label: "Built-in Interface" },
       ],
       predicate: (r, v) => (v === "interface" ? r.kind === "builtin" : r.kind === "user" && r.alias.type === v),

@@ -125,10 +125,10 @@ export function AreaFormModal({ initial, existingAreas, onClose, onSaved }: {
 
   return (
     <ModalShell onClose={onClose} maxWidth={560}>
-      <ModalHeader title={`${isEdit ? "Edit" : "Add"} Area`} subtitle={isEdit ? `Area ${initial!.area}` : "OSPF area"} onClose={onClose} />
+      <ModalHeader title={isEdit ? `Edit Area — ${initial!.area}` : "Add Area"} subtitle="OSPF area" onClose={onClose} />
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Area ID" hint="A number (0) or dotted-quad (0.0.0.0).">
+        <div className="grid gap-4" style={{ gridTemplateColumns: "140px 1fr" }}>
+          <Field label="Area ID" hint="A number or dotted quad.">
             <input value={area} disabled={isEdit} onChange={(e) => setArea(e.target.value)} placeholder="0" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Area type">

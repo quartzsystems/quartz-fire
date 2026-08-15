@@ -73,6 +73,7 @@ export function AppHeader({ onOpenPalette }: { onOpenPalette: () => void }) {
           <Icon shape="angle" dir="down" size={12} />
         </button>
       </div>
+      <div className="header-divider" />
       <div className="header-actions" ref={menuRef}>
         <button type="button" className="nav-icon" title="Search (Ctrl+K)" onClick={onOpenPalette}>
           <Icon shape="search" size={20} />
@@ -203,7 +204,7 @@ export function AppVerticalNav() {
         title={collapsed ? "Expand navigation" : "Collapse navigation"}
         onClick={() => setCollapsed((v) => !v)}
       >
-        <Icon shape="angle-double" size={16} dir={collapsed ? "right" : "left"} />
+        <Icon shape="angle-double" size={14} dir={collapsed ? "right" : "left"} />
       </button>
       {!collapsed && <div className="nav-group-text">{section.label}</div>}
       {section.children.map((p) => (
@@ -213,7 +214,7 @@ export function AppVerticalNav() {
           className={`nav-link${p.href === activeHref ? " active" : ""}`}
           title={collapsed ? p.label : undefined}
         >
-          <Icon shape={p.icon} size={20} />
+          <Icon shape={p.icon} size={16} />
           {!collapsed && <span>{p.label}</span>}
         </Link>
       ))}

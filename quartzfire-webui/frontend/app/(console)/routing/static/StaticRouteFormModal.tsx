@@ -10,10 +10,12 @@ import { applyStaticRoute, RouteFamily, StaticRoute, StaticRouteKind } from "@/l
 const inputStyle = { maxWidth: "none", width: "100%" } as const;
 const monoStyle = { ...inputStyle, fontFamily: "var(--qz-font-mono)" } as const;
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="clr-form-control" style={{ marginTop: 0 }}>
-      <label className="clr-control-label">{label}</label>
+      <label className="clr-control-label">
+        {label} {required && <span className="clr-required">*</span>}
+      </label>
       {children}
       {hint && <div className="clr-subtext">{hint}</div>}
     </div>
@@ -140,7 +142,7 @@ export function StaticRouteFormModal({
   return (
     <ModalShell onClose={onClose} maxWidth={560}>
       <ModalHeader
-        title={`${isEdit ? "Edit" : "Create"} Static Route`}
+        title={isEdit ? `Edit Route — ${initial!.destination}` : "Create Route"}
         subtitle={family === "ipv4" ? "IPv4 static route" : "IPv6 static route"}
         onClose={onClose}
       />
@@ -165,7 +167,7 @@ export function StaticRouteFormModal({
         </Field>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Destination">
+          <Field label="Destination" required>
             <input
               value={destination}
               onChange={(e) => setDestination(e.target.value)}
@@ -204,9 +206,9 @@ export function StaticRouteFormModal({
           )}
         </div>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: kind === "gateway" ? "1fr 140px" : "140px" }}>
           {kind === "gateway" && (
-            <Field label="Egress interface" hint="Optional — pin the next-hop to an interface.">
+            <Field label="Egress interface" hint="Optional — pin the next hop to an interface.">
               <input
                 list="static-route-interfaces"
                 value={iface}
@@ -217,7 +219,7 @@ export function StaticRouteFormModal({
               />
             </Field>
           )}
-          <Field label="Distance" hint="Optional — administrative distance (default 1).">
+          <Field label="Distance">
             <input
               type="number"
               min={1}
@@ -231,7 +233,7 @@ export function StaticRouteFormModal({
           </Field>
         </div>
 
-        <Field label="Description" hint="Stored on the destination — shared by all its next-hops.">
+        <Field label="Description" hint="Stored on the destination — shared by all its next hops.">
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}

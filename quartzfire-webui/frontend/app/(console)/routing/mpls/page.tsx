@@ -17,6 +17,7 @@ export default function MplsPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [section, setSection] = useState<Section>("config");
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (mode: "load" | "refresh" = "load") => {
     if (mode === "load") setStatus("loading");
@@ -33,54 +34,69 @@ export default function MplsPage() {
     load();
   }, [load]);
 
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   const tabs: [Section, string][] = [
     ["config", "Global"],
     ["status", "Status"],
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h2 style={{ margin: 0 }}>MPLS</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Multiprotocol Label Switching — label forwarding and the LDP control plane.
-        </p>
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">MPLS</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Multiprotocol Label Switching — label forwarding and the LDP control plane.
+          </p>
+        </div>
+        {status === "ready" && (
+          <Button kind="outline" onClick={refresh} disabled={refreshing}>
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </Button>
+        )}
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="clr-secondary">Loading MPLS configuration…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="alert alert-danger alert-sm">
-              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
-              <div className="alert-text">{errorMsg}</div>
-            </div>
-            <div>
-              <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading MPLS configuration…</div>}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">{errorMsg}</div>
           </div>
-        )}
-        {status === "ready" && cfg && (
-          <div className="flex flex-col gap-5">
-            <Tabs
-              items={tabs.map(([id, label]) => ({ value: id, label }))}
-              value={section}
-              onChange={(v) => setSection(v as Section)}
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
+          </div>
+        </div>
+      )}
+      {status === "ready" && cfg && (
+        <>
+          <Tabs
+            items={tabs.map(([id, label]) => ({ value: id, label }))}
+            value={section}
+            onChange={(v) => setSection(v as Section)}
+          />
+
+          {section === "config" && (
+            <MplsConfigPanel
+              live={cfg}
+              onSaved={(msg) => {
+                setToast(msg);
+                load("refresh");
+              }}
             />
-
-            {section === "config" && (
-              <MplsConfigPanel
-                live={cfg}
-                onSaved={(msg) => {
-                  setToast(msg);
-                  load("refresh");
-                }}
-              />
-            )}
-            {section === "status" && <MplsStatusPanel />}
-          </div>
-        )}
-      </div>
+          )}
+          {section === "status" && <MplsStatusPanel />}
+        </>
+      )}
     </div>
   );
 }

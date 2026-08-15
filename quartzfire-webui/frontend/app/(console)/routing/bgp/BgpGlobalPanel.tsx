@@ -21,14 +21,20 @@ function Field({ label, hint, required, children }: { label: string; hint?: stri
   );
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+/// Section break inside the single settings card, styled after the DC
+/// reference's "L2VPN EVPN" divider caption.
+function DividerCaption({ children }: { children: React.ReactNode }) {
   return (
-    <div className="card" style={{ marginTop: 0 }}>
-      <div className="card-header">{title}</div>
-      <div className="card-block flex flex-col gap-4">
-        {subtitle && <p className="clr-secondary" style={{ margin: 0 }}>{subtitle}</p>}
-        {children}
-      </div>
+    <div
+      style={{
+        borderTop: "1px solid var(--cds-alias-object-border-subtle)",
+        paddingTop: 12,
+        fontSize: 12,
+        fontWeight: 600,
+        color: "var(--cds-alias-typography-color-450)",
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -162,28 +168,38 @@ export function BgpGlobalPanel({ live, onSaved }: { live: BgpGlobal; onSaved: (m
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-[720px]">
-      <Section title="Router" subtitle="Local autonomous system and identity.">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="System AS" required hint="This router's ASN.">
+    <div className="card" style={{ maxWidth: 720 }}>
+      <div className="card-block flex flex-col gap-4">
+        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <Field label="System AS" required>
             <input value={systemAs} onChange={(e) => setSystemAs(e.target.value)} placeholder="65001" className="clr-input" style={monoStyle} />
           </Field>
-          <Field label="Router ID" hint="Usually a loopback address.">
+          <Field label="Router ID">
             <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
           </Field>
+          <Field label="Cluster ID" hint="Only when acting as a route reflector.">
+            <input value={clusterId} onChange={(e) => setClusterId(e.target.value)} placeholder="—" className="clr-input" style={monoStyle} />
+          </Field>
         </div>
-        <Field label="Cluster ID" hint="Route-reflector cluster id (only when acting as an RR).">
-          <input value={clusterId} onChange={(e) => setClusterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
-        </Field>
-        <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Toggle on={noV4} onChange={setNoV4} label="No IPv4-unicast by default" hint="Peers activate address families explicitly (EVPN fabric norm)." />
-          <Toggle on={multipathRelax} onChange={setMultipathRelax} label="AS-path multipath-relax" hint="ECMP across equal-length paths from different neighbours." />
+
+        <div className="flex flex-col" style={{ gap: 8 }}>
+          <Toggle on={noV4} onChange={setNoV4} label="No IPv4-unicast by default — peers activate address families explicitly" />
+          <Toggle on={multipathRelax} onChange={setMultipathRelax} label="AS-path multipath-relax — ECMP across equal-length paths from different neighbors" />
           <Toggle on={compareRouterId} onChange={setCompareRouterId} label="Compare router-id" />
           <Toggle on={logChanges} onChange={setLogChanges} label="Log neighbor changes" />
         </div>
-      </Section>
 
-      <Section title="IPv4 Unicast" subtitle="Underlay IPv4 origination and redistribution.">
+        <DividerCaption>L2VPN EVPN</DividerCaption>
+        <div className="flex flex-col" style={{ gap: 8 }}>
+          <Toggle on={advAllVni} onChange={setAdvAllVni} label="Advertise all VNIs — auto-advertise every locally configured VNI" />
+          <Toggle on={advV4} onChange={setAdvV4} label="Advertise IPv4 unicast — inject IPv4 routes into EVPN (type-5)" />
+          <Toggle on={advV6} onChange={setAdvV6} label="Advertise IPv6 unicast" />
+        </div>
+        <p className="clr-subtext" style={{ margin: 0 }}>
+          Route-distinguisher and route-target are configured per-VNI or per-VRF, not on the global instance.
+        </p>
+
+        <DividerCaption>IPv4 Unicast</DividerCaption>
         {netEditor(v4Networks, setV4Networks, "10.0.0.0/24")}
         <Field label="Redistribute">
           <div className="flex flex-wrap gap-4">
@@ -200,9 +216,8 @@ export function BgpGlobalPanel({ live, onSaved }: { live: BgpGlobal; onSaved: (m
             ))}
           </div>
         </Field>
-      </Section>
 
-      <Section title="IPv6 Unicast" subtitle="Underlay IPv6 origination and redistribution.">
+        <DividerCaption>IPv6 Unicast</DividerCaption>
         {netEditor(v6Networks, setV6Networks, "2001:db8::/64")}
         <Field label="Redistribute">
           <div className="flex flex-wrap gap-4">
@@ -219,27 +234,15 @@ export function BgpGlobalPanel({ live, onSaved }: { live: BgpGlobal; onSaved: (m
             ))}
           </div>
         </Field>
-      </Section>
 
-      <Section title="L2VPN EVPN" subtitle="The overlay control plane that carries VXLAN MAC/IP routes.">
-        <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Toggle on={advAllVni} onChange={setAdvAllVni} label="Advertise all VNIs" hint="Auto-advertise every locally configured VNI." />
-          <Toggle on={advV4} onChange={setAdvV4} label="Advertise IPv4 unicast" hint="Inject IPv4 routes into EVPN (type-5)." />
-          <Toggle on={advV6} onChange={setAdvV6} label="Advertise IPv6 unicast" />
-        </div>
-        <p className="clr-subtext" style={{ margin: 0 }}>
-          Route-distinguisher and route-target are configured per-VNI or per-VRF, not on the global instance.
-        </p>
-      </Section>
-
-      {error && (
-        <div className="alert alert-danger alert-sm">
-          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
-          <div className="alert-text">{error}</div>
-        </div>
-      )}
-
-      <div className="flex justify-end">
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
+        )}
+      </div>
+      <div className="card-footer">
         <Button kind="primary" onClick={save} disabled={saving}>
           {saving ? "Applying…" : "Save BGP Settings"}
         </Button>

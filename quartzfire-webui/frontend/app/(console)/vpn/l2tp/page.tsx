@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { StatePill } from "@/components/ui/Badge";
 import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
@@ -34,7 +35,7 @@ const userColumns: Column<L2tpUser>[] = [
     key: "state",
     header: "State",
     value: (r) => (r.disabled ? "disabled" : "enabled"),
-    render: (r) => <span className={r.disabled ? "badge badge-muted" : "badge badge-success"}>{r.disabled ? "Disabled" : "Enabled"}</span>,
+    render: (r) => <StatePill enabled={!r.disabled} />,
     width: 120,
   },
 ];
@@ -51,7 +52,7 @@ const radiusColumns: Column<L2tpRadiusServer>[] = [
     key: "state",
     header: "State",
     value: (r) => (r.disabled ? "disabled" : "enabled"),
-    render: (r) => <span className={r.disabled ? "badge badge-muted" : "badge badge-success"}>{r.disabled ? "Disabled" : "Enabled"}</span>,
+    render: (r) => <StatePill enabled={!r.disabled} />,
     width: 120,
   },
 ];
@@ -94,15 +95,14 @@ export default function L2tpPage() {
   };
 
   // Header "Add" control follows the active tab (DC pattern: one primary
-  // button in the page-header row whose label tracks the tab).
-  const addAction: { label: string; onClick: () => void } | null =
-    tab === "users"
-      ? { label: "Add User", onClick: () => setUserModal({}) }
-      : tab === "pools"
-        ? { label: "Add Pool", onClick: () => setPoolModal({}) }
-        : tab === "radius"
-          ? { label: "Add Server", onClick: () => setRadiusModal({}) }
-          : null;
+  // button in the page-header row whose label tracks the tab; other tabs fall
+  // back to "Add User", mirroring the mock's always-present primary).
+  const addAction: { label: string; onClick: () => void } =
+    tab === "pools"
+      ? { label: "Add Pool", onClick: () => setPoolModal({}) }
+      : tab === "radius"
+        ? { label: "Add Server", onClick: () => setRadiusModal({}) }
+        : { label: "Add User", onClick: () => setUserModal({}) };
 
   const saved = (msg: string) => {
     setUserModal(null);
@@ -140,26 +140,36 @@ export default function L2tpPage() {
     }
   };
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-start gap-2">
-        <div className="mr-auto">
-          <h2 className="m-0">L2TP</h2>
-          <p className="clr-secondary" style={{ marginTop: 4 }}>
-            L2TP/IPsec remote-access server — dial-in VPN for roaming clients.
-          </p>
-        </div>
-        {status === "ready" && (
-          <>
-            <Button kind="outline" onClick={refresh} disabled={refreshing}>
-              {refreshing ? "Refreshing…" : "Refresh"}
-            </Button>
-            {addAction && <Button kind="primary" onClick={addAction.onClick}>{addAction.label}</Button>}
-          </>
-        )}
-      </div>
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">L2TP</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        L2TP/IPsec remote-access server — dial-in VPN for roaming clients.
+      </p>
+    </div>
+  );
 
-      {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading L2TP configuration…</div>}
+  const tabStrip = cfg && (
+    <Tabs
+      items={[
+        { value: "general", label: "General" },
+        { value: "users", label: "Users", count: cfg.users.length },
+        { value: "pools", label: "Pools", count: cfg.pools.length },
+        { value: "radius", label: "RADIUS", count: cfg.radius_servers.length },
+        { value: "status", label: "Status" },
+      ]}
+      value={tab}
+      onChange={(v) => setTab(v as Tab)}
+    />
+  );
+
+  const addButton = <Button kind="primary" onClick={addAction.onClick}>{addAction.label}</Button>;
+
+  return (
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      {status !== "ready" && headerBlock}
+
+      {status === "loading" && <div className="clr-secondary">Loading L2TP configuration…</div>}
       {status === "error" && (
         <div className="alert alert-danger alert-sm">
           <Icon shape="exclamation-circle" size={14} className="alert-icon" />
@@ -172,68 +182,82 @@ export default function L2tpPage() {
         </div>
       )}
       {status === "ready" && cfg && (
-        <div className="flex flex-col gap-5">
-          <Tabs
-            items={[
-              { value: "general", label: "General" },
-              { value: "users", label: "Users", count: cfg.users.length },
-              { value: "pools", label: "IP Pools", count: cfg.pools.length },
-              { value: "radius", label: "RADIUS", count: cfg.radius_servers.length },
-              { value: "status", label: "Status" },
-            ]}
-            value={tab}
-            onChange={(v) => setTab(v as Tab)}
-          />
-
-          {tab === "general" && (
-            <GeneralPanel
-              live={cfg.general}
-              pools={cfg.pools.map((p) => p.name)}
-              onSaved={(msg) => { setToast(msg); load("refresh"); }}
-            />
-          )}
-
+        <>
           {tab === "users" && (
-            <DataTable
+            <DataTable searchable={false}
               rows={cfg.users}
               columns={userColumns}
               rowId={(r) => r.username}
               storageKey="vpn-l2tp-users"
               searchPlaceholder="Search users…"
               emptyMessage="No L2TP users configured."
+              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setUserModal({ user: row })}
+              headerLeft={headerBlock}
+              subHeader={tabStrip}
+              toolbar={addButton}
               actions={(row) => <RowActions label={`user ${row.username}`} onEdit={() => setUserModal({ user: row })} onDelete={() => removeUser(row)} />}
             />
           )}
 
           {tab === "pools" && (
-            <DataTable
+            <DataTable searchable={false}
               rows={cfg.pools}
               columns={poolColumns}
               rowId={(r) => r.name}
               storageKey="vpn-l2tp-pools"
               searchPlaceholder="Search pools…"
               emptyMessage="No IP pools configured."
+              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setPoolModal({ pool: row })}
+              headerLeft={headerBlock}
+              subHeader={tabStrip}
+              toolbar={addButton}
               actions={(row) => <RowActions label={`pool ${row.name}`} onEdit={() => setPoolModal({ pool: row })} onDelete={() => removePool(row)} />}
             />
           )}
 
           {tab === "radius" && (
-            <DataTable
+            <DataTable searchable={false}
               rows={cfg.radius_servers}
               columns={radiusColumns}
               rowId={(r) => r.address}
               storageKey="vpn-l2tp-radius"
               searchPlaceholder="Search servers…"
               emptyMessage="No RADIUS servers configured."
+              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setRadiusModal({ server: row })}
+              headerLeft={headerBlock}
+              subHeader={tabStrip}
+              toolbar={addButton}
               actions={(row) => <RowActions label={`RADIUS server ${row.address}`} onEdit={() => setRadiusModal({ server: row })} onDelete={() => removeRadius(row)} />}
             />
           )}
 
-          {tab === "status" && <L2tpStatusPanel />}
-        </div>
+          {(tab === "general" || tab === "status") && (
+            <>
+              <div className="flex items-start gap-2 flex-wrap">
+                <div className="mr-auto">{headerBlock}</div>
+                <div className="flex items-center gap-2">
+                  <Button kind="outline" onClick={refresh} disabled={refreshing}>
+                    {refreshing ? "Refreshing…" : "Refresh"}
+                  </Button>
+                  {addButton}
+                </div>
+              </div>
+              {tabStrip}
+              {tab === "general" ? (
+                <GeneralPanel
+                  live={cfg.general}
+                  pools={cfg.pools}
+                  onSaved={(msg) => { setToast(msg); load("refresh"); }}
+                />
+              ) : (
+                <L2tpStatusPanel />
+              )}
+            </>
+          )}
+        </>
       )}
 
       {userModal && cfg && (

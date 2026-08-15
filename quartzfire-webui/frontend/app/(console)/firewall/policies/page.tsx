@@ -18,8 +18,12 @@ import { useDashboard } from "@/lib/DashboardContext";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { PolicyFormModal } from "./PolicyFormModal";
 
+/// Pill/filter casing per the DC mock (TCP + UDP) — PROTOCOL_LABEL keeps the
+/// terser form used in prose and error messages.
+const PROTO_DISPLAY: Record<PolicyProtocol, string> = { tcp: "TCP", udp: "UDP", tcp_udp: "TCP + UDP" };
+
 function ProtocolPill({ protocol }: { protocol: PolicyProtocol }) {
-  return <span className="badge badge-info">{PROTOCOL_LABEL[protocol]}</span>;
+  return <span className="badge badge-info">{PROTO_DISPLAY[protocol]}</span>;
 }
 
 export default function FirewallPoliciesPage() {
@@ -108,7 +112,7 @@ export default function FirewallPoliciesPage() {
     {
       key: "protocol",
       label: "Protocol",
-      options: (Object.keys(PROTOCOL_LABEL) as PolicyProtocol[]).map((p) => ({ value: p, label: PROTOCOL_LABEL[p] })),
+      options: (Object.keys(PROTOCOL_LABEL) as PolicyProtocol[]).map((p) => ({ value: p, label: PROTO_DISPLAY[p] })),
       predicate: (p, v) => p.protocol === v,
     },
   ];

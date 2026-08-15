@@ -80,9 +80,9 @@ export function IkeGroupFormModal({ initial, existingNames, onClose, onSaved }: 
     <ModalShell onClose={onClose} maxWidth={560}>
       <ModalHeader title={`${isEdit ? "Edit" : "Add"} IKE Group`} subtitle={isEdit ? initial!.name : "IKE (phase-1) proposals and timers"} onClose={onClose} />
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
           <Field label="Name" required>
-            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="IKE-DEFAULT" className="clr-input" style={monoSt} />
+            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="IKE-MAIN" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Key exchange">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
@@ -93,11 +93,10 @@ export function IkeGroupFormModal({ initial, existingNames, onClose, onSaved }: 
               </select>
             </div>
           </Field>
+          <Field label="Lifetime (s)" hint="IKE SA lifetime (default 28800).">
+            <input value={lifetime} onChange={(e) => setLifetime(e.target.value)} placeholder="28800" className="clr-input" style={monoSt} />
+          </Field>
         </div>
-
-        <Field label="Lifetime" hint="IKE SA lifetime in seconds (default 28800).">
-          <input value={lifetime} onChange={(e) => setLifetime(e.target.value)} placeholder="28800" className="clr-input" style={monoSt} />
-        </Field>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
           <Field label="DPD action" hint="hold / clear / restart / trap.">

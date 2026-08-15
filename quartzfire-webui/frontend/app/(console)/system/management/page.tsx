@@ -22,23 +22,9 @@ import {
   validateEnrollToken,
 } from "@/lib/quartz-command";
 
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div
-      className="flex items-start gap-4 py-[9px]"
-      style={{ borderBottom: "1px solid var(--cds-alias-object-border-subtle)" }}
-    >
-      <span
-        className="w-[200px] flex-shrink-0 pt-[1px]"
-        style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}
-      >
-        {label}
-      </span>
-      <span className="min-w-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
-        {children}
-      </span>
-    </div>
-  );
+/// Definition-grid label cell (DC: sentence case, color-200).
+function DefLabel({ children }: { children: React.ReactNode }) {
+  return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>{children}</span>;
 }
 
 function Section({ title, action, children }: {
@@ -252,7 +238,7 @@ export default function ManagementPage() {
         </div>
       )}
       {phase === "ready" && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {(live?.flags?.length ?? 0) > 0 && (
             <div className="alert alert-danger" style={{ maxWidth: 760 }}>
               <Icon shape="exclamation-triangle" size={16} className="alert-icon" />
@@ -266,36 +252,44 @@ export default function ManagementPage() {
             </div>
           )}
 
-          <Section
-            title="Status"
-            action={live?.control === "connected" ? <Pill tone="success">Connected</Pill> : undefined}
-          >
-            <InfoRow label="Enrollment">
-              {enrolled ? <Pill tone="success">Enrolled</Pill> : <Pill>Not enrolled</Pill>}
-            </InfoRow>
-            <InfoRow label="Device ID">
-              <span style={{ fontFamily: "var(--qz-font-mono)" }}>{deviceId ?? "—"}</span>
-            </InfoRow>
-            {enrolled && (
-              <>
-                <InfoRow label="Organization">
-                  <span style={{ fontFamily: "var(--qz-font-mono)" }}>
+          <div className="card" style={{ maxWidth: 760 }}>
+            <div className="card-header">
+              Status
+              {live?.control === "connected" && (
+                <span style={{ marginLeft: "auto" }}>
+                  <Pill tone="success">Connected</Pill>
+                </span>
+              )}
+            </div>
+            <div
+              className="card-block"
+              style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: "10px 24px", fontSize: 13 }}
+            >
+              <DefLabel>Enrollment</DefLabel>
+              <span>{enrolled ? <Pill tone="success">Enrolled</Pill> : <Pill>Not enrolled</Pill>}</span>
+              <DefLabel>Device ID</DefLabel>
+              <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" }}>
+                {deviceId ?? "—"}
+              </span>
+              {enrolled && (
+                <>
+                  <DefLabel>Organization</DefLabel>
+                  <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" }}>
                     {live?.org_id ?? state?.org_id ?? "—"}
                   </span>
-                </InfoRow>
-                <InfoRow label="Gateway">
-                  <span style={{ fontFamily: "var(--qz-font-mono)" }}>
+                  <DefLabel>Gateway</DefLabel>
+                  <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" }}>
                     {live?.gateway ?? state?.assigned_gateway ?? state?.token_gateway ?? "—"}
                   </span>
-                </InfoRow>
-                <InfoRow label="Trust">
-                  {(live?.trust_path ?? state?.trust_path) === "pinned-ca"
-                    ? "Pinned CA (from token fingerprint)"
-                    : (live?.trust_path ?? state?.trust_path) === "web-pki"
-                      ? "WebPKI"
-                      : "—"}
-                </InfoRow>
-                <InfoRow label="Certificate">
+                  <DefLabel>Trust</DefLabel>
+                  <span style={{ color: "var(--cds-alias-typography-color-300)" }}>
+                    {(live?.trust_path ?? state?.trust_path) === "pinned-ca"
+                      ? "Pinned CA (from token fingerprint)"
+                      : (live?.trust_path ?? state?.trust_path) === "web-pki"
+                        ? "WebPKI"
+                        : "—"}
+                  </span>
+                  <DefLabel>Certificate</DefLabel>
                   <span className="flex items-center gap-2 flex-wrap">
                     expires <span className="mono">{fmtUnix(live?.cert_not_after_unix ?? state?.cert_not_after_unix ?? null)}</span>
                     {live?.cert_renewal_alarm && (
@@ -305,11 +299,10 @@ export default function ManagementPage() {
                       </>
                     )}
                   </span>
-                </InfoRow>
-              </>
-            )}
-            <InfoRow label="Control channel">
-              <span className="flex items-center gap-2 flex-wrap">
+                </>
+              )}
+              <DefLabel>Control channel</DefLabel>
+              <span className="flex items-center gap-2 flex-wrap" style={{ color: "var(--cds-alias-typography-color-300)" }}>
                 {controlBadge(live?.control)}
                 {live?.control === "connected" && live.control_since_unix && (
                   <span style={{ color: "var(--cds-alias-typography-color-200)" }}>
@@ -317,13 +310,14 @@ export default function ManagementPage() {
                   </span>
                 )}
               </span>
-            </InfoRow>
-            {live?.last_error && (
-              <InfoRow label="Last error">
-                <span style={{ color: "var(--cds-alias-status-danger)" }}>{live.last_error}</span>
-              </InfoRow>
-            )}
-          </Section>
+              {live?.last_error && (
+                <>
+                  <DefLabel>Last error</DefLabel>
+                  <span style={{ color: "var(--cds-alias-status-danger)" }}>{live.last_error}</span>
+                </>
+              )}
+            </div>
+          </div>
 
           {!enrolled && (
             <Section title="Enroll">
@@ -438,20 +432,44 @@ export default function ManagementPage() {
             </div>
           </Section>
 
-          <Section title="Identity Lifecycle">
-            <p className="clr-secondary" style={{ marginTop: 4, marginBottom: 8 }}>
-              Destructive identity operations are CLI-only (they sever cloud
-              management until re-enrollment):
-            </p>
-            <InfoRow label="Regenerate identity">
-              <span style={{ fontFamily: "var(--qz-font-mono)" }}>qf identity regenerate</span>
-              <span style={{ color: "var(--cds-alias-typography-color-200)" }}> — wipe the device keypair (e.g. after cloning)</span>
-            </InfoRow>
-            <InfoRow label="Prepare VM template">
-              <span style={{ fontFamily: "var(--qz-font-mono)" }}>qf prepare-template</span>
-              <span style={{ color: "var(--cds-alias-typography-color-200)" }}> — wipe identity + machine-id before templating</span>
-            </InfoRow>
-          </Section>
+          {/* DC anatomy: action rows with a divider. The actions themselves are
+              CLI-only (they sever cloud management until re-enrollment), so the
+              command stands where the mock's button would be. */}
+          <div className="card" style={{ maxWidth: 760 }}>
+            <div className="card-header">Identity Lifecycle</div>
+            <div className="card-block" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Regenerate Identity</div>
+                  <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+                    New key and certificate; the old identity is revoked on the gateway. CLI-only.
+                  </div>
+                </div>
+                <span style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>
+                  qf identity regenerate
+                </span>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 16,
+                  borderTop: "1px solid var(--cds-alias-object-border-subtle)",
+                  paddingTop: 12,
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Prepare VM Template</div>
+                  <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+                    Strip identity so clones enroll as new devices on first boot. CLI-only.
+                  </div>
+                </div>
+                <span style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>
+                  qf prepare-template
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

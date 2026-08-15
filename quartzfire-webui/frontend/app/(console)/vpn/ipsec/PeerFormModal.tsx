@@ -145,6 +145,15 @@ export function PeerFormModal({ initial, existingNames, ikeGroups, espGroups, on
           <Field label="Peer name" required hint="A label, or the peer's address / hostname.">
             <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="peer-hq" className="clr-input" style={monoSt} />
           </Field>
+          <Field label="Remote address" hint="Peer's public address.">
+            <input value={remoteAddress} onChange={(e) => setRemoteAddress(e.target.value)} placeholder="198.51.100.1" className="clr-input" style={monoSt} />
+          </Field>
+        </div>
+
+        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <Field label="Local address" hint="Local WAN address (must be a bound interface).">
+            <input value={localAddress} onChange={(e) => setLocalAddress(e.target.value)} placeholder="203.0.113.1" className="clr-input" style={monoSt} />
+          </Field>
           <Field label="Connection type">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
               <select value={connType} onChange={(e) => setConnType(e.target.value as ConnectionType | "")} className="clr-select" style={monoSt}>
@@ -157,12 +166,27 @@ export function PeerFormModal({ initial, existingNames, ikeGroups, espGroups, on
           </Field>
         </div>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Local address" hint="Local WAN address (must be a bound interface).">
-            <input value={localAddress} onChange={(e) => setLocalAddress(e.target.value)} placeholder="203.0.113.1" className="clr-input" style={monoSt} />
+        {/* Authentication */}
+        <span className="clr-smallcaption mt-1">Authentication</span>
+        <Segmented
+          items={[
+            { value: "pre-shared-secret", label: "Pre-shared secret" },
+            { value: "x509", label: "x509 certificate" },
+          ]}
+          value={authMode}
+          onChange={(v) => setAuthMode(v as AuthMode)}
+        />
+        {authMode === "pre-shared-secret" && (
+          <Field label="Pre-shared secret" hint="Leave blank to keep the current secret.">
+            <input value={psk} onChange={(e) => setPsk(e.target.value)} type="password" placeholder="shared secret" className="clr-input" style={inputSt} />
           </Field>
-          <Field label="Remote address" hint="Peer's public address.">
-            <input value={remoteAddress} onChange={(e) => setRemoteAddress(e.target.value)} placeholder="198.51.100.1" className="clr-input" style={monoSt} />
+        )}
+        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <Field label="Local ID" hint="IKE identity sent to the peer (optional).">
+            <input value={localId} onChange={(e) => setLocalId(e.target.value)} placeholder="203.0.113.1" className="clr-input" style={monoSt} />
+          </Field>
+          <Field label="Remote ID" hint="Expected IKE identity of the peer (optional).">
+            <input value={remoteId} onChange={(e) => setRemoteId(e.target.value)} placeholder="198.51.100.1" className="clr-input" style={monoSt} />
           </Field>
         </div>
 
@@ -175,44 +199,19 @@ export function PeerFormModal({ initial, existingNames, ikeGroups, espGroups, on
           </Field>
         </div>
 
-        {/* Authentication */}
-        <span className="clr-smallcaption mt-1">Authentication</span>
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Mode">
-            <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
-              <select value={authMode} onChange={(e) => setAuthMode(e.target.value as AuthMode | "")} className="clr-select" style={monoSt}>
-                <option value="pre-shared-secret">pre-shared-secret</option>
-                <option value="x509">x509</option>
-              </select>
-            </div>
-          </Field>
-          {authMode === "pre-shared-secret" && (
-            <Field label="Pre-shared secret" hint="Leave blank to keep the current secret.">
-              <input value={psk} onChange={(e) => setPsk(e.target.value)} type="password" placeholder="shared secret" className="clr-input" style={inputSt} />
-            </Field>
-          )}
-        </div>
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Local ID" hint="IKE identity sent to the peer (optional).">
-            <input value={localId} onChange={(e) => setLocalId(e.target.value)} placeholder="203.0.113.1" className="clr-input" style={monoSt} />
-          </Field>
-          <Field label="Remote ID" hint="Expected IKE identity of the peer (optional).">
-            <input value={remoteId} onChange={(e) => setRemoteId(e.target.value)} placeholder="198.51.100.1" className="clr-input" style={monoSt} />
-          </Field>
-        </div>
-
-        {/* Design: policy vs route (VTI) */}
-        <div className="flex items-center gap-3 mt-1">
-          <span className="clr-smallcaption">Tunnels</span>
-          <Segmented
-            items={[{ value: "policy", label: "Policy-based" }, { value: "route", label: "Route-based (VTI)" }]}
-            value={design}
-            onChange={(v) => setDesign(v as Design)}
-          />
-        </div>
+        {/* Tunnel mode: route (VTI) vs policy */}
+        <span className="clr-smallcaption mt-1">Tunnel mode</span>
+        <Segmented
+          items={[
+            { value: "route", label: "Route-based — bind a VTI" },
+            { value: "policy", label: "Policy-based — local/remote prefixes" },
+          ]}
+          value={design}
+          onChange={(v) => setDesign(v as Design)}
+        />
 
         {design === "route" ? (
-          <Field label="VTI interface" required hint="Bind the SA to this VTI (`interfaces vti <vtiN>`); route traffic over it.">
+          <Field label="VTI binding" required hint="Bind the SA to this VTI (`interfaces vti <vtiN>`); route traffic over it.">
             <input value={vtiBind} onChange={(e) => setVtiBind(e.target.value)} placeholder="vti0" className="clr-input" style={monoSt} />
           </Field>
         ) : (

@@ -25,14 +25,20 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+/// Section break inside the single settings card, styled after the DC
+/// reference's "L2VPN EVPN" divider caption.
+function DividerCaption({ children }: { children: React.ReactNode }) {
   return (
-    <div className="card" style={{ marginTop: 0 }}>
-      <div className="card-header">{title}</div>
-      <div className="card-block flex flex-col gap-4">
-        {subtitle && <p className="clr-secondary" style={{ margin: 0 }}>{subtitle}</p>}
-        {children}
-      </div>
+    <div
+      style={{
+        borderTop: "1px solid var(--cds-alias-object-border-subtle)",
+        paddingTop: 12,
+        fontSize: 12,
+        fontWeight: 600,
+        color: "var(--cds-alias-typography-color-450)",
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -164,13 +170,8 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-[1100px]">
-      {/* The section stack is long, so on wide screens flow it into two balanced
-          columns (single column below xl). Each section is kept intact across
-          the column break; the per-section bottom margin is the inter-section
-          gap the flex `gap-4` gives in single-column mode. */}
-      <div className="columns-1 xl:columns-2 [column-gap:16px] [&>*]:mb-4 [&>*]:break-inside-avoid">
-      <Section title="MPLS Forwarding" subtitle="Interfaces that push/pop MPLS labels, and label-header parameters.">
+    <div className="card" style={{ maxWidth: 720 }}>
+      <div className="card-block flex flex-col gap-4">
         <ListEditor
           label="MPLS interfaces"
           addLabel="Add Interface"
@@ -183,129 +184,141 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
           onRemove={(key) => setInterfaces((p) => p.filter((r) => r.key !== key))}
         />
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Maximum TTL" hint="MPLS header TTL ceiling (1–255, default 255).">
+          <Field label="Maximum TTL">
             <input value={maximumTtl} onChange={(e) => setMaximumTtl(e.target.value)} placeholder="255" className="clr-input" style={monoStyle} />
           </Field>
-          <div className="flex items-end">
-            <Toggle on={noPropagateTtl} onChange={setNoPropagateTtl} label="Do not propagate TTL" hint="Hide the LSP hop-count from traceroute (uniform → pipe model)." />
-          </div>
+          <Field label="LDP router-id" hint="The LSR-id, usually a loopback address.">
+            <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
+          </Field>
         </div>
-      </Section>
 
-      <Section title="LDP Router" subtitle="Label Distribution Protocol identity and protocol behaviour.">
-        <Field label="LDP router ID" hint="The LSR-id, usually a loopback address.">
-          <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
-        </Field>
-        <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Toggle on={orderedControl} onChange={setOrderedControl} label="Ordered control" hint="Only advertise a label once the downstream label is known." />
-          <Toggle on={preferIpv4} onChange={setPreferIpv4} label="Prefer IPv4 transport" hint="For dual-stack sessions, use the IPv4 transport address." />
-          <Toggle on={ciscoInterop} onChange={setCiscoInterop} label="Cisco interop TLV" hint="Non-compliant dual-stack TLV negotiation for Cisco peers." />
+        <div className="flex flex-col" style={{ gap: 8 }}>
+          <Toggle on={noPropagateTtl} onChange={setNoPropagateTtl} label="Do not propagate TTL — hide the LSP hop count from traceroute" />
+          <Toggle on={orderedControl} onChange={setOrderedControl} label="Ordered control — advertise a label only once the downstream label is known" />
+          <Toggle on={preferIpv4} onChange={setPreferIpv4} label="Prefer IPv4 transport for dual-stack sessions" />
+          <Toggle on={ciscoInterop} onChange={setCiscoInterop} label="Cisco interop TLV" />
         </div>
-      </Section>
 
-      <Section title="LDP Interfaces" subtitle="Interfaces that run LDP and form hello adjacencies.">
-        <div className="flex items-center justify-between">
-          <span className="clr-control-label" style={{ marginBottom: 0 }}>Interfaces</span>
-          <button
-            type="button"
-            onClick={() => setLdpIfs((p) => [...p, { key: nextKey(), name: "", disableHello: false }])}
-            className="btn btn-sm btn-link-neutral"
-          >
-            <Icon shape="plus" size={12} /> Add Interface
-          </button>
-        </div>
-        {ldpIfs.length === 0 ? (
-          <p className="clr-subtext" style={{ margin: 0 }}>No interfaces run LDP.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {ldpIfs.map((r) => (
-              <div key={r.key} className="flex items-center gap-3">
-                <input value={r.name} onChange={(e) => setLdpIfs((p) => p.map((x) => (x.key === r.key ? { ...x, name: e.target.value } : x)))} placeholder="eth1" className="clr-input" style={monoStyle} />
-                <label className="flex items-center gap-2 whitespace-nowrap cursor-pointer select-none" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>
-                  <Switch on={r.disableHello} onChange={(v) => setLdpIfs((p) => p.map((x) => (x.key === r.key ? { ...x, disableHello: v } : x)))} />
-                  No triggered hello
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setLdpIfs((p) => p.filter((x) => x.key !== r.key))}
-                  title="Remove interface"
-                  aria-label="Remove interface"
-                  className="btn btn-sm btn-link-neutral btn-icon"
-                >
-                  <Icon shape="trash" size={14} />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      <Section title="Discovery" subtitle="Transport addresses and hello / session timers.">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="IPv4 transport address"><input value={transportV4} onChange={(e) => setTransportV4(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv6 transport address"><input value={transportV6} onChange={(e) => setTransportV6(e.target.value)} placeholder="2001:db8::1" className="clr-input" style={monoStyle} /></Field>
-        </div>
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <Field label="IPv4 hello interval"><input value={helloV4Int} onChange={(e) => setHelloV4Int(e.target.value)} placeholder="5" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv4 hello holdtime"><input value={helloV4Hold} onChange={(e) => setHelloV4Hold(e.target.value)} placeholder="15" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv4 session holdtime"><input value={sessV4Hold} onChange={(e) => setSessV4Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv6 hello interval"><input value={helloV6Int} onChange={(e) => setHelloV6Int(e.target.value)} placeholder="5" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv6 hello holdtime"><input value={helloV6Hold} onChange={(e) => setHelloV6Hold(e.target.value)} placeholder="15" className="clr-input" style={monoStyle} /></Field>
-          <Field label="IPv6 session holdtime"><input value={sessV6Hold} onChange={(e) => setSessV6Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} /></Field>
-        </div>
-      </Section>
-
-      <Section title="LDP Neighbors" subtitle="Per-peer authentication and session tuning (keyed by LSR-id).">
-        <div className="flex items-center justify-between">
-          <span className="clr-control-label" style={{ marginBottom: 0 }}>Neighbors</span>
-          <button
-            type="button"
-            onClick={() => setNeighbors((p) => [...p, { key: nextKey(), address: "", password: "", holdtime: "", ttl: "" }])}
-            className="btn btn-sm btn-link-neutral"
-          >
-            <Icon shape="plus" size={12} /> Add Neighbor
-          </button>
-        </div>
-        {neighbors.length === 0 ? (
-          <p className="clr-subtext" style={{ margin: 0 }}>No per-neighbor LDP settings.</p>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <div className="grid gap-2 clr-subtext" style={{ gridTemplateColumns: "1.4fr 1.4fr 1fr 1fr 36px", marginTop: 0 }}>
-              <span>Address</span><span>Password</span><span>Session holdtime</span><span>TTL security</span><span />
+          <Field label="IPv4 transport address">
+            <input value={transportV4} onChange={(e) => setTransportV4(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
+          </Field>
+          <Field label="Hello interval / holdtime">
+            <div className="flex gap-2">
+              <input value={helloV4Int} onChange={(e) => setHelloV4Int(e.target.value)} placeholder="5" title="Hello interval" className="clr-input" style={monoStyle} />
+              <input value={helloV4Hold} onChange={(e) => setHelloV4Hold(e.target.value)} placeholder="15" title="Hello holdtime" className="clr-input" style={monoStyle} />
             </div>
-            {neighbors.map((r) => (
-              <div key={r.key} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1.4fr 1.4fr 1fr 1fr 36px" }}>
-                <input value={r.address} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, address: e.target.value } : x)))} placeholder="192.0.2.2" className="clr-input" style={monoStyle} />
-                <input value={r.password} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, password: e.target.value } : x)))} placeholder="secret" type="password" className="clr-input" style={inputStyle} />
-                <input value={r.holdtime} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, holdtime: e.target.value } : x)))} placeholder="180" className="clr-input" style={monoStyle} />
-                <input value={r.ttl} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, ttl: e.target.value } : x)))} placeholder="disable / 1-254" className="clr-input" style={monoStyle} />
-                <button
-                  type="button"
-                  onClick={() => setNeighbors((p) => p.filter((x) => x.key !== r.key))}
-                  title="Remove neighbor"
-                  aria-label="Remove neighbor"
-                  className="btn btn-sm btn-link-neutral btn-icon"
-                >
-                  <Icon shape="trash" size={14} />
-                </button>
+          </Field>
+          <Field label="Session holdtime">
+            <input value={sessV4Hold} onChange={(e) => setSessV4Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} />
+          </Field>
+        </div>
+
+        <DividerCaption>LDP Interfaces</DividerCaption>
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <div className="flex items-center justify-between">
+            <span className="clr-control-label" style={{ marginBottom: 0 }}>Interfaces that run LDP</span>
+            <button
+              type="button"
+              onClick={() => setLdpIfs((p) => [...p, { key: nextKey(), name: "", disableHello: false }])}
+              className="btn btn-sm btn-link-neutral"
+            >
+              <Icon shape="plus" size={12} /> Add Interface
+            </button>
+          </div>
+          {ldpIfs.length === 0 ? (
+            <p className="clr-subtext" style={{ margin: 0 }}>No interfaces run LDP.</p>
+          ) : (
+            <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
+              {ldpIfs.map((r) => (
+                <div key={r.key} className="flex items-center gap-3">
+                  <input value={r.name} onChange={(e) => setLdpIfs((p) => p.map((x) => (x.key === r.key ? { ...x, name: e.target.value } : x)))} placeholder="eth1" className="clr-input" style={monoStyle} />
+                  <label className="flex items-center gap-2 whitespace-nowrap cursor-pointer select-none" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>
+                    <Switch on={r.disableHello} onChange={(v) => setLdpIfs((p) => p.map((x) => (x.key === r.key ? { ...x, disableHello: v } : x)))} />
+                    No triggered hello
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setLdpIfs((p) => p.filter((x) => x.key !== r.key))}
+                    title="Remove interface"
+                    aria-label="Remove interface"
+                    className="btn btn-sm btn-link-neutral btn-icon"
+                  >
+                    <Icon shape="trash" size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DividerCaption>IPv6 Discovery</DividerCaption>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <Field label="IPv6 transport address">
+            <input value={transportV6} onChange={(e) => setTransportV6(e.target.value)} placeholder="2001:db8::1" className="clr-input" style={monoStyle} />
+          </Field>
+          <Field label="Hello interval / holdtime">
+            <div className="flex gap-2">
+              <input value={helloV6Int} onChange={(e) => setHelloV6Int(e.target.value)} placeholder="5" title="Hello interval" className="clr-input" style={monoStyle} />
+              <input value={helloV6Hold} onChange={(e) => setHelloV6Hold(e.target.value)} placeholder="15" title="Hello holdtime" className="clr-input" style={monoStyle} />
+            </div>
+          </Field>
+          <Field label="Session holdtime">
+            <input value={sessV6Hold} onChange={(e) => setSessV6Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} />
+          </Field>
+        </div>
+
+        <DividerCaption>LDP Neighbors</DividerCaption>
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <div className="flex items-center justify-between">
+            <span className="clr-control-label" style={{ marginBottom: 0 }}>Per-peer authentication and session tuning (keyed by LSR-id)</span>
+            <button
+              type="button"
+              onClick={() => setNeighbors((p) => [...p, { key: nextKey(), address: "", password: "", holdtime: "", ttl: "" }])}
+              className="btn btn-sm btn-link-neutral"
+            >
+              <Icon shape="plus" size={12} /> Add Neighbor
+            </button>
+          </div>
+          {neighbors.length === 0 ? (
+            <p className="clr-subtext" style={{ margin: 0 }}>No per-neighbor LDP settings.</p>
+          ) : (
+            <div className="flex flex-col gap-3" style={{ marginTop: 6 }}>
+              <div className="grid gap-2 clr-subtext" style={{ gridTemplateColumns: "1.4fr 1.4fr 1fr 1fr 36px", marginTop: 0 }}>
+                <span>Address</span><span>Password</span><span>Session holdtime</span><span>TTL security</span><span />
               </div>
-            ))}
+              {neighbors.map((r) => (
+                <div key={r.key} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1.4fr 1.4fr 1fr 1fr 36px" }}>
+                  <input value={r.address} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, address: e.target.value } : x)))} placeholder="192.0.2.2" className="clr-input" style={monoStyle} />
+                  <input value={r.password} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, password: e.target.value } : x)))} placeholder="secret" type="password" className="clr-input" style={inputStyle} />
+                  <input value={r.holdtime} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, holdtime: e.target.value } : x)))} placeholder="180" className="clr-input" style={monoStyle} />
+                  <input value={r.ttl} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, ttl: e.target.value } : x)))} placeholder="disable / 1-254" className="clr-input" style={monoStyle} />
+                  <button
+                    type="button"
+                    onClick={() => setNeighbors((p) => p.filter((x) => x.key !== r.key))}
+                    title="Remove neighbor"
+                    aria-label="Remove neighbor"
+                    className="btn btn-sm btn-link-neutral btn-icon"
+                  >
+                    <Icon shape="trash" size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <TargetedSection af="IPv4" value={t4} onChange={setT4} placeholder="192.0.2.9" />
+        <TargetedSection af="IPv6" value={t6} onChange={setT6} placeholder="2001:db8::9" />
+
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
           </div>
         )}
-      </Section>
-
-      <TargetedSection af="IPv4" value={t4} onChange={setT4} placeholder="192.0.2.9" />
-      <TargetedSection af="IPv6" value={t6} onChange={setT6} placeholder="2001:db8::9" />
       </div>
-
-      {error && (
-        <div className="alert alert-danger alert-sm">
-          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
-          <div className="alert-text">{error}</div>
-        </div>
-      )}
-
-      <div className="flex justify-end">
+      <div className="card-footer">
         <Button kind="primary" onClick={save} disabled={saving}>
           {saving ? "Applying…" : "Save MPLS Settings"}
         </Button>
@@ -367,8 +380,9 @@ function TargetedSection({ af, value, onChange, placeholder }: { af: "IPv4" | "I
   const set = (partial: Partial<TargetedAf>) => onChange({ ...value, ...partial });
   const addrRows = value.addresses.map((a, i) => ({ key: `${af}-${i}-${a}`, value: a }));
   return (
-    <Section title={`Targeted Neighbors — ${af}`} subtitle="Extended (targeted) LDP discovery for non-directly-connected peers.">
-      <Toggle on={value.enable} onChange={(v) => set({ enable: v })} label={`Accept targeted ${af} sessions`} />
+    <>
+      <DividerCaption>Targeted Neighbors — {af}</DividerCaption>
+      <Toggle on={value.enable} onChange={(v) => set({ enable: v })} label={`Accept targeted ${af} sessions — extended LDP discovery for non-directly-connected peers`} />
       <ListEditor
         label="Targeted addresses"
         addLabel="Add Address"
@@ -396,6 +410,6 @@ function TargetedSection({ af, value, onChange, placeholder }: { af: "IPv4" | "I
           <input value={numStr(value.hello_holdtime)} onChange={(e) => set({ hello_holdtime: numOrNull(e.target.value) })} placeholder="30" className="clr-input" style={monoStyle} />
         </Field>
       </div>
-    </Section>
+    </>
   );
 }

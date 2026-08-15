@@ -69,16 +69,23 @@ function peerColumns(): Column<PeerSummary>[] {
     { key: "remote_as", header: "Remote AS", value: (r) => r.remote_as ?? "", render: (r) => dash(r.remote_as), mono: true, sortable: true, width: 120 },
     {
       key: "state",
-      header: "State",
+      header: "Session state",
       value: (r) => r.state,
       render: (r) => <span className={statePill(r.state)} style={pillStyle}>{r.state}</span>,
       sortable: true,
-      width: 130,
+      width: 140,
     },
     { key: "uptime", header: "Uptime", value: (r) => r.uptime_secs ?? 0, render: (r) => formatUptime(r.uptime_secs), mono: true, sortable: true, width: 110 },
-    { key: "pfx_rcvd", header: "Pfx rcvd", value: (r) => r.prefixes_received ?? -1, render: (r) => dash(r.prefixes_received), mono: true, sortable: true, width: 100 },
-    { key: "pfx_sent", header: "Pfx sent", value: (r) => r.prefixes_sent ?? -1, render: (r) => dash(r.prefixes_sent), mono: true, sortable: true, width: 100 },
-    { key: "msgs", header: "Msgs Rx/Tx", value: (r) => (r.msg_rcvd ?? 0) + (r.msg_sent ?? 0), render: (r) => `${dash(r.msg_rcvd)} / ${dash(r.msg_sent)}`, mono: true, width: 130 },
+    {
+      key: "pfx",
+      header: "Prefixes rx / tx",
+      value: (r) => r.prefixes_received ?? -1,
+      render: (r) => `${dash(r.prefixes_received)} / ${dash(r.prefixes_sent)}`,
+      mono: true,
+      sortable: true,
+      width: 130,
+    },
+    { key: "msgs", header: "Msgs rx / tx", value: (r) => (r.msg_rcvd ?? 0) + (r.msg_sent ?? 0), render: (r) => `${dash(r.msg_rcvd)} / ${dash(r.msg_sent)}`, mono: true, width: 130 },
   ];
 }
 
@@ -91,7 +98,7 @@ function AfTable({ af, onInspect }: { af: AfSummary; onInspect: (neighbor: strin
           <span className="mono">{af.established_peers}/{af.total_peers}</span> established
         </span>
       </div>
-      <DataTable
+      <DataTable searchable={false}
         rows={af.peers}
         columns={peerColumns()}
         rowId={(r) => r.neighbor}
@@ -346,21 +353,11 @@ export function BgpStatusPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 flex-1 min-w-[280px]">
-          <StatTile label="Local AS" value={dash(summary?.local_as)} />
-          <StatTile label="Router ID" value={dash(summary?.router_id)} sub={routerIdSub} subTone={routerIdTone} />
-          <StatTile label="Sessions" value={`${totalEstablished}/${totalPeers}`} sub="established / total (all AFs)" />
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {lastUpdated && (
-            <span className="clr-secondary">
-              Updated {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
-          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
-        </div>
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <StatTile label="Local AS" value={dash(summary?.local_as)} />
+        <StatTile label="Router ID" value={dash(summary?.router_id)} sub={routerIdSub} subTone={routerIdTone} />
+        <StatTile label="Sessions" value={`${totalEstablished} / ${totalPeers}`} sub="established / total (all AFs)" />
       </div>
 
       {!hasPeers ? (
@@ -374,6 +371,9 @@ export function BgpStatusPanel() {
           <AfTable key={af.af} af={af} onInspect={setInspect} />
         ))
       )}
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        Live state from bgpd — refreshes every 5 seconds{lastUpdated ? `, last updated ${lastUpdated.toLocaleTimeString()}` : ""}.
+      </div>
 
       {inspect && <NeighborDetailModal neighbor={inspect} onClose={() => setInspect(null)} />}
     </div>

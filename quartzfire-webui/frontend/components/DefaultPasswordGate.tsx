@@ -66,8 +66,8 @@ export function DefaultPasswordGate() {
   return (
     <ModalShell onClose={() => {}} maxWidth={440}>
       <ModalHeader title="Change the Default Password" onClose={signOut} />
-      <div className="alert alert-warning">
-        <Icon shape="shield-x" size={16} className="alert-icon" />
+      <div className="alert alert-warning alert-sm">
+        <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
         <div className="alert-text">
           The account <span style={{ fontFamily: "var(--qz-font-mono)" }}>{user.username}</span> is
           still using the factory-default password. Anyone who can reach this firewall can sign in
@@ -78,7 +78,7 @@ export function DefaultPasswordGate() {
       <form onSubmit={submit}>
         <div className="clr-form-control" style={{ marginTop: 16 }}>
           <label className="clr-control-label" htmlFor="dpg-new">
-            New Password
+            New password
           </label>
           <input
             id="dpg-new"
@@ -93,7 +93,7 @@ export function DefaultPasswordGate() {
         </div>
         <div className="clr-form-control" style={{ marginTop: 16 }}>
           <label className="clr-control-label" htmlFor="dpg-confirm">
-            Confirm Password
+            Confirm password
           </label>
           <input
             id="dpg-confirm"

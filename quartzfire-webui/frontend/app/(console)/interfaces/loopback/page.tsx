@@ -3,13 +3,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
-import { StatePill } from "@/components/ui/Badge";
-import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
+import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { MtuCell } from "@/components/dashboard/MtuCell";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { effectiveMtu, fetchLoopback, LoopbackInterface } from "@/lib/interfaces";
 import { useDashboard } from "@/lib/DashboardContext";
 import { LoopbackFormModal } from "./LoopbackFormModal";
+
+/// Clarity status pill (mono uppercase), per the design reference.
+const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" } as const;
+const dim = (t: string) => <span style={{ color: "var(--cds-alias-typography-color-200)" }}>{t}</span>;
+
+function StatusPill({ enabled }: { enabled: boolean }) {
+  return (
+    <span className={`label${enabled ? " label-success" : ""}`} style={pillStyle}>
+      {enabled ? "ENABLED" : "DISABLED"}
+    </span>
+  );
+}
 
 const columns: Column<LoopbackInterface>[] = [
   { key: "name", header: "Interface", value: (r) => r.name, mono: true, sortable: true, width: 130 },
@@ -18,7 +29,7 @@ const columns: Column<LoopbackInterface>[] = [
     key: "addresses",
     header: "IP address",
     value: (r) => r.addresses.join(", "),
-    render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
+    render: (r) => (r.addresses.length ? r.addresses.join(", ") : dim("—")),
     mono: true,
   },
   { key: "mtu", header: "MTU", value: (r) => effectiveMtu(r.mtu, "loopback"), render: (r) => <MtuCell mtu={r.mtu} kind="loopback" />, mono: true, sortable: true, width: 80 },
@@ -26,21 +37,9 @@ const columns: Column<LoopbackInterface>[] = [
     key: "status",
     header: "Status",
     value: (r) => (r.enabled ? "enabled" : "disabled"),
-    render: (r) => <StatePill enabled={r.enabled} />,
+    render: (r) => <StatusPill enabled={r.enabled} />,
     sortable: true,
     width: 120,
-  },
-];
-
-const filters: FilterDef<LoopbackInterface>[] = [
-  {
-    key: "status",
-    label: "Status",
-    options: [
-      { value: "enabled", label: "Enabled" },
-      { value: "disabled", label: "Disabled" },
-    ],
-    predicate: (r, v) => (v === "enabled" ? r.enabled : !r.enabled),
   },
 ];
 
@@ -101,10 +100,9 @@ export default function LoopbackPage() {
         </div>
       )}
       {status === "ready" && (
-        <DataTable
+        <DataTable searchable={false}
           rows={rows}
           columns={columns}
-          filters={filters}
           rowId={(r) => r.name}
           storageKey="interfaces-loopback"
           searchPlaceholder="Search loopback interfaces…"

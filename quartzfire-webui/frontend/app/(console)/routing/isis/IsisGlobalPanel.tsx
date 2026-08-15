@@ -31,14 +31,20 @@ function Field({ label, hint, required, children }: { label: string; hint?: stri
   );
 }
 
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+/// Section break inside the single settings card, styled after the DC
+/// reference's "L2VPN EVPN" divider caption.
+function DividerCaption({ children }: { children: React.ReactNode }) {
   return (
-    <div className="card" style={{ marginTop: 0 }}>
-      <div className="card-header">{title}</div>
-      <div className="card-block flex flex-col gap-4">
-        {subtitle && <p className="clr-secondary" style={{ margin: 0 }}>{subtitle}</p>}
-        {children}
-      </div>
+    <div
+      style={{
+        borderTop: "1px solid var(--cds-alias-object-border-subtle)",
+        paddingTop: 12,
+        fontSize: 12,
+        fontWeight: 600,
+        color: "var(--cds-alias-typography-color-450)",
+      }}
+    >
+      {children}
     </div>
   );
 }
@@ -160,13 +166,13 @@ export function IsisGlobalPanel({ live, onSaved }: { live: IsisGlobal; onSaved: 
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-[720px]">
-      <Section title="Router" subtitle="IS-IS identity and level.">
-        <Field label="Network entity title (NET)" required hint="e.g. 49.0001.1921.6800.1002.00 — the area + system-id + NSEL.">
+    <div className="card" style={{ maxWidth: 720 }}>
+      <div className="card-block flex flex-col gap-4">
+        <Field label="Network Entity Title (NET)" required hint="Area + system-id + NSEL.">
           <input value={net} onChange={(e) => setNet(e.target.value)} placeholder="49.0001.1921.6800.1002.00" className="clr-input" style={monoStyle} />
         </Field>
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="IS type (level)" hint="Which levels this router participates in.">
+          <Field label="IS type (level)">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
               <select value={level} onChange={(e) => setLevel(e.target.value as IsisLevel | "")} className="clr-select" style={inputStyle}>
                 <option value="">Default (level-1-2)</option>
@@ -176,7 +182,7 @@ export function IsisGlobalPanel({ live, onSaved }: { live: IsisGlobal; onSaved: 
               </select>
             </div>
           </Field>
-          <Field label="Metric style" hint="wide is required for anything but the smallest legacy network.">
+          <Field label="Metric style">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
               <select value={metricStyle} onChange={(e) => setMetricStyle(e.target.value as IsisMetricStyle | "")} className="clr-select" style={inputStyle}>
                 <option value="">Default (narrow)</option>
@@ -187,54 +193,52 @@ export function IsisGlobalPanel({ live, onSaved }: { live: IsisGlobal; onSaved: 
             </div>
           </Field>
         </div>
-        <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Toggle on={dynamicHostname} onChange={setDynamicHostname} label="Dynamic hostname" hint="Show peer hostnames instead of system-ids." />
-          <Toggle on={attachedBit} onChange={setAttachedBit} label="Set attached bit" hint="Signal L1/L2 attachment to the L2 backbone." />
-          <Toggle on={overloadBit} onChange={setOverloadBit} label="Set overload bit" hint="Advertise as transit-unusable (maintenance drain)." />
-        </div>
-      </Section>
 
-      <Section title="Timers" subtitle="LSP generation / refresh and SPF pacing (seconds).">
+        <div className="flex flex-col" style={{ gap: 8 }}>
+          <Toggle on={dynamicHostname} onChange={setDynamicHostname} label="Dynamic hostname — show peer hostnames instead of system-ids" />
+          <Toggle on={attachedBit} onChange={setAttachedBit} label="Set attached bit" />
+          <Toggle on={overloadBit} onChange={setOverloadBit} label="Set overload bit — advertise as transit-unusable (maintenance drain)" />
+        </div>
+
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
           <Field label="LSP gen interval"><input value={lspGen} onChange={(e) => setLspGen(e.target.value)} placeholder="30" className="clr-input" style={monoStyle} /></Field>
           <Field label="LSP refresh interval"><input value={lspRefresh} onChange={(e) => setLspRefresh(e.target.value)} placeholder="900" className="clr-input" style={monoStyle} /></Field>
           <Field label="SPF interval"><input value={spfInterval} onChange={(e) => setSpfInterval(e.target.value)} placeholder="1" className="clr-input" style={monoStyle} /></Field>
         </div>
-      </Section>
 
-      <Section title="Redistribution" subtitle="Inject routes from other protocols, per address family and level.">
+        <DividerCaption>Redistribution</DividerCaption>
         <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <RedistMatrix afi="ipv4" protocols={ISIS_REDIST_IPV4} entries={redist} onToggle={toggleRedist} />
           <RedistMatrix afi="ipv6" protocols={ISIS_REDIST_IPV6} entries={redist} onToggle={toggleRedist} />
         </div>
-      </Section>
 
-      <Section title="Originated Default Route" subtitle="default-information originate — advertise a default per family and level.">
-        <div className="grid gap-2 items-center clr-subtext" style={{ gridTemplateColumns: "1fr 70px 70px", marginTop: 0 }}>
-          <span />
-          <span className="text-center">L1</span>
-          <span className="text-center">L2</span>
-        </div>
-        {(["ipv4", "ipv6"] as const).map((afi) => (
-          <div key={afi} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 70px 70px" }}>
-            <span style={{ fontSize: 13, fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" }}>{afi}</span>
-            {REDIST_LEVELS.map((level) => (
-              <span key={level} className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
-                <input type="checkbox" checked={hasOriginate(afi, level)} onChange={() => toggleOriginate(afi, level)} />
-              </span>
-            ))}
+        <DividerCaption>Originated Default Route</DividerCaption>
+        <div className="flex flex-col gap-1">
+          <div className="grid gap-2 items-center clr-subtext" style={{ gridTemplateColumns: "1fr 70px 70px", marginTop: 0 }}>
+            <span />
+            <span className="text-center">L1</span>
+            <span className="text-center">L2</span>
           </div>
-        ))}
-      </Section>
-
-      {error && (
-        <div className="alert alert-danger alert-sm">
-          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
-          <div className="alert-text">{error}</div>
+          {(["ipv4", "ipv6"] as const).map((afi) => (
+            <div key={afi} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 70px 70px" }}>
+              <span style={{ fontSize: 13, fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" }}>{afi}</span>
+              {REDIST_LEVELS.map((level) => (
+                <span key={level} className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
+                  <input type="checkbox" checked={hasOriginate(afi, level)} onChange={() => toggleOriginate(afi, level)} />
+                </span>
+              ))}
+            </div>
+          ))}
         </div>
-      )}
 
-      <div className="flex justify-end">
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
+        )}
+      </div>
+      <div className="card-footer">
         <Button kind="primary" onClick={save} disabled={saving}>
           {saving ? "Applying…" : "Save IS-IS Settings"}
         </Button>

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { Switch } from "@/components/ui/Switch";
 import { applyIpsecInterfaces } from "@/lib/ipsec";
 
 /// Which interfaces IKE/IPsec listens on (`vpn ipsec interface <name>`). A peer
@@ -47,32 +46,41 @@ export function InterfacesPanel({ live, interfaces, onSaved }: {
 
   return (
     <div className="card" style={{ maxWidth: 560 }}>
-      <div className="card-block flex flex-col gap-4">
-        <p className="text-[13px] m-0" style={{ color: "var(--cds-alias-typography-color-300)" }}>
-          Select the interfaces IKE/IPsec should listen on. A peer stays down until the interface carrying its local address is enabled here.
+      <div className="card-block">
+        <p className="text-[13px] m-0" style={{ color: "var(--cds-alias-typography-color-300)", marginBottom: 12 }}>
+          IKE listens on these interfaces.
         </p>
 
         {names.length === 0 && <p className="text-[13px] m-0" style={{ color: "var(--cds-alias-typography-color-200)" }}>No interfaces available.</p>}
 
-        <div className="flex flex-col" style={{ border: "1px solid var(--cds-alias-object-border-subtle)", borderRadius: "var(--clr-base-border-radius-m)" }}>
-          {names.map((name, i) => (
-            <label key={name} className="flex items-center justify-between px-3 py-[10px] cursor-pointer select-none" style={{ borderTop: i === 0 ? undefined : "1px solid var(--cds-alias-object-border-subtle)" }}>
-              <span className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-450)", fontFamily: "var(--qz-font-mono)" }}>{name}</span>
-              <Switch on={selected.has(name)} onChange={(v) => toggle(name, v)} />
-            </label>
+        <div className="flex flex-col" style={{ gap: 6 }}>
+          {names.map((name) => (
+            <div key={name} className="clr-checkbox-wrapper">
+              <input
+                id={`ipsec-if-${name}`}
+                type="checkbox"
+                checked={selected.has(name)}
+                onChange={(e) => toggle(name, e.target.checked)}
+              />
+              <label htmlFor={`ipsec-if-${name}`} style={{ fontFamily: "var(--qz-font-mono)" }}>{name}</label>
+            </div>
           ))}
         </div>
 
+        <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)", marginTop: 12 }}>
+          A peer stays down until the interface carrying its local address is enabled here.
+        </p>
+
         {error && (
-          <div className="alert alert-danger alert-sm">
+          <div className="alert alert-danger alert-sm" style={{ marginTop: 12 }}>
             <Icon shape="exclamation-circle" size={14} className="alert-icon" />
             <span className="alert-text">{error}</span>
           </div>
         )}
       </div>
       <div className="card-footer">
-        <Button kind="primary" size="sm" onClick={apply} disabled={saving || !dirty}>
-          {saving ? "Applying…" : "Apply"}
+        <Button kind="primary" onClick={apply} disabled={saving || !dirty}>
+          {saving ? "Saving…" : "Save Interfaces"}
         </Button>
       </div>
     </div>

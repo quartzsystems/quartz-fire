@@ -369,7 +369,7 @@ export default function AuditLogPage() {
             columns={commitCols}
             rowId={(r) => String(r.revision)}
             storageKey="system-audit-commits"
-            searchPlaceholder="Search commits…"
+            searchPlaceholder="Search…"
             emptyMessage="No commit history recorded on this device."
             onRefresh={() => load("refresh")}
             onRowOpen={(row) => setDiffRevision(row.revision)}
@@ -411,7 +411,7 @@ export default function AuditLogPage() {
             // v2: reset persisted layouts that seeded from the old
             // stretched-to-fit measurements (unreadably wide columns).
             storageKey="system-audit-log-v2"
-            searchPlaceholder="Search log messages…"
+            searchPlaceholder="Search…"
             emptyMessage="No system log entries readable on this device."
             onRefresh={() => load("refresh")}
             headerLeft={headerBlock}

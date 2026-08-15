@@ -212,8 +212,8 @@ export function PeerFormModal({
   return (
     <ModalShell onClose={onClose} maxWidth={600}>
       <ModalHeader
-        title={`${isEdit ? "Edit" : "Add"} ${noun}`}
-        subtitle={isEdit ? peer.name : isNeighbor ? "BGP neighbor / peering session" : "Reusable neighbor template"}
+        title={isEdit ? `Edit ${noun} — ${initial!.name}` : `Add ${noun}`}
+        subtitle={isNeighbor ? "BGP neighbor / peering session" : "Reusable neighbor template"}
         onClose={onClose}
       />
 

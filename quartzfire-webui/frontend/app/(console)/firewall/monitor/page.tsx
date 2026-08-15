@@ -12,7 +12,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
-import { Segmented } from "@/components/ui/Segmented";
+import { Tabs } from "@/components/ui/Tabs";
 import {
   emptyFirewallConfig,
   enableTrafficLogging,
@@ -101,7 +101,7 @@ function monitorCell(
       return time(r.ts);
     case "action":
       return (
-        <span className="inline-flex items-center gap-[5px]">
+        <span className="inline-flex items-center gap-1">
           <ActionPill action={r.action} />
           {r.ips && (
             <span className="badge badge-warn" title="Inspected by the IPS engine">
@@ -407,7 +407,7 @@ export default function TrafficMonitorPage() {
         )}
 
         {/* Controls */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -416,7 +416,8 @@ export default function TrafficMonitorPage() {
             style={{ width: 240, maxWidth: 240 }}
           />
 
-          <Segmented
+          {/* Verdict filter as a tab strip, per the DC mock. */}
+          <Tabs
             items={[
               { value: "all", label: "All" },
               { value: "accept", label: "Allowed" },
@@ -477,17 +478,22 @@ export default function TrafficMonitorPage() {
             </select>
           </div>
 
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
             <ColumnsMenu vis={vis} />
-            <Button kind="outline" size="sm" onClick={refresh}>
+            <button type="button" className="btn btn-sm" onClick={refresh}>
               Refresh
-            </Button>
-            <Button kind="outline" size="sm" onClick={togglePause}>
-              {paused ? "Resume" : "Pause"}
-            </Button>
-            <Button kind="outline" size="sm" onClick={clear}>
+            </button>
+            {/* Clear before Pause, and Pause filled while paused, per the DC mock. */}
+            <button type="button" className="btn btn-sm" onClick={clear}>
               Clear
-            </Button>
+            </button>
+            <button
+              type="button"
+              className={`btn btn-sm${paused ? " btn-primary" : ""}`}
+              onClick={togglePause}
+            >
+              {paused ? "Resume" : "Pause"}
+            </button>
             <span
               className="inline-flex items-center gap-[6px]"
               style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}

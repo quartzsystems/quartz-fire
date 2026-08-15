@@ -3,17 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { AcStatus, fetchAcStatus } from "@/lib/appcontrol";
 import { AppSliceInput, TopAppsDonut } from "./TopAppsDonut";
-import { LiveButton } from "./LiveButton";
 
 const POLL_MS = 5_000;
 
 export function TopApplicationsTile() {
-  const [paused, setPaused] = useState(false);
   const [status, setStatus] = useState<AcStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (paused) return;
     let alive = true;
     const load = async () => {
       try {
@@ -31,7 +28,7 @@ export function TopApplicationsTile() {
       alive = false;
       clearInterval(t);
     };
-  }, [paused]);
+  }, []);
 
   const runtime = status?.status ?? null;
   const running = status?.running ?? false;
@@ -60,7 +57,6 @@ export function TopApplicationsTile() {
         >
           by classified bytes
         </span>
-        <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
       </div>
 
       <div className="card-block flex-1 min-h-0 flex flex-col">

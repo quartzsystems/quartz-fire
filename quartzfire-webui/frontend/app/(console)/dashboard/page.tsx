@@ -193,7 +193,7 @@ export default function DashboardPage() {
         <div className="alert alert-info alert-sm mb-4">
           <Icon shape="info-circle" size={14} className="alert-icon" />
           <span className="alert-text">
-            Edit mode — drag a tile to any cell, resize from its corner, or remove it with ✕. The
+            Edit mode — drag a tile to any cell, resize from its corner, or remove it with ×. The
             layout is saved per user on the firewall itself.
           </span>
         </div>

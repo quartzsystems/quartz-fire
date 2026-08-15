@@ -38,13 +38,7 @@ export function Tabs({
         >
           {it.label}
           {it.count !== undefined && (
-            <span
-              style={{
-                fontFamily: "var(--qz-font-mono)",
-                fontSize: 11,
-                color: "var(--cds-alias-typography-color-200)",
-              }}
-            >
+            <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
               {it.count}
             </span>
           )}

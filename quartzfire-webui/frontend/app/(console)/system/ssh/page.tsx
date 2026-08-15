@@ -1,30 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { fetchSystemConfig, SshSettings, SystemUser } from "@/lib/system";
 import { useDashboard } from "@/lib/DashboardContext";
 import { SshFormModal } from "./SshFormModal";
 
-/// One label/value line of the settings card.
-function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div
-      className="flex items-start gap-4 py-[9px]"
-      style={{ borderBottom: "1px solid var(--cds-alias-object-border-subtle)" }}
-    >
-      <span
-        className="w-[200px] flex-shrink-0 pt-[1px]"
-        style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}
-      >
-        {label}
-      </span>
-      <span className="min-w-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
-        {children}
-      </span>
-    </div>
-  );
+/// Definition-grid label cell (DC: sentence case, color-200).
+function DefLabel({ children }: { children: React.ReactNode }) {
+  return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>{children}</span>;
 }
 
 /// Clarity status pill — mono uppercase label.
@@ -44,14 +29,13 @@ function Pill({ tone, children }: { tone?: "success" | "warning"; children: Reac
   );
 }
 
+/// Multi-value cell — mono, values joined with " · " per the DC reference.
 function MonoList({ items, fallback }: { items: string[]; fallback: string }) {
   if (items.length === 0)
     return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>{fallback}</span>;
   return (
-    <span className="flex flex-wrap gap-x-3 gap-y-1" style={{ fontFamily: "var(--qz-font-mono)" }}>
-      {items.map((v) => (
-        <span key={v}>{v}</span>
-      ))}
+    <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" }}>
+      {items.join(" · ")}
     </span>
   );
 }
@@ -115,22 +99,27 @@ export default function SshPage() {
         </div>
       )}
       {status === "ready" && ssh && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           <div className="card" style={{ maxWidth: 720 }}>
             <div className="card-header">SSH Service</div>
-            <div className="card-block" style={{ paddingTop: 4, paddingBottom: 8 }}>
-              <InfoRow label="Service">
-                {ssh.enabled ? <Pill tone="success">Enabled</Pill> : <Pill>Disabled</Pill>}
-              </InfoRow>
-              <InfoRow label="Ports"><MonoList items={ssh.ports} fallback="22 (default)" /></InfoRow>
-              <InfoRow label="Listen addresses"><MonoList items={ssh.listen_addresses} fallback="All addresses" /></InfoRow>
-              <InfoRow label="Password authentication">
+            <div
+              className="card-block"
+              style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: "10px 24px", fontSize: 13 }}
+            >
+              <DefLabel>Service</DefLabel>
+              <span>{ssh.enabled ? <Pill tone="success">Enabled</Pill> : <Pill>Disabled</Pill>}</span>
+              <DefLabel>Ports</DefLabel>
+              <MonoList items={ssh.ports} fallback="22 (default)" />
+              <DefLabel>Listen addresses</DefLabel>
+              <MonoList items={ssh.listen_addresses} fallback="All addresses" />
+              <DefLabel>Password authentication</DefLabel>
+              <span>
                 {ssh.password_auth_disabled ? (
-                  <Pill tone="warning">Disabled (keys only)</Pill>
+                  <Pill tone="warning">Disabled — keys only</Pill>
                 ) : (
                   <Pill tone="success">Allowed</Pill>
                 )}
-              </InfoRow>
+              </span>
             </div>
           </div>
 
@@ -138,28 +127,28 @@ export default function SshPage() {
             <div className="card-header">
               Authorized Keys
               <span style={{ marginLeft: "auto" }}>
-                <Link href="/system/users" className="btn btn-sm btn-link">
+                <Link href="/system/users" style={{ fontSize: 12, fontWeight: 400 }}>
                   Manage on the Users page →
                 </Link>
               </span>
             </div>
-            <div className="card-block" style={{ paddingTop: 4, paddingBottom: 8 }}>
+            <div
+              className="card-block"
+              style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: "10px 24px", fontSize: 13 }}
+            >
               {usersWithKeys.length === 0 ? (
-                <p className="clr-secondary py-2" style={{ margin: 0 }}>
+                <p className="clr-secondary m-0" style={{ gridColumn: "1 / -1" }}>
                   No account has SSH public keys yet. Keys are managed per user account.
                 </p>
               ) : (
                 usersWithKeys.map((u) => (
-                  <InfoRow key={u.name} label={u.name}>
-                    <span className="flex flex-wrap gap-x-3 gap-y-1" style={{ fontFamily: "var(--qz-font-mono)" }}>
-                      {u.keys.map((k) => (
-                        <span key={k.id}>
-                          {k.id}
-                          <span style={{ color: "var(--cds-alias-typography-color-200)" }}> ({k.type ?? "?"})</span>
-                        </span>
-                      ))}
+                  <Fragment key={u.name}>
+                    <DefLabel>{u.name}</DefLabel>
+                    <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" }}>
+                      {/* DC shows the short algorithm name: "cw-macbook (ed25519)". */}
+                      {u.keys.map((k) => `${k.id} (${(k.type ?? "?").replace(/^ssh-/, "")})`).join(" · ")}
                     </span>
-                  </InfoRow>
+                  </Fragment>
                 ))
               )}
             </div>

@@ -47,9 +47,7 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
 
 function neighborColumns(): Column<OspfNeighborState>[] {
   return [
-    { key: "neighbor_id", header: "Router ID", value: (r) => r.neighbor_id, mono: true, sortable: true, width: 130 },
-    { key: "address", header: "Address", value: (r) => r.address ?? "", render: (r) => dash(r.address), mono: true, width: 130 },
-    { key: "interface", header: "Interface", value: (r) => r.interface ?? "", render: (r) => dash(r.interface), mono: true, sortable: true },
+    { key: "neighbor_id", header: "Neighbor ID", value: (r) => r.neighbor_id, mono: true, sortable: true, width: 130 },
     {
       key: "state",
       header: "State",
@@ -58,8 +56,10 @@ function neighborColumns(): Column<OspfNeighborState>[] {
       sortable: true,
       width: 140,
     },
+    { key: "address", header: "Address", value: (r) => r.address ?? "", render: (r) => dash(r.address), mono: true, width: 130 },
+    { key: "interface", header: "Interface", value: (r) => r.interface ?? "", render: (r) => dash(r.interface), mono: true, sortable: true },
+    { key: "dead", header: "Dead time", value: (r) => r.dead_time_secs ?? -1, render: (r) => (r.dead_time_secs == null ? "—" : `${r.dead_time_secs} s`), mono: true, width: 100 },
     { key: "priority", header: "Priority", value: (r) => r.priority ?? -1, render: (r) => dash(r.priority), mono: true, width: 90 },
-    { key: "dead", header: "Dead", value: (r) => r.dead_time_secs ?? -1, render: (r) => (r.dead_time_secs == null ? "—" : `${r.dead_time_secs}s`), mono: true, width: 90 },
     { key: "uptime", header: "Uptime", value: (r) => r.uptime_secs ?? 0, render: (r) => formatUptime(r.uptime_secs), mono: true, sortable: true, width: 100 },
   ];
 }
@@ -140,17 +140,11 @@ export function OspfStatusPanel() {
   const running = summary?.running ?? false;
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 flex-1 min-w-[280px]">
-          <StatTile label="Router ID" value={dash(summary?.router_id)} sub="operational value" />
-          <StatTile label="Areas" value={String(summary?.areas.length ?? 0)} />
-          <StatTile label="Adjacencies" value={`${fullNeighbors}/${totalNeighbors}`} sub="full / total" />
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
-          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
-        </div>
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <StatTile label="Router ID" value={dash(summary?.router_id)} sub="operational value" />
+        <StatTile label="Areas" value={String(summary?.areas.length ?? 0)} />
+        <StatTile label="Adjacencies" value={`${fullNeighbors} / ${totalNeighbors}`} sub="full / total" />
       </div>
 
       {!running ? (
@@ -181,7 +175,7 @@ export function OspfStatusPanel() {
 
           <div className="flex flex-col gap-2">
             <h3 className="clr-section" style={{ margin: 0, color: "var(--cds-alias-typography-color-450)" }}>Neighbors</h3>
-            <DataTable
+            <DataTable searchable={false}
               rows={summary!.neighbors}
               columns={neighborColumns()}
               rowId={(r) => `${r.neighbor_id}-${r.interface ?? ""}`}
@@ -193,7 +187,7 @@ export function OspfStatusPanel() {
 
           <div className="flex flex-col gap-2">
             <h3 className="clr-section" style={{ margin: 0, color: "var(--cds-alias-typography-color-450)" }}>Interfaces</h3>
-            <DataTable
+            <DataTable searchable={false}
               rows={summary!.interfaces}
               columns={interfaceColumns()}
               rowId={(r) => r.name}
@@ -204,6 +198,9 @@ export function OspfStatusPanel() {
           </div>
         </>
       )}
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        Live state from ospfd — refreshes every 5 seconds{lastUpdated ? `, last updated ${lastUpdated.toLocaleTimeString()}` : ""}.
+      </div>
     </div>
   );
 }

@@ -267,7 +267,7 @@ export default function DevicesPage() {
   );
 
   return (
-    <div>
+    <div className="flex flex-col gap-3">
       {/* Page header per the DC reference: title/sub left; search + plain
           Refresh right-aligned beside it. */}
       <div className="flex items-start gap-2 flex-wrap">
@@ -291,7 +291,7 @@ export default function DevicesPage() {
       </div>
 
       {/* Throughput + application mix — two cards, per the DC reference */}
-      <div className="grid mt-4" style={{ gridTemplateColumns: "2fr 1fr", gap: 12, alignItems: "stretch" }}>
+      <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 12, alignItems: "stretch" }}>
         <div className="card">
           <div className="card-header">
             Total Throughput
@@ -343,7 +343,7 @@ export default function DevicesPage() {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center gap-3 flex-wrap mt-6">
+      <div className="flex items-center gap-3 flex-wrap">
         <Segmented items={statusItems} value={status} onChange={(v) => setStatus(v as StatusFilter)} />
 
         <div className="flex items-center gap-2">
@@ -360,14 +360,14 @@ export default function DevicesPage() {
       </div>
 
       {collectorDown && (
-        <div className="alert alert-warning alert-sm mt-4">
+        <div className="alert alert-warning alert-sm">
           <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
           <div className="alert-text">{collectorDown}</div>
         </div>
       )}
 
       {/* Table */}
-      <div className="mt-4 rounded-lg overflow-x-auto" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
+      <div className="rounded-lg overflow-x-auto" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ tableLayout: resize.tableLayout, width: "100%" }}>
           <colgroup>
             <col style={{ width: 34 }} />
@@ -432,7 +432,7 @@ export default function DevicesPage() {
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between mt-3">
+      <div className="flex items-center justify-between">
         <span className="text-[12px] text-[var(--qz-fg-4)]">
           Page {data?.page ?? page} of {pageCount}
         </span>

@@ -107,13 +107,13 @@ export function PrefixListFormModal({
 
   return (
     <ModalShell onClose={onClose} maxWidth={680}>
-      <ModalHeader title={`${isEdit ? "Edit" : "Create"} Prefix List`} subtitle={isEdit ? initial!.name : "Ordered IP prefix match list"} onClose={onClose} />
+      <ModalHeader title={isEdit ? `Edit Prefix-List — ${initial!.name}` : "Create Prefix-List"} subtitle="Ordered IP prefix match list" onClose={onClose} />
 
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <div className="clr-form-control" style={{ marginTop: 0 }}>
             <label className="clr-control-label">Name <span className="clr-required">*</span></label>
-            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="ALLOW-LOOPBACKS" className="clr-input" style={monoStyle} />
+            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="PL-LAN" className="clr-input" style={monoStyle} />
           </div>
           <div className="clr-form-control" style={{ marginTop: 0 }}>
             <label className="clr-control-label">Family</label>

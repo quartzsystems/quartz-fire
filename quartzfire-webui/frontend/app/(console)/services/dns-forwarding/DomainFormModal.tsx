@@ -93,13 +93,13 @@ export function DomainFormModal({
   return (
     <ModalShell onClose={onClose} maxWidth={460}>
       <ModalHeader
-        title={`${isEdit ? "Edit" : "Create"} Conditional Domain`}
+        title="Per-Domain Forwarding"
         subtitle="Send queries for one domain to dedicated name servers"
         onClose={onClose}
       />
 
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <Field label="Domain">
+        <Field label="Domain *">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -109,7 +109,7 @@ export function DomainFormModal({
           />
         </Field>
 
-        <Field label="Name servers" hint="One address per line.">
+        <Field label="Name servers" hint="Queries for this domain go to these servers instead of the upstream. One address per line.">
           <textarea
             value={serversText}
             onChange={(e) => setServersText(e.target.value)}
@@ -131,7 +131,7 @@ export function DomainFormModal({
             Cancel
           </button>
           <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Domain"}
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Add Domain"}
           </button>
         </ModalFooter>
       </form>

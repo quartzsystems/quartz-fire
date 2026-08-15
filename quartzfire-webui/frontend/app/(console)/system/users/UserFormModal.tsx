@@ -177,22 +177,22 @@ export function UserFormModal({
 
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Username">
+          <Field label="Username *">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="admin"
+              placeholder="j.smith"
               disabled={isEdit}
               autoComplete="off"
               className="clr-input"
               style={monoSt}
             />
           </Field>
-          <Field label="Full name" hint="Optional display name.">
+          <Field label="Full name">
             <input
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Jane Admin"
+              placeholder="Optional display name"
               className="clr-input"
               style={plainSt}
             />
@@ -200,11 +200,12 @@ export function UserFormModal({
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label={isEdit ? "New password" : "Password"} hint={isEdit ? "Leave empty to keep the current password." : undefined}>
+          <Field label="Password">
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder={isEdit ? "Leave blank to keep" : undefined}
               autoComplete="new-password"
               className="clr-input"
               style={plainSt}
@@ -222,18 +223,8 @@ export function UserFormModal({
           </Field>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-[6px]">
-            <label className="clr-control-label" style={{ marginBottom: 0 }}>SSH public keys</label>
-            <button
-              type="button"
-              onClick={() => setKeys((rows) => [...rows, { id: "", type: "ssh-ed25519", key: "" }])}
-              className="btn btn-sm btn-link-neutral"
-              style={{ margin: 0 }}
-            >
-              <Icon shape="plus" size={13} /> Add Key
-            </button>
-          </div>
+        <div className="flex flex-col gap-2">
+          <label className="clr-control-label" style={{ marginBottom: 0 }}>SSH public keys</label>
 
           {keys.length === 0 ? (
             <p className="clr-subtext" style={{ margin: 0 }}>
@@ -290,6 +281,15 @@ export function UserFormModal({
               ))}
             </div>
           )}
+
+          <button
+            type="button"
+            onClick={() => setKeys((rows) => [...rows, { id: "", type: "ssh-ed25519", key: "" }])}
+            className="btn btn-sm self-start"
+            style={{ margin: 0 }}
+          >
+            Add Key
+          </button>
         </div>
 
         {error && (

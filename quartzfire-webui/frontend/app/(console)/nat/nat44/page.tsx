@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
-import { StatePill } from "@/components/ui/Badge";
 import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
@@ -17,9 +16,22 @@ import { StaticNatFormModal } from "./StaticNatFormModal";
 
 type Tab = NatSection | "static";
 
+/// Clarity status pill (mono uppercase), per the design reference.
+const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" } as const;
+const dimText = { color: "var(--cds-alias-typography-color-200)" } as const;
+
+function StatusPill({ enabled }: { enabled: boolean }) {
+  return (
+    <span className={`label${enabled ? " label-success" : ""}`} style={pillStyle}>
+      {enabled ? "ENABLED" : "DISABLED"}
+    </span>
+  );
+}
+
 const dash = (v: string | null) => (v && v.length ? v : "—");
-// An unset match address means "any" in VyOS NAT — surface that rather than a blank dash.
-const any = (v: string | null) => (v && v.length ? v : "any");
+// An unset match address means "any" in VyOS NAT — surface that (dimmed, per
+// the design reference) rather than a blank dash.
+const any = (v: string | null) => (v && v.length ? v : <span style={dimText}>any</span>);
 
 const columns: Column<NatRule>[] = [
   { key: "rule", header: "Rule", value: (r) => r.rule, mono: true, sortable: true, width: 80 },
@@ -40,7 +52,7 @@ const columns: Column<NatRule>[] = [
     key: "status",
     header: "Status",
     value: (r) => (r.enabled ? "enabled" : "disabled"),
-    render: (r) => <StatePill enabled={r.enabled} />,
+    render: (r) => <StatusPill enabled={r.enabled} />,
     sortable: true,
     width: 110,
   },
@@ -56,7 +68,7 @@ const staticColumns: Column<StaticNatMapping>[] = [
     key: "status",
     header: "Status",
     value: (r) => (r.enabled ? "enabled" : "disabled"),
-    render: (r) => <StatePill enabled={r.enabled} />,
+    render: (r) => <StatusPill enabled={r.enabled} />,
     sortable: true,
     width: 110,
   },
@@ -131,14 +143,32 @@ export default function Nat44Page() {
     }
   };
 
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">NAT44</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        IPv4-to-IPv4 source (SNAT) and destination (DNAT) translation.
+      </p>
+    </div>
+  );
+
+  // Per the DC reference the tab strip sits between the page-header row and
+  // the grid — the DataTable's subHeader slot.
+  const tabStrip = (
+    <Tabs
+      items={[
+        { value: "source", label: "Source NAT", count: data.source.length },
+        { value: "destination", label: "Destination NAT", count: data.destination.length },
+        { value: "static", label: "Static (1-to-1)", count: data.static_nat.length },
+      ]}
+      value={tab}
+      onChange={(v) => setTab(v as Tab)}
+    />
+  );
+
   return (
     <div className="flex flex-col" style={{ gap: 16 }}>
-      <div>
-        <h2>NAT44</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          IPv4-to-IPv4 source (SNAT) and destination (DNAT) translation.
-        </p>
-      </div>
+      {status !== "ready" && headerBlock}
 
       {status === "loading" && (
         <div className="clr-secondary">Loading NAT44 rules…</div>
@@ -154,72 +184,64 @@ export default function Nat44Page() {
           </div>
         </div>
       )}
-      {status === "ready" && (
-        <div className="flex flex-col gap-5">
-          <Tabs
-            items={[
-              { value: "source", label: "Source NAT", count: data.source.length },
-              { value: "destination", label: "Destination NAT", count: data.destination.length },
-              { value: "static", label: "Static (1-to-1)", count: data.static_nat.length },
-            ]}
-            value={tab}
-            onChange={(v) => setTab(v as Tab)}
+      {status === "ready" &&
+        (tab === "static" ? (
+          <DataTable
+            rows={data.static_nat}
+            columns={staticColumns}
+            rowId={(r) => String(r.rule)}
+            storageKey="nat-nat44-static"
+            searchPlaceholder="Search rules…"
+            emptyMessage="No 1-to-1 NAT mappings configured."
+            onRefresh={() => load("refresh")}
+            onRowOpen={(row) => setStaticModal({ mapping: row })}
+            headerLeft={headerBlock}
+            subHeader={tabStrip}
+            toolbar={
+              <Button kind="primary" onClick={() => setStaticModal({})}>
+                Create Mapping
+              </Button>
+            }
+            actions={(row) => (
+              <RowActions
+                label={`mapping ${row.rule}`}
+                onEdit={() => setStaticModal({ mapping: row })}
+                onDelete={() => removeStatic(row)}
+              />
+            )}
           />
-
-          {tab === "static" ? (
-            <DataTable
-              rows={data.static_nat}
-              columns={staticColumns}
-              rowId={(r) => String(r.rule)}
-              storageKey="nat-nat44-static"
-              searchPlaceholder="Search mappings…"
-              emptyMessage="No 1-to-1 NAT mappings configured."
-              onRefresh={() => load("refresh")}
-              onRowOpen={(row) => setStaticModal({ mapping: row })}
-              toolbar={
-                <Button kind="primary" onClick={() => setStaticModal({})}>
-                  Create Mapping
-                </Button>
-              }
-              actions={(row) => (
-                <RowActions
-                  label={`rule ${row.rule}`}
-                  onEdit={() => setStaticModal({ mapping: row })}
-                  onDelete={() => removeStatic(row)}
-                />
-              )}
-            />
-          ) : (
-            <DataTable
-              rows={tab === "source" ? data.source : data.destination}
-              columns={columns}
-              rowId={(r) => String(r.rule)}
-              storageKey={`nat-nat44-${tab}`}
-              searchPlaceholder="Search rules…"
-              emptyMessage={`No ${tab} NAT rules configured.`}
-              onRefresh={() => load("refresh")}
-              onRowOpen={(row) => setModal({ section: tab as NatSection, rule: row })}
-              toolbar={
-                <Button kind="primary" onClick={() => setModal({ section: tab as NatSection })}>
-                  Create Rule
-                </Button>
-              }
-              actions={(row) => (
-                <RowActions
-                  label={`rule ${row.rule}`}
-                  onEdit={() => setModal({ section: tab as NatSection, rule: row })}
-                  onDelete={() => removeRule(tab as NatSection, row)}
-                />
-              )}
-            />
-          )}
-
-          <div className="alert alert-info alert-sm">
-            <Icon shape="info-circle" size={14} className="alert-icon" />
-            <div className="alert-text">
-              An unset match address means any, and an unset protocol means all. Destination NAT
-              still needs a firewall rule that allows the translated traffic.
-            </div>
+        ) : (
+          <DataTable
+            rows={tab === "source" ? data.source : data.destination}
+            columns={columns}
+            rowId={(r) => String(r.rule)}
+            storageKey={`nat-nat44-${tab}`}
+            searchPlaceholder="Search rules…"
+            emptyMessage={`No ${tab} NAT rules configured.`}
+            onRefresh={() => load("refresh")}
+            onRowOpen={(row) => setModal({ section: tab as NatSection, rule: row })}
+            headerLeft={headerBlock}
+            subHeader={tabStrip}
+            toolbar={
+              <Button kind="primary" onClick={() => setModal({ section: tab as NatSection })}>
+                Create Rule
+              </Button>
+            }
+            actions={(row) => (
+              <RowActions
+                label={`rule ${row.rule}`}
+                onEdit={() => setModal({ section: tab as NatSection, rule: row })}
+                onDelete={() => removeRule(tab as NatSection, row)}
+              />
+            )}
+          />
+        ))}
+      {status === "ready" && (
+        <div className="alert alert-info alert-sm">
+          <Icon shape="info-circle" size={14} className="alert-icon" />
+          <div className="alert-text">
+            An unset match address means any, and an unset protocol means all. Destination NAT
+            still needs a firewall rule that allows the translated traffic.
           </div>
         </div>
       )}

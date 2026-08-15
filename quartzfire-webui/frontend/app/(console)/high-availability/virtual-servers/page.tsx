@@ -76,7 +76,7 @@ export default function VirtualServersPage() {
   );
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {status !== "ready" && headerBlock}
 
       {status === "loading" && <div className="clr-secondary">Loading virtual servers…</div>}
@@ -92,7 +92,7 @@ export default function VirtualServersPage() {
         </div>
       )}
       {status === "ready" && rows && (
-        <DataTable
+        <DataTable searchable={false}
           rows={rows}
           columns={columns()}
           rowId={(r) => r.id}

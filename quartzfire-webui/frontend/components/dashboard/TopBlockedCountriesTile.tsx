@@ -14,7 +14,6 @@ import {
   GeoCountry,
   GeoStatus,
 } from "@/lib/geolocation";
-import { LiveButton } from "./LiveButton";
 
 const POLL_MS = 5_000;
 const MAX_ROWS = 8;
@@ -27,7 +26,6 @@ interface Row {
 }
 
 export function TopBlockedCountriesTile() {
-  const [paused, setPaused] = useState(false);
   const [status, setStatus] = useState<GeoStatus | null>(null);
   const [countries, setCountries] = useState<GeoCountry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +38,6 @@ export function TopBlockedCountriesTile() {
   }, []);
 
   useEffect(() => {
-    if (paused) return;
     let alive = true;
     const load = async () => {
       try {
@@ -58,7 +55,7 @@ export function TopBlockedCountriesTile() {
       alive = false;
       clearInterval(t);
     };
-  }, [paused]);
+  }, []);
 
   const rows = useMemo<Row[]>(() => {
     const counts = status?.counters?.countries ?? {};
@@ -89,7 +86,6 @@ export function TopBlockedCountriesTile() {
         >
           by dropped packets
         </span>
-        <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
       </div>
 
       <div className="card-block flex-1 min-h-0 flex flex-col">

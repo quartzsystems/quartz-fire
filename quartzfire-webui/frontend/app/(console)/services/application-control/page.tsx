@@ -82,15 +82,32 @@ function ActionsTab({
   catalog,
   onSave,
   saving,
+  pendingCreate,
+  onCreateConsumed,
 }: {
   config: AcConfig;
   catalog: Catalog;
   onSave: (next: AcConfig) => void;
   saving: boolean;
+  /** Set when the page-header "New Action" button was clicked — open the editor. */
+  pendingCreate: boolean;
+  onCreateConsumed: () => void;
 }) {
   const [editing, setEditing] = useState<{ name: string; action: AcAction } | null>(null);
   const [creating, setCreating] = useState(false);
   const resize = useColumnResize("ac-actions", AC_ACTION_COLS);
+
+  // The create button lives in the page-header row (DC anatomy); it survives
+  // tab switches because the request is page state consumed here.
+  useEffect(() => {
+    if (!pendingCreate) return;
+    onCreateConsumed();
+    setCreating(true);
+    setEditing({
+      name: "",
+      action: { default_action: "allow", block_mode: "drop", categories: {}, applications: {} },
+    });
+  }, [pendingCreate, onCreateConsumed]);
 
   const actionNames = Object.keys(config.actions);
   const bindingsByAction = useMemo(() => {
@@ -132,26 +149,6 @@ function ActionsTab({
 
   return (
     <div className="flex flex-col gap-4 max-w-[980px]">
-      <div className="flex items-center gap-3">
-        <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0 flex-1">
-          An action decides allow or block per application and per category. Attach one to firewall
-          rules on the Policies tab. Application rules take precedence over category rules.
-        </p>
-        <Button
-          kind="primary"
-          size="sm"
-          onClick={() => {
-            setCreating(true);
-            setEditing({
-              name: "",
-              action: { default_action: "allow", block_mode: "drop", categories: {}, applications: {} },
-            });
-          }}
-        >
-          Add Action
-        </Button>
-      </div>
-
       <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
@@ -228,13 +225,16 @@ function ActionsTab({
         </table>
       </div>
 
-      <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0">
-        Signature set:{" "}
-        {catalog.available
-          ? `nDPI ${catalog.ndpi_version} · ${catalog.num_protocols} applications`
-          : "qfappd has not reported its catalog yet — showing a built-in sample until the service runs."}
-        {saving && " · Saving…"}
-      </p>
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        <div>Unset applications follow their category&apos;s verdict, then the action&apos;s default.</div>
+        <div>
+          Signature set:{" "}
+          {catalog.available
+            ? `nDPI ${catalog.ndpi_version} · ${catalog.num_protocols} applications`
+            : "qfappd has not reported its catalog yet — showing a built-in sample until the service runs."}
+          {saving && " · Saving…"}
+        </div>
+      </div>
 
       {editing && (
         <ActionEditor
@@ -330,8 +330,12 @@ function ActionEditor({
   return (
     <ModalShell onClose={onCancel} maxWidth={760}>
       <ModalHeader
-        title={isNew ? "New Application Control Action" : `Edit Action — ${initialName}`}
-        subtitle="Set a per-application or per-category verdict; unset apps follow their category, then the default."
+        title="Application Control Action"
+        subtitle={
+          isNew
+            ? "Set a per-application or per-category verdict; unset apps follow their category, then the default."
+            : initialName
+        }
         onClose={onCancel}
       />
 
@@ -604,13 +608,6 @@ function PoliciesTab({
 
   return (
     <div className="flex flex-col gap-3 max-w-[900px]">
-      <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0">
-        Attach an Application Control action to an Allow rule to classify and enforce its traffic.
-        Rules for routed traffic are eligible — not traffic to or from the firewall itself. At most{" "}
-        {MAX_BOUND_ACTIONS} actions can be active at once ({boundActionCount} in use
-        {saving ? " · Saving…" : ""}).
-      </p>
-
       <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
@@ -680,6 +677,13 @@ function PoliciesTab({
             )}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        Attach an Application Control action to an Allow rule to classify and enforce its traffic.
+        Rules for routed traffic are eligible — not traffic to or from the firewall itself. At most{" "}
+        {MAX_BOUND_ACTIONS} actions can be active at once ({boundActionCount} in use
+        {saving ? " · Saving…" : ""}).
       </div>
     </div>
   );
@@ -951,6 +955,8 @@ export default function ApplicationControlPage() {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [saving, setSaving] = useState(false);
+  // Set by the page-header "New Action" button; consumed by the Actions tab.
+  const [pendingCreate, setPendingCreate] = useState(false);
 
   const load = useCallback(async (mode: "load" | "refresh" = "load") => {
     if (mode === "load") setState("loading");
@@ -992,38 +998,48 @@ export default function ApplicationControlPage() {
     [load, setToast],
   );
 
+  // Engine-state pill in the page header, per the DC reference.
+  const rejected = !!(status?.status?.policy_last_error || status?.apply?.ok === false);
+  const pill = rejected ? (
+    <span
+      className="label label-danger"
+      style={pillStyle}
+      title={status?.status?.policy_last_error || status?.apply?.error || undefined}
+    >
+      APPLY REJECTED
+    </span>
+  ) : status?.running ? (
+    <span className="label label-success" style={pillStyle}>RUNNING</span>
+  ) : (
+    <span className="label" style={pillStyle}>NOT REPORTING</span>
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Application Control</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Classify flows by application and enforce per-app or per-category verdicts on Allow rules.
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">Application Control</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Classify flows by application and enforce per-app or per-category verdicts on Allow rules.
+          </p>
+        </div>
+        <span className="flex items-center gap-2">
+          {pill}
+          <button type="button" className="btn" onClick={() => load("refresh")}>
+            Refresh
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setTab("actions");
+              setPendingCreate(true);
+            }}
+          >
+            New Action
+          </button>
+        </span>
       </div>
-
-      <Tabs
-        items={[
-          { value: "actions", label: "Actions", count: Object.keys(config.actions).length },
-          { value: "policies", label: "Policies", count: config.bindings.length },
-          { value: "alerts", label: "Alerts" },
-        ]}
-        value={tab}
-        onChange={(v) => setTab(v as Tab)}
-        trailing={
-          status?.status?.policy_last_error || status?.apply?.ok === false ? (
-            <span
-              className="badge badge-crit"
-              title={status?.status?.policy_last_error || status?.apply?.error}
-            >
-              Apply Rejected
-            </span>
-          ) : status?.running ? (
-            <span className="badge badge-ok">qfappd running</span>
-          ) : (
-            <span className="badge badge-muted">qfappd not reporting</span>
-          )
-        }
-      />
 
       {status?.apply?.ok === false && (
         <div className="alert alert-danger alert-sm">
@@ -1047,6 +1063,16 @@ export default function ApplicationControlPage() {
           </div>
         )}
 
+      <Tabs
+        items={[
+          { value: "actions", label: "Actions", count: Object.keys(config.actions).length },
+          { value: "policies", label: "Policies", count: config.bindings.length },
+          { value: "alerts", label: "Log" },
+        ]}
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+      />
+
       <div>
         {state === "loading" && <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading Application Control…</div>}
         {state === "error" && (
@@ -1064,7 +1090,16 @@ export default function ApplicationControlPage() {
         )}
         {state === "ready" && (
           <>
-            {tab === "actions" && <ActionsTab config={config} catalog={catalog} onSave={save} saving={saving} />}
+            {tab === "actions" && (
+              <ActionsTab
+                config={config}
+                catalog={catalog}
+                onSave={save}
+                saving={saving}
+                pendingCreate={pendingCreate}
+                onCreateConsumed={() => setPendingCreate(false)}
+              />
+            )}
             {tab === "policies" && <PoliciesTab config={config} onSave={save} saving={saving} />}
             {tab === "alerts" && <AlertsTab />}
           </>

@@ -12,7 +12,7 @@ const wideMono = { ...wide, ...mono } as const;
 
 // Mbit/s options VyOS accepts; "auto" maps to no explicit speed leaf.
 const SPEED_OPTIONS = ["auto", "10", "100", "1000", "2500", "5000", "10000"];
-const DUPLEX_OPTIONS = ["auto", "half", "full"];
+const DUPLEX_OPTIONS = ["auto", "full", "half"];
 
 /// Clarity field: label + control + optional helper sentence.
 function Field({
@@ -136,7 +136,10 @@ export function EthernetFormModal({
       />
 
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <Field label="Physical interface" required>
+        <Field
+          label="Physical interface"
+          hint={isEdit ? undefined : "Only NICs with no configured interface are offered."}
+        >
           {isEdit ? (
             <input value={name} disabled className="clr-input" style={wideMono} />
           ) : (
@@ -262,10 +265,15 @@ export function EthernetFormModal({
           </Field>
         </div>
 
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <Switch on={enabled} onChange={setEnabled} />
-          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Enabled</span>
-        </label>
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <Switch on={enabled} onChange={setEnabled} />
+            <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Enabled</span>
+          </label>
+          <div className="clr-subtext">
+            Speed and duplex must both be Auto, or both fixed. MTU 68–16000.
+          </div>
+        </div>
 
         {error && (
           <div className="alert alert-danger alert-sm">

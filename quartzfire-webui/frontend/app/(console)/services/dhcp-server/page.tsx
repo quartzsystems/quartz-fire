@@ -169,14 +169,115 @@ export default function DhcpServerPage() {
     );
   };
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h2>DHCP Server</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Address pools, static mappings, and the leases the server has handed out.
-        </p>
+  // DC anatomy: the page-header row is rendered by the DataTable (headerLeft),
+  // with the server selector + tab strip in the subHeader slot between it and
+  // the grid. Outside the ready state the header renders standalone.
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">DHCP Server</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Address pools, static mappings, and the leases the server has handed out.
+      </p>
+    </div>
+  );
+
+  const serverSelector = (
+    <div className="flex items-center gap-3 flex-wrap">
+      {data.servers.length === 0 ? (
+        <p className="clr-secondary m-0">No DHCP servers configured.</p>
+      ) : (
+        data.servers.map((s) => {
+          const active = s.name === selectedName;
+          return (
+            <button
+              key={s.name}
+              type="button"
+              onClick={() => setSelectedName(s.name)}
+              className="card clickable items-start gap-[6px] px-4 py-3 text-left min-w-[180px]"
+              style={{
+                background: active
+                  ? "var(--cds-alias-object-interaction-background-selected)"
+                  : undefined,
+                borderColor: active ? "var(--cds-alias-interaction-action)" : undefined,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-[14px] font-semibold"
+                  style={{
+                    color: active
+                      ? "var(--cds-alias-interaction-action)"
+                      : "var(--cds-alias-typography-color-450)",
+                  }}
+                >
+                  {s.name}
+                </span>
+                <span className={s.enabled ? "badge badge-ok" : "badge badge-muted"}>{s.enabled ? "Enabled" : "Disabled"}</span>
+                {s.authoritative && <span className="badge badge-ok">Authoritative</span>}
+              </div>
+              <span className="text-[12px]" style={{ color: "var(--cds-alias-typography-color-200)" }}>
+                {s.subnets.length} {s.subnets.length === 1 ? "subnet" : "subnets"}
+                {s.description ? ` · ${s.description}` : ""}
+              </span>
+            </button>
+          );
+        })
+      )}
+      <div className="ml-auto flex items-center gap-2">
+        {selected && (
+          confirmingServer ? (
+            <>
+              <span className="text-[12px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>
+                Delete {selected.name}?
+              </span>
+              <button type="button" className="btn btn-sm btn-danger" onClick={removeServer}>
+                Confirm
+              </button>
+              <button type="button" className="btn btn-sm btn-neutral" onClick={() => setConfirmingServer(false)}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <Button kind="secondary" size="sm" onClick={() => setServerModal({ server: selected })}>
+                Edit Server
+              </Button>
+              <Button kind="secondary" size="sm" onClick={() => setConfirmingServer(true)}>
+                Delete Server
+              </Button>
+            </>
+          )
+        )}
+        <Button kind="primary" size="sm" onClick={() => setServerModal({})}>
+          Create DHCP Server
+        </Button>
       </div>
+    </div>
+  );
+
+  const subHeader = selected ? (
+    <>
+      {serverSelector}
+      <Tabs
+        items={TABS.map((t) => ({
+          value: t.id,
+          label: t.label,
+          count: {
+            subnets: selected.subnets.length,
+            ranges: rangeRows.length,
+            mappings: mappingRows.length,
+            leases: leaseRows.length,
+          }[t.id],
+        }))}
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+      />
+    </>
+  ) : null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      {!(status === "ready" && selected) && headerBlock}
 
       {status === "loading" && <p className="clr-secondary">Loading DHCP servers…</p>}
       {status === "error" && (
@@ -190,202 +291,115 @@ export default function DhcpServerPage() {
           </div>
         </div>
       )}
-      {status === "ready" && (
-        <div className="flex flex-col gap-5">
-          {/* Server selector */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {data.servers.length === 0 ? (
-              <p className="clr-secondary m-0">No DHCP servers configured.</p>
-            ) : (
-              data.servers.map((s) => {
-                const active = s.name === selectedName;
-                return (
-                  <button
-                    key={s.name}
-                    type="button"
-                    onClick={() => setSelectedName(s.name)}
-                    className="card clickable items-start gap-[6px] px-4 py-3 text-left min-w-[180px]"
-                    style={{
-                      background: active
-                        ? "var(--cds-alias-object-interaction-background-selected)"
-                        : undefined,
-                      borderColor: active ? "var(--cds-alias-interaction-action)" : undefined,
-                    }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="text-[14px] font-semibold"
-                        style={{
-                          color: active
-                            ? "var(--cds-alias-interaction-action)"
-                            : "var(--cds-alias-typography-color-450)",
-                        }}
-                      >
-                        {s.name}
-                      </span>
-                      <span className={s.enabled ? "badge badge-ok" : "badge badge-muted"}>{s.enabled ? "Enabled" : "Disabled"}</span>
-                      {s.authoritative && <span className="badge badge-ok">Authoritative</span>}
-                    </div>
-                    <span className="text-[12px]" style={{ color: "var(--cds-alias-typography-color-200)" }}>
-                      {s.subnets.length} {s.subnets.length === 1 ? "subnet" : "subnets"}
-                      {s.description ? ` · ${s.description}` : ""}
-                    </span>
-                  </button>
-                );
-              })
-            )}
-            <div className="ml-auto flex items-center gap-2">
-              {selected && (
-                confirmingServer ? (
-                  <>
-                    <span className="text-[12px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>
-                      Delete {selected.name}?
-                    </span>
-                    <button type="button" className="btn btn-sm btn-danger" onClick={removeServer}>
-                      Confirm
-                    </button>
-                    <button type="button" className="btn btn-sm btn-neutral" onClick={() => setConfirmingServer(false)}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <Button kind="secondary" size="sm" onClick={() => setServerModal({ server: selected })}>
-                      Edit Server
-                    </Button>
-                    <Button kind="secondary" size="sm" onClick={() => setConfirmingServer(true)}>
-                      Delete Server
-                    </Button>
-                  </>
-                )
-              )}
-              <Button kind="primary" size="sm" onClick={() => setServerModal({})}>
-                Create DHCP Server
-              </Button>
-            </div>
-          </div>
-
-          {selected && (
-            <>
-              <Tabs
-                items={TABS.map((t) => ({
-                  value: t.id,
-                  label: t.label,
-                  count: {
-                    subnets: selected.subnets.length,
-                    ranges: rangeRows.length,
-                    mappings: mappingRows.length,
-                    leases: leaseRows.length,
-                  }[t.id],
-                }))}
-                value={tab}
-                onChange={(v) => setTab(v as Tab)}
-              />
-
-              {tab === "subnets" && (
-                <DataTable
-                  rows={selected.subnets}
-                  columns={subnetColumns}
-                  rowId={(r) => r.subnet}
-                  storageKey="services-dhcp-subnets"
-                  searchPlaceholder="Search subnets…"
-                  emptyMessage="No subnets configured for this server."
-                  onRefresh={() => load("refresh")}
-                  onRowOpen={(row) => setSubnetModal({ subnet: row })}
-                  toolbar={
-                    <Button kind="primary" size="sm" onClick={() => setSubnetModal({})}>
-                      Create Subnet
-                    </Button>
+      {status === "ready" && !selected && serverSelector}
+      {status === "ready" && selected && (
+        <>
+          {tab === "subnets" && (
+            <DataTable
+              rows={selected.subnets}
+              columns={subnetColumns}
+              rowId={(r) => r.subnet}
+              storageKey="services-dhcp-subnets"
+              emptyMessage="No subnets configured for this server."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setSubnetModal({ subnet: row })}
+              headerLeft={headerBlock}
+              subHeader={subHeader}
+              toolbar={
+                <Button kind="primary" size="sm" onClick={() => setSubnetModal({})}>
+                  Create Subnet
+                </Button>
+              }
+              actions={(row) => (
+                <RowActions
+                  label={`subnet ${row.subnet}`}
+                  onEdit={() => setSubnetModal({ subnet: row })}
+                  onDelete={() =>
+                    toastAfter(
+                      deleteDhcpSubnet(selected.name, row.subnet),
+                      `Deleted subnet ${row.subnet}.`,
+                      `Failed to delete subnet ${row.subnet}.`,
+                    )
                   }
-                  actions={(row) => (
-                    <RowActions
-                      label={`subnet ${row.subnet}`}
-                      onEdit={() => setSubnetModal({ subnet: row })}
-                      onDelete={() =>
-                        toastAfter(
-                          deleteDhcpSubnet(selected.name, row.subnet),
-                          `Deleted subnet ${row.subnet}.`,
-                          `Failed to delete subnet ${row.subnet}.`,
-                        )
-                      }
-                    />
-                  )}
                 />
               )}
-              {tab === "ranges" && (
-                <DataTable
-                  rows={rangeRows}
-                  columns={rangeColumns}
-                  rowId={(r) => `${r.subnet}/${r.range.name}`}
-                  storageKey="services-dhcp-ranges"
-                  searchPlaceholder="Search ranges…"
-                  emptyMessage="No address ranges configured for this server."
-                  onRefresh={() => load("refresh")}
-                  onRowOpen={(row) => setRangeModal({ row })}
-                  toolbar={
-                    <Button kind="primary" size="sm" onClick={() => setRangeModal({})}>
-                      Create Range
-                    </Button>
-                  }
-                  actions={(row) => (
-                    <RowActions
-                      label={`range ${row.range.name}`}
-                      onEdit={() => setRangeModal({ row })}
-                      onDelete={() =>
-                        toastAfter(
-                          deleteDhcpRange(selected.name, row.subnet, row.range.name),
-                          `Deleted range ${row.range.name}.`,
-                          `Failed to delete range ${row.range.name}.`,
-                        )
-                      }
-                    />
-                  )}
-                />
-              )}
-              {tab === "mappings" && (
-                <DataTable
-                  rows={mappingRows}
-                  columns={mappingColumns}
-                  rowId={(r) => `${r.subnet}/${r.mapping.name}`}
-                  storageKey="services-dhcp-mappings"
-                  searchPlaceholder="Search static mappings…"
-                  emptyMessage="No static mappings configured for this server."
-                  onRefresh={() => load("refresh")}
-                  onRowOpen={(row) => setMappingModal({ row })}
-                  toolbar={
-                    <Button kind="primary" size="sm" onClick={() => setMappingModal({})}>
-                      Create Mapping
-                    </Button>
-                  }
-                  actions={(row) => (
-                    <RowActions
-                      label={`mapping ${row.mapping.name}`}
-                      onEdit={() => setMappingModal({ row })}
-                      onDelete={() =>
-                        toastAfter(
-                          deleteDhcpMapping(selected.name, row.subnet, row.mapping.name),
-                          `Deleted mapping ${row.mapping.name}.`,
-                          `Failed to delete mapping ${row.mapping.name}.`,
-                        )
-                      }
-                    />
-                  )}
-                />
-              )}
-              {tab === "leases" && (
-                <DataTable
-                  rows={leaseRows}
-                  columns={leaseColumns}
-                  rowId={(r) => `${r.ip_address}/${r.mac_address ?? ""}`}
-                  storageKey="services-dhcp-leases"
-                  searchPlaceholder="Search leases…"
-                  emptyMessage="No active leases for this server."
-                  onRefresh={() => load("refresh")}
-                />
-              )}
-            </>
+            />
           )}
-        </div>
+          {tab === "ranges" && (
+            <DataTable
+              rows={rangeRows}
+              columns={rangeColumns}
+              rowId={(r) => `${r.subnet}/${r.range.name}`}
+              storageKey="services-dhcp-ranges"
+              emptyMessage="No address ranges configured for this server."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setRangeModal({ row })}
+              headerLeft={headerBlock}
+              subHeader={subHeader}
+              toolbar={
+                <Button kind="primary" size="sm" onClick={() => setRangeModal({})}>
+                  Create Range
+                </Button>
+              }
+              actions={(row) => (
+                <RowActions
+                  label={`range ${row.range.name}`}
+                  onEdit={() => setRangeModal({ row })}
+                  onDelete={() =>
+                    toastAfter(
+                      deleteDhcpRange(selected.name, row.subnet, row.range.name),
+                      `Deleted range ${row.range.name}.`,
+                      `Failed to delete range ${row.range.name}.`,
+                    )
+                  }
+                />
+              )}
+            />
+          )}
+          {tab === "mappings" && (
+            <DataTable
+              rows={mappingRows}
+              columns={mappingColumns}
+              rowId={(r) => `${r.subnet}/${r.mapping.name}`}
+              storageKey="services-dhcp-mappings"
+              emptyMessage="No static mappings configured for this server."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setMappingModal({ row })}
+              headerLeft={headerBlock}
+              subHeader={subHeader}
+              toolbar={
+                <Button kind="primary" size="sm" onClick={() => setMappingModal({})}>
+                  Create Mapping
+                </Button>
+              }
+              actions={(row) => (
+                <RowActions
+                  label={`mapping ${row.mapping.name}`}
+                  onEdit={() => setMappingModal({ row })}
+                  onDelete={() =>
+                    toastAfter(
+                      deleteDhcpMapping(selected.name, row.subnet, row.mapping.name),
+                      `Deleted mapping ${row.mapping.name}.`,
+                      `Failed to delete mapping ${row.mapping.name}.`,
+                    )
+                  }
+                />
+              )}
+            />
+          )}
+          {tab === "leases" && (
+            <DataTable
+              rows={leaseRows}
+              columns={leaseColumns}
+              rowId={(r) => `${r.ip_address}/${r.mac_address ?? ""}`}
+              storageKey="services-dhcp-leases"
+              emptyMessage="No active leases for this server."
+              onRefresh={() => load("refresh")}
+              headerLeft={headerBlock}
+              subHeader={subHeader}
+            />
+          )}
+        </>
       )}
 
       {serverModal && (

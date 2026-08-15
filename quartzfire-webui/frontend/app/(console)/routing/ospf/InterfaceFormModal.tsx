@@ -97,7 +97,7 @@ export function InterfaceFormModal({ initial, existingNames, areas, interfaces, 
 
   return (
     <ModalShell onClose={onClose} maxWidth={600}>
-      <ModalHeader title={`${isEdit ? "Edit" : "Add"} Interface`} subtitle={isEdit ? initial!.name : "OSPF interface settings"} onClose={onClose} />
+      <ModalHeader title={isEdit ? `Edit OSPF Interface — ${initial!.name}` : "Add OSPF Interface"} subtitle="OSPF interface settings" onClose={onClose} />
       <form onSubmit={submit} className="flex flex-col gap-4">
         <datalist id="ospf-if-interfaces">{interfaces.map((n) => <option key={n} value={n} />)}</datalist>
         <datalist id="ospf-if-areas">{areas.map((a) => <option key={a} value={a} />)}</datalist>
@@ -135,8 +135,8 @@ export function InterfaceFormModal({ initial, existingNames, areas, interfaces, 
           </div>
         </Field>
 
-        <Field label="Authentication password" hint="Simple (plaintext) OSPF authentication — leave blank for none.">
-          <input value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="secret" type="password" className="clr-input" style={inputStyle} />
+        <Field label="Authentication password" hint="Simple (plaintext) OSPF authentication.">
+          <input value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="Leave blank for none" type="password" className="clr-input" style={inputStyle} />
         </Field>
 
         <div className="flex flex-wrap gap-x-6 gap-y-3">

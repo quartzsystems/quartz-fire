@@ -86,7 +86,7 @@ export function InterfaceFormModal({ initial, existingNames, interfaces, onClose
 
   return (
     <ModalShell onClose={onClose} maxWidth={560}>
-      <ModalHeader title={`${isEdit ? "Edit" : "Add"} Interface`} subtitle={isEdit ? initial!.name : "IS-IS interface settings"} onClose={onClose} />
+      <ModalHeader title={isEdit ? `Edit IS-IS Interface — ${initial!.name}` : "Add IS-IS Interface"} subtitle="IS-IS interface settings" onClose={onClose} />
       <form onSubmit={submit} className="flex flex-col gap-4">
         <datalist id="isis-if-interfaces">{interfaces.map((n) => <option key={n} value={n} />)}</datalist>
 

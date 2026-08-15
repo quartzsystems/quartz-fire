@@ -3,11 +3,11 @@
 // Intrusion Prevention — WatchGuard-style IPS on top of Suricata.
 //
 // Settings tab: the engine policy (per-threat-level actions, scan mode,
-// exceptions, signature updates), stored as a desired-state file a root
-// helper applies asynchronously. Policies tab: which firewall rules hand
-// their traffic to the engine (`action queue` — inspection only happens for
-// traffic hitting IPS-enabled Allow rules). Alerts tab: the live EVE alert
-// stream from the journal.
+// signature updates), stored as a desired-state file a root helper applies
+// asynchronously. Policies tab: which firewall rules hand their traffic to
+// the engine (`action queue` — inspection only happens for traffic hitting
+// IPS-enabled Allow rules). Alerts tab: the live EVE alert stream from the
+// journal. Exclusions tab: suppressed signature IDs.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
 import { Switch } from "@/components/ui/Switch";
@@ -42,7 +43,7 @@ import {
   FirewallRule,
 } from "@/lib/firewall";
 
-type Tab = "settings" | "policies" | "alerts";
+type Tab = "settings" | "policies" | "alerts" | "exclusions";
 
 const dash = <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;
 
@@ -51,58 +52,25 @@ const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" }
 
 // ── Settings tab ──────────────────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: IpsStatus }) {
-  if (!status.settings.enabled) return <span className="badge badge-muted">Disabled</span>;
-  if (status.apply?.error) return <span className="badge badge-crit">Error</span>;
-  if (status.running) return <span className="badge badge-ok">Running</span>;
-  return <span className="badge badge-warn">Starting…</span>;
-}
-
 function SettingsTab({
   status,
-  sigNames,
   onSaved,
-  onRefresh,
 }: {
   status: IpsStatus;
-  /** SID → signature name, learned from alert history (for exception labels). */
-  sigNames: Record<number, string>;
   onSaved: () => void;
-  onRefresh: () => void;
 }) {
   const { setToast } = useDashboard();
   const [draft, setDraft] = useState<IpsSettings>(status.settings);
-  const [newSid, setNewSid] = useState("");
   const [saving, setSaving] = useState(false);
   const [updating, setUpdating] = useState(false);
 
   // A fresh status (after save/apply) becomes the new baseline.
   useEffect(() => {
     setDraft(status.settings);
-    setNewSid("");
   }, [status.settings]);
 
   const setLevel = (level: ThreatLevel, patch: Partial<IpsSettings[ThreatLevel]>) =>
     setDraft((d) => ({ ...d, [level]: { ...d[level], ...patch } }));
-
-  const addException = () => {
-    const tok = newSid.trim();
-    if (tok === "") return;
-    if (!/^\d+$/.test(tok)) {
-      setToast(`Exceptions must be signature IDs (numbers) — "${tok}" isn't one.`);
-      return;
-    }
-    const sid = Number(tok);
-    setDraft((d) =>
-      d.exceptions.includes(sid)
-        ? d
-        : { ...d, exceptions: [...d.exceptions, sid].sort((a, b) => a - b) },
-    );
-    setNewSid("");
-  };
-
-  const removeException = (sid: number) =>
-    setDraft((d) => ({ ...d, exceptions: d.exceptions.filter((s) => s !== sid) }));
 
   const save = async () => {
     setSaving(true);
@@ -138,6 +106,13 @@ function SettingsTab({
   const lastUpdate = apply?.last_update ?? null;
   const time = (ts: number) => new Date(ts * 1000).toLocaleString(undefined, { hour12: false });
 
+  // Card-header meta, per the DC reference: "signature set <date> · <n> rules".
+  const totalRules = counts ? Object.values(counts).reduce((a: number, b) => a + (b ?? 0), 0) : 0;
+  const sigDate = lastUpdate?.ok ? new Date(lastUpdate.time * 1000).toISOString().slice(0, 10) : null;
+  const meta = [sigDate ? `signature set ${sigDate}` : null, totalRules > 0 ? `${totalRules.toLocaleString()} rules` : null]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
     <div className="flex flex-col gap-4 max-w-[860px]">
       {apply?.error && (
@@ -155,19 +130,21 @@ function SettingsTab({
         </div>
       )}
 
-      <section className="card">
+      <section className="card" style={{ maxWidth: 760 }}>
+        <div className="card-header">
+          Verdicts by Threat Level
+          {meta && (
+            <span style={{ marginLeft: "auto", fontSize: 12, fontWeight: 400, color: "var(--cds-alias-typography-color-200)" }}>
+              {meta}
+            </span>
+          )}
+        </div>
         <div className="card-block flex flex-col gap-5">
           <div className="flex items-center gap-3">
             <Switch on={draft.enabled} onChange={(v) => setDraft((d) => ({ ...d, enabled: v }))} />
             <span className="text-[14px] font-semibold text-[var(--cds-alias-typography-color-450)]">
               Enable Intrusion Prevention
             </span>
-            <div className="ml-auto flex items-center gap-2">
-              <StatusBadge status={status} />
-              <Button kind="outline" size="sm" onClick={onRefresh}>
-                Refresh
-              </Button>
-            </div>
           </div>
 
           <div className="clr-form-control" style={{ marginTop: 0 }}>
@@ -275,77 +252,11 @@ function SettingsTab({
             </p>
           </div>
 
-          {/* Exceptions */}
-          <div className="clr-form-control" style={{ marginTop: 0 }}>
-            <label className="clr-control-label">Exceptions</label>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                <input
-                  value={newSid}
-                  onChange={(e) => setNewSid(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      addException();
-                    }
-                  }}
-                  inputMode="numeric"
-                  placeholder="Signature ID, e.g. 2100498"
-                  className="clr-input"
-                  style={{ width: 220, maxWidth: "none", fontFamily: "var(--qz-font-mono)" }}
-                />
-                <Button kind="secondary" size="sm" icon="plus" onClick={addException} disabled={!newSid.trim()}>
-                  Add
-                </Button>
-              </div>
-              {draft.exceptions.length > 0 && (
-                <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
-                  {draft.exceptions.map((sid, i) => {
-                    const name = sigNames[sid];
-                    return (
-                      <div
-                        key={sid}
-                        className="flex items-center gap-3 px-3 py-[6px]"
-                        style={{ borderTop: i > 0 ? "1px solid var(--cds-alias-object-border-subtle)" : undefined }}
-                      >
-                        <span
-                          className="text-[13px] text-[var(--cds-alias-typography-color-450)] flex-shrink-0"
-                          style={{ fontFamily: "var(--qz-font-mono)" }}
-                        >
-                          {sid}
-                        </span>
-                        <span
-                          className={`text-[12px] truncate flex-1 min-w-0 ${name ? "text-[var(--cds-alias-typography-color-300)]" : "text-[var(--cds-alias-typography-color-200)] italic"}`}
-                          title={name ?? undefined}
-                        >
-                          {name ?? "Not in recent alerts"}
-                        </span>
-                        <button
-                          type="button"
-                          title={`Remove exception ${sid}`}
-                          aria-label={`Remove exception ${sid}`}
-                          onClick={() => removeException(sid)}
-                          className="btn btn-sm btn-link-neutral btn-icon flex-shrink-0"
-                        >
-                          <Icon shape="trash" size={13} />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0">
-                Excepted signatures are never blocked — matching traffic is allowed but still logged
-                as an alert (use the SID from an alert).
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <Button kind="primary" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : "Save Settings"}
-            </Button>
-          </div>
+        </div>
+        <div className="card-footer">
+          <Button kind="primary" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save IPS Settings"}
+          </Button>
         </div>
       </section>
 
@@ -378,6 +289,219 @@ function SettingsTab({
           </p>
         </div>
       </section>
+    </div>
+  );
+}
+
+// ── Exclusions tab ────────────────────────────────────────────────────────────
+
+/// Add one excluded signature ID (mock: "Add IPS Exclusion"). The signature
+/// name fills in from recent alert history when the SID has been seen.
+function ExclusionModal({
+  existing,
+  sigNames,
+  onClose,
+  onAdd,
+}: {
+  existing: number[];
+  sigNames: Record<number, string>;
+  onClose: () => void;
+  onAdd: (sid: number) => Promise<void>;
+}) {
+  const [sid, setSid] = useState("");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const tok = sid.trim();
+  const parsed = /^\d+$/.test(tok) ? Number(tok) : null;
+  const signature = parsed != null ? sigNames[parsed] : undefined;
+
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError("");
+    if (parsed == null) {
+      setError("Exclusions are signature IDs (numbers) — take the SID from an alert.");
+      return;
+    }
+    if (existing.includes(parsed)) {
+      setError(`SID ${parsed} is already excluded.`);
+      return;
+    }
+    setSaving(true);
+    try {
+      await onAdd(parsed);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add the exclusion.");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <ModalShell onClose={onClose} maxWidth={460}>
+      <ModalHeader title="Add IPS Exclusion" onClose={onClose} />
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <div style={{ display: "grid", gridTemplateColumns: "140px 1fr", gap: 12 }}>
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <label className="clr-control-label">SID *</label>
+            <input
+              value={sid}
+              onChange={(e) => {
+                setSid(e.target.value);
+                setError("");
+              }}
+              inputMode="numeric"
+              placeholder="2013028"
+              autoFocus
+              className="clr-input"
+              style={{ maxWidth: "none", width: "100%", fontFamily: "var(--qz-font-mono)" }}
+            />
+          </div>
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <label className="clr-control-label">Signature</label>
+            <input
+              value={signature ?? ""}
+              readOnly
+              placeholder="Filled in from the alert you exclude"
+              className="clr-input"
+              style={{ maxWidth: "none", width: "100%" }}
+            />
+          </div>
+        </div>
+
+        {error && (
+          <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>
+            {error}
+          </p>
+        )}
+
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={saving || !tok}>
+            {saving ? "Applying…" : "Add Exclusion"}
+          </button>
+        </ModalFooter>
+      </form>
+    </ModalShell>
+  );
+}
+
+function ExclusionsTab({
+  status,
+  sigNames,
+  onSaved,
+}: {
+  status: IpsStatus;
+  /** SID → signature name, learned from alert history (for exclusion labels). */
+  sigNames: Record<number, string>;
+  onSaved: () => void;
+}) {
+  const { setToast } = useDashboard();
+  const [adding, setAdding] = useState(false);
+  const [busySid, setBusySid] = useState<number | null>(null);
+  const exceptions = status.settings.exceptions;
+
+  const persist = (next: number[]) =>
+    saveIpsSettings({
+      ...status.settings,
+      exceptions: next,
+      update_url: status.settings.update_url?.trim() || null,
+    });
+
+  const add = async (sid: number) => {
+    await persist([...exceptions, sid].sort((a, b) => a - b));
+    setAdding(false);
+    setToast(`Excluded SID ${sid} — applying on the device…`);
+    onSaved();
+  };
+
+  const remove = async (sid: number) => {
+    setBusySid(sid);
+    try {
+      await persist(exceptions.filter((s) => s !== sid));
+      setToast(`Removed exclusion ${sid} — applying on the device…`);
+      onSaved();
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : "Failed to update the exclusions.");
+    } finally {
+      setBusySid(null);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3 max-w-[860px]">
+      <div className="flex justify-end">
+        <Button kind="primary" size="sm" onClick={() => setAdding(true)}>
+          Add Exclusion
+        </Button>
+      </div>
+
+      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+        <table className="qz-table" style={{ width: "100%" }}>
+          <colgroup>
+            <col style={{ width: 120 }} />
+            <col />
+            <col style={{ width: 70 }} />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>SID</th>
+              <th>Signature</th>
+              <th aria-label="Actions" />
+            </tr>
+          </thead>
+          <tbody>
+            {exceptions.length === 0 ? (
+              <tr>
+                <td colSpan={3} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
+                  No exclusions — add a false positive&apos;s SID to stop it blocking traffic.
+                </td>
+              </tr>
+            ) : (
+              exceptions.map((sid) => {
+                const name = sigNames[sid];
+                return (
+                  <tr key={sid} style={{ cursor: "default" }}>
+                    <td className="mono text-[var(--cds-alias-typography-color-450)]">{sid}</td>
+                    <td
+                      className={
+                        name
+                          ? "text-[var(--cds-alias-typography-color-300)]"
+                          : "text-[var(--cds-alias-typography-color-200)] italic"
+                      }
+                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      title={name ?? undefined}
+                    >
+                      {name ?? "Not in recent alerts"}
+                    </td>
+                    <td className="text-right">
+                      <button
+                        type="button"
+                        title={`Remove exclusion ${sid}`}
+                        aria-label={`Remove exclusion ${sid}`}
+                        disabled={busySid === sid}
+                        onClick={() => remove(sid)}
+                        className="btn btn-sm btn-link-neutral btn-icon"
+                      >
+                        <Icon shape="trash" size={13} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        Excluded signatures are suppressed for their scope — matches still log at the informational level.
+      </div>
+
+      {adding && (
+        <ExclusionModal existing={exceptions} sigNames={sigNames} onClose={() => setAdding(false)} onAdd={add} />
+      )}
     </div>
   );
 }
@@ -454,11 +578,7 @@ function PoliciesTab() {
 
   return (
     <div className="flex flex-col gap-3 max-w-[860px]">
-      <div className="flex items-center gap-3">
-        <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0 flex-1">
-          Only traffic hitting IPS-enabled Allow rules is inspected — everything else flows
-          untouched. Deny rules never need inspection.
-        </p>
+      <div className="flex items-center justify-end gap-3">
         <Button
           kind="secondary"
           size="sm"
@@ -543,6 +663,11 @@ function PoliciesTab() {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        IPS attaches per rule — toggle it when editing a rule under Firewall → Rules. Only traffic
+        hitting IPS-enabled Allow rules is inspected; Deny rules never need inspection.
       </div>
     </div>
   );
@@ -892,7 +1017,7 @@ export default function IntrusionPreventionPage() {
   // the app router requires for search params during prerender.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get("tab");
-    if (t === "settings" || t === "policies" || t === "alerts") setTab(t);
+    if (t === "settings" || t === "policies" || t === "alerts" || t === "exclusions") setTab(t);
   }, []);
 
   const load = useCallback(async (mode: "load" | "refresh" = "load") => {
@@ -935,13 +1060,53 @@ export default function IntrusionPreventionPage() {
     if (savedTimer.current) clearTimeout(savedTimer.current);
   }, []);
 
+  // Engine-state pill in the page header, per the DC reference.
+  const pill = !status ? null : !status.settings.enabled ? (
+    <span className="label" style={pillStyle}>DISABLED</span>
+  ) : status.apply?.error ? (
+    <span className="label label-danger" style={pillStyle} title={status.apply.error}>ERROR</span>
+  ) : status.running ? (
+    <span className="label label-success" style={pillStyle}>ENGINE RUNNING</span>
+  ) : (
+    <span className="label label-warning" style={pillStyle}>STARTING</span>
+  );
+
+  // Shared loading/error scaffolding for the status-backed tabs.
+  const statusGate = (content: (st: IpsStatus) => React.ReactNode) => (
+    <>
+      {state === "loading" && (
+        <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading IPS status…</div>
+      )}
+      {state === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">{errorMsg}</div>
+          </div>
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
+          </div>
+        </div>
+      )}
+      {state === "ready" && status && content(status)}
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Intrusion Prevention</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Signature inspection for traffic on rules that opt in — verdicts by threat level.
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">Intrusion Prevention</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Signature inspection for traffic on rules that opt in — verdicts by threat level.
+          </p>
+        </div>
+        <span className="flex items-center gap-2">
+          {pill}
+          <button type="button" className="btn" onClick={() => load("refresh")}>
+            Refresh
+          </button>
+        </span>
       </div>
 
       <Tabs
@@ -949,33 +1114,15 @@ export default function IntrusionPreventionPage() {
           { value: "settings", label: "Settings" },
           { value: "policies", label: "Policies" },
           { value: "alerts", label: "Alerts" },
+          { value: "exclusions", label: "Exclusions", count: status?.settings.exceptions.length },
         ]}
         value={tab}
         onChange={(v) => setTab(v as Tab)}
       />
 
       <div>
-        {tab === "settings" && (
-          <>
-            {state === "loading" && (
-              <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading IPS status…</div>
-            )}
-            {state === "error" && (
-              <div className="flex flex-col gap-3">
-                <div className="alert alert-danger alert-sm">
-                  <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
-                  <div className="alert-text">{errorMsg}</div>
-                </div>
-                <div>
-                  <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
-                </div>
-              </div>
-            )}
-            {state === "ready" && status && (
-              <SettingsTab status={status} sigNames={sigNames} onSaved={onSaved} onRefresh={() => load("refresh")} />
-            )}
-          </>
-        )}
+        {tab === "settings" && statusGate((st) => <SettingsTab status={st} onSaved={onSaved} />)}
+        {tab === "exclusions" && statusGate((st) => <ExclusionsTab status={st} sigNames={sigNames} onSaved={onSaved} />)}
         {tab === "policies" && <PoliciesTab />}
         {tab === "alerts" && (
           <AlertsTab settings={status?.settings ?? ({

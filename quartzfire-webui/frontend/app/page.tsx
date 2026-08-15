@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/Icon";
 import { fetchMe, login } from "@/lib/api";
+import pkg from "@/package.json";
 
 /// Sign-in page at the root of the WebUI — Clarity split layout: brand panel
 /// (dot grid, mark, tagline) beside the form card. Credentials are the users
@@ -46,16 +47,32 @@ export default function LoginPage() {
     <div className="login-wrapper">
       <div className="login-brand">
         <img src="/logo-mark.png" alt="Quartz Systems" />
-        <div className="login-brand-title">QuartzFire</div>
+        <div className="login-brand-title">
+          The firewall OS that
+          <br />
+          holds the line.
+        </div>
         <div className="login-brand-sub">
-          The Quartz Systems firewall — routing, security services, and monitoring for your network
-          edge, managed from one console.
+          Zones, rules, NAT, routing, VPN, and deep-inspection services on a VyOS core — managed
+          from the console this firewall serves itself.
+        </div>
+        {/* position:relative lifts the line above the brand panel's dot-grid overlay. */}
+        <div
+          style={{
+            position: "relative",
+            fontFamily: "var(--qz-font-mono)",
+            fontSize: 11,
+            letterSpacing: "0.08em",
+            color: "var(--cds-alias-typography-color-200)",
+          }}
+        >
+          QUARTZFIRE {pkg.version} · QUARTZ SYSTEMS
         </div>
       </div>
 
       <div className="login">
-        <div className="title">Sign In</div>
-        <div className="subtitle">Use an administrator account configured on this firewall.</div>
+        <div className="title">QuartzFire</div>
+        <div className="subtitle">Sign in to this firewall</div>
 
         <form onSubmit={handleSubmit}>
           <div className="clr-form-control">
@@ -67,6 +84,8 @@ export default function LoginPage() {
               type="text"
               className="clr-input"
               style={{ maxWidth: "none" }}
+              placeholder="admin"
+              spellCheck={false}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
@@ -83,6 +102,7 @@ export default function LoginPage() {
                 id="login-password"
                 type={showPassword ? "text" : "password"}
                 className="clr-input"
+                placeholder="••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
@@ -106,11 +126,11 @@ export default function LoginPage() {
           )}
 
           <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
-            {loading ? "Signing In…" : "Sign In"}
+            {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
-        <div className="signup">
+        <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)", marginTop: 16 }}>
           Sign in with a user account configured on this firewall. An account still on the
           factory-default password must change it before the console opens.
         </div>

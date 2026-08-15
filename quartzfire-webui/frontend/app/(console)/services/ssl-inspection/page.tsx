@@ -23,7 +23,6 @@ import { useColumnResize } from "@/components/dashboard/ColumnResize";
 import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
-import { Tabs } from "@/components/ui/Tabs";
 import { useDashboard } from "@/lib/DashboardContext";
 import { emptyFirewallConfig, fetchFirewall, FirewallConfig } from "@/lib/firewall";
 import {
@@ -139,161 +138,238 @@ function CaPanel({
     }
   };
 
-  const row = (label: string, value: React.ReactNode) => (
-    <div className="flex flex-col gap-[2px]">
-      <span className="clr-smallcaption">{label}</span>
-      <span className="text-[13px] text-[var(--cds-alias-typography-color-450)] break-all">{value}</span>
-    </div>
-  );
+  const label = (text: string) => <span style={{ color: "var(--cds-alias-typography-color-200)" }}>{text}</span>;
+  const mono = { fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" } as const;
 
   return (
     <section className="card">
       <div className="card-header">
-        <Icon shape="shield-check" size={16} />
-        Inspection Root CA
+        Inspection CA
+        <span style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+          <a href={ca?.present ? caCrtUrl : undefined} download>
+            <button type="button" className="btn btn-sm" disabled={!ca?.present} style={{ margin: 0 }}>
+              Download Certificate
+            </button>
+          </a>
+          <button
+            type="button"
+            className="btn btn-sm btn-warning-outline"
+            onClick={onRegenerate}
+            disabled={regenerating}
+            style={{ margin: 0 }}
+          >
+            {regenerating ? "Regenerating…" : "Regenerate"}
+          </button>
+        </span>
       </div>
-      <div className="card-block flex flex-col gap-4">
+      <div
+        className="card-block"
+        style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "6px 24px", fontSize: 13 }}
+      >
         {!ca?.present ? (
-          <p className="text-[13px] text-[var(--cds-alias-typography-color-300)] m-0">
+          <p className="text-[13px] text-[var(--cds-alias-typography-color-300)] m-0" style={{ gridColumn: "1 / -1" }}>
             No CA generated yet. Enabling SSL inspection generates a self-signed root CA
             (<span className="mono">CN=QuartzFire SSL Inspection, O=Quartz Systems</span>).
           </p>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {row("Subject", ca.subject ?? "—")}
-              {row("Serial", <span className="mono text-[12px]">{ca.serial ?? "—"}</span>)}
-              {row("Valid from", ca.not_before ?? "—")}
-              {row("Valid until", ca.not_after ?? "—")}
-            </div>
-            <div className="flex flex-col gap-[2px]">
-              <span className="clr-smallcaption">
-                SHA-256 fingerprint
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="mono text-[12px] text-[var(--cds-alias-typography-color-450)] break-all">
-                  {ca.fingerprint_sha256 ?? "—"}
-                </span>
-                {ca.fingerprint_sha256 && (
+            {label("Subject")}
+            <span style={mono}>{ca.subject ?? "—"}</span>
+            {label("Fingerprint")}
+            <span style={{ ...mono, wordBreak: "break-all" }}>
+              SHA-256 {ca.fingerprint_sha256 ?? "—"}
+              {ca.fingerprint_sha256 && (
+                <>
+                  {" "}
                   <button
                     type="button"
                     onClick={copyFp}
-                    className="btn btn-sm btn-link-neutral btn-icon"
-                    title="Copy fingerprint"
+                    className="btn btn-sm btn-link"
+                    style={{ margin: 0, minWidth: 0, padding: "0 4px" }}
                   >
-                    {copied ? <Icon shape="check" size={14} /> : <Icon shape="copy" size={14} />}
+                    {copied ? "Copied" : "Copy"}
                   </button>
-                )}
-              </div>
-            </div>
+                </>
+              )}
+            </span>
+            {label("Validity")}
+            <span style={mono}>
+              {ca.not_before ?? "—"} → {ca.not_after ?? "—"}
+            </span>
+            {label("Distribution")}
+            <span style={{ color: "var(--cds-alias-typography-color-300)" }}>
+              Install this CA on every inspected client, or TLS breaks visibly — that is the point. Clients
+              fetch it from{" "}
+              <a
+                className="underline"
+                style={{ color: "var(--cds-alias-typography-link-color)" }}
+                href={caDistUrl(host)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {caDistUrl(host)}
+              </a>{" "}
+              (plain HTTP, trusted interfaces only), or as{" "}
+              <a className="underline" style={{ color: "var(--cds-alias-typography-link-color)" }} href={caDerUrl} download>
+                DER
+              </a>
+              . The private key never leaves the box.
+            </span>
           </>
         )}
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <a href={caCrtUrl} download>
-            <Button kind="secondary" size="sm" icon="download" disabled={!ca?.present}>
-              Download CA (PEM)
-            </Button>
-          </a>
-          <a href={caDerUrl} download>
-            <Button kind="secondary" size="sm" icon="download" disabled={!ca?.present}>
-              Download CA (DER)
-            </Button>
-          </a>
-          <Button kind="danger" size="sm" icon="refresh" onClick={onRegenerate} disabled={regenerating}>
-            {regenerating ? "Regenerating…" : "Regenerate"}
-          </Button>
-        </div>
-
-        <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0">
-          Clients install the CA from{" "}
-          <a
-            className="underline"
-            style={{ color: "var(--cds-alias-typography-link-color)" }}
-            href={caDistUrl(host)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {caDistUrl(host)}
-          </a>{" "}
-          (plain HTTP, reachable only on trusted interfaces). The private key never leaves the box.
-        </p>
       </div>
     </section>
   );
 }
 
-// ── do-not-inspect editor ───────────────────────────────────────────────────
+// ── exclusions (do-not-inspect) card ─────────────────────────────────────────
 
-function NoInspectEditor({
-  domains,
-  onChange,
+/// Add one do-not-inspect destination (mock: "Add SSL Exclusion").
+function AddExclusionModal({
+  existing,
+  onClose,
+  onAdd,
 }: {
-  domains: string[];
-  onChange: (next: string[]) => void;
+  existing: string[];
+  onClose: () => void;
+  onAdd: (domain: string) => void;
 }) {
   const [draft, setDraft] = useState("");
   const [err, setErr] = useState<string | null>(null);
 
-  const add = () => {
+  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     const d = draft.trim().toLowerCase();
     if (!d) return;
-    const e = validateDomainPattern(d);
-    if (e) {
-      setErr(e);
+    const v = validateDomainPattern(d);
+    if (v) {
+      setErr(v);
       return;
     }
-    if (domains.includes(d)) {
+    if (existing.includes(d)) {
       setErr("Already in the list.");
       return;
     }
-    onChange([...domains, d]);
-    setDraft("");
-    setErr(null);
+    onAdd(d);
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2">
-        <input
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            setErr(null);
-          }}
-          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
-          placeholder=".bank.com, *.mozilla.org…"
-          className="clr-input"
-          style={{ width: 240, maxWidth: "none", fontFamily: "var(--qz-font-mono)" }}
-        />
-        <Button kind="secondary" size="sm" icon="plus" onClick={add}>
-          Add
-        </Button>
-      </div>
-      {err && <span className="text-[12px] text-[var(--cds-alias-status-danger)]">{err}</span>}
-      {domains.length === 0 ? (
-        <span className="text-[12px] text-[var(--cds-alias-typography-color-200)]">
-          No custom exclusions. (The shipped baseline still applies unless disabled below.)
-        </span>
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          {domains.map((d) => (
-            <span key={d} className="label" style={{ fontFamily: "var(--qz-font-mono)" }}>
-              {d}
-              <button
-                type="button"
-                onClick={() => onChange(domains.filter((x) => x !== d))}
-                className="hover:text-[var(--cds-alias-status-danger)]"
-                title="Remove"
-                style={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center" }}
-              >
-                <Icon shape="times" size={12} />
-              </button>
-            </span>
-          ))}
+    <ModalShell onClose={onClose} maxWidth={460}>
+      <ModalHeader title="Add SSL Exclusion" onClose={onClose} />
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <label className="clr-control-label">Destination *</label>
+          <input
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setErr(null);
+            }}
+            placeholder="*.bank.example"
+            autoFocus
+            className="clr-input"
+            style={{ maxWidth: "none", width: "100%", fontFamily: "var(--qz-font-mono)" }}
+          />
+          <div className="clr-subtext">SNI pattern or FQDN — matching flows are spliced, never decrypted.</div>
         </div>
+        {err && (
+          <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>
+            {err}
+          </p>
+        )}
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={!draft.trim()}>
+            Add Exclusion
+          </button>
+        </ModalFooter>
+      </form>
+    </ModalShell>
+  );
+}
+
+/// The mock's Exclusions card: compact table of do-not-inspect destinations
+/// with the add button in the card header. Edits go to the page draft and are
+/// committed by the Apply Changes row below the settings cards.
+function ExclusionsCard({
+  domains,
+  baseline,
+  onChange,
+  onBaselineChange,
+}: {
+  domains: string[];
+  baseline: boolean;
+  onChange: (next: string[]) => void;
+  onBaselineChange: (v: boolean) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+
+  return (
+    <section className="card">
+      <div className="card-header">
+        Exclusions
+        <span style={{ marginLeft: "auto" }}>
+          <button type="button" className="btn btn-sm btn-primary" onClick={() => setAdding(true)} style={{ margin: 0 }}>
+            Add Exclusion
+          </button>
+        </span>
+      </div>
+      <table className="table table-noborder table-compact" style={{ width: "100%" }}>
+        <thead>
+          <tr>
+            <th>Destination</th>
+            <th style={{ width: 60 }} aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {domains.length === 0 ? (
+            <tr>
+              <td colSpan={2} className="text-center" style={{ color: "var(--cds-alias-typography-color-200)" }}>
+                No custom exclusions — the shipped baseline still applies while enabled below.
+              </td>
+            </tr>
+          ) : (
+            domains.map((d) => (
+              <tr key={d}>
+                <td className="mono">{d}</td>
+                <td className="text-right">
+                  <button
+                    type="button"
+                    title={`Remove ${d}`}
+                    aria-label={`Remove ${d}`}
+                    onClick={() => onChange(domains.filter((x) => x !== d))}
+                    className="btn btn-sm btn-link-neutral btn-icon"
+                  >
+                    <Icon shape="trash" size={14} />
+                  </button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+      <div className="card-block" style={{ borderTop: "1px solid var(--cds-alias-object-border-subtle)" }}>
+        <label className="clr-checkbox-wrapper cursor-pointer">
+          <input type="checkbox" checked={baseline} onChange={(e) => onBaselineChange(e.target.checked)} />
+          <span className="text-[13px] text-[var(--cds-alias-typography-color-400)]">
+            Apply the shipped baseline (banking, healthcare, government, cert-pinned/update endpoints)
+          </span>
+        </label>
+      </div>
+
+      {adding && (
+        <AddExclusionModal
+          existing={domains}
+          onClose={() => setAdding(false)}
+          onAdd={(d) => {
+            onChange([...domains, d]);
+            setAdding(false);
+          }}
+        />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -389,17 +465,10 @@ function PoliciesTab({
   const eligible = fw.rules.filter((r) => r.chain === "forward" && r.action === "accept");
 
   return (
-    <div className="flex flex-col gap-3 max-w-[1000px]">
-      <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0">
-        Attach SSL inspection to a forward Allow rule to decrypt (<span className="mono">Inspect</span>)
-        or explicitly spare (<span className="mono">Splice</span>) the HTTPS it matches. Only forward
-        Allow rules are eligible. SSL inspection won&apos;t enable until at least one rule is set to
-        Inspect. Rules that match on an outbound interface can&apos;t carry inspection — scope by
-        source or destination instead.
-      </p>
-
-      <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
-        <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
+    <div className="flex flex-col gap-3">
+      <section className="card">
+        <div className="card-header">Rule Bindings</div>
+        <table ref={resize.tableRef} className="table table-noborder" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {SSL_RULE_COLS.map((c) => (
               <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
@@ -470,6 +539,14 @@ function PoliciesTab({
             )}
           </tbody>
         </table>
+      </section>
+
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        Attach SSL inspection to a forward Allow rule to decrypt (<span className="mono">Inspect</span>)
+        or explicitly spare (<span className="mono">Splice</span>) the HTTPS it matches. Only forward
+        Allow rules are eligible. SSL inspection won&apos;t enable until at least one rule is set to
+        Inspect. Rules that match on an outbound interface can&apos;t carry inspection — scope by
+        source or destination instead.
       </div>
     </div>
   );
@@ -551,7 +628,6 @@ export default function SslInspectionPage() {
   const [regenerating, setRegenerating] = useState(false);
   // Which high-blast-radius action is awaiting an in-app confirmation, if any.
   const [confirm, setConfirm] = useState<"enable" | "regenerate" | null>(null);
-  const [tab, setTab] = useState<"settings" | "policies">("settings");
 
   const loadStatus = useCallback(async () => {
     try {
@@ -649,9 +725,9 @@ export default function SslInspectionPage() {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-start gap-3">
-        <div style={{ marginRight: "auto" }}>
-          <h2>SSL Inspection</h2>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">SSL Inspection</h2>
           <p className="clr-secondary" style={{ marginTop: 4 }}>
             Decrypt, inspect, and re-encrypt TLS on forward Allow rules that opt in.
           </p>
@@ -663,120 +739,101 @@ export default function SslInspectionPage() {
           <span aria-disabled={toggling} style={{ opacity: toggling ? 0.5 : 1 }}>
             <Switch on={config.enabled} onChange={onToggle} />
           </span>
+          <button type="button" className="btn" onClick={() => load()}>
+            Refresh
+          </button>
         </span>
       </div>
 
-      <Tabs
-        items={[
-          { value: "settings", label: "Settings" },
-          { value: "policies", label: "Policies", count: config.policies.length },
-        ]}
-        value={tab}
-        onChange={(v) => setTab(v as "settings" | "policies")}
-      />
+      {/* DC page order: CA card → Rule Bindings → Exclusions; the status card
+          leads (alerts/tiles slot) and the extra config cards follow. */}
+      <div className="flex flex-col gap-4 max-w-[1000px]">
+        <StatusCard status={status} />
+        <CaPanel status={status} onRegenerate={() => setConfirm("regenerate")} regenerating={regenerating} />
+        <PoliciesTab config={config} status={status} onApplied={load} setToast={setToast} />
+        <ExclusionsCard
+          domains={draft.noInspect}
+          baseline={draft.defaultExclusions}
+          onChange={(next) => setDraft((d) => ({ ...d, noInspect: next }))}
+          onBaselineChange={(v) => setDraft((d) => ({ ...d, defaultExclusions: v }))}
+        />
 
-      <div>
-        {tab === "policies" ? (
-          <PoliciesTab config={config} status={status} onApplied={load} setToast={setToast} />
-        ) : (
-          <div className="flex flex-col gap-4 max-w-[1000px]">
-            <StatusCard status={status} />
-            <CaPanel status={status} onRegenerate={() => setConfirm("regenerate")} regenerating={regenerating} />
+        {/* Inspection policy */}
+        <section className="card">
+          <div className="card-header">Inspection Policy</div>
+          <div className="card-block flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <span className="clr-smallcaption">Default action</span>
+              <Segmented
+                items={[
+                  { value: "inspect", label: "Inspect all" },
+                  { value: "splice", label: "Splice all" },
+                ]}
+                value={draft.defaultAction}
+                onChange={(v) => setDraft((d) => ({ ...d, defaultAction: v as "inspect" | "splice" }))}
+              />
+              <span className="text-[12px] text-[var(--cds-alias-typography-color-200)]">
+                Traffic not on the do-not-inspect list is {draft.defaultAction === "inspect" ? "decrypted" : "passed through"}.
+              </span>
+            </div>
 
-            {/* Inspection policy */}
-            <section className="card">
-              <div className="card-header">Inspection Policy</div>
-              <div className="card-block flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <span className="clr-smallcaption">Default action</span>
-                  <Segmented
-                    items={[
-                      { value: "inspect", label: "Inspect all" },
-                      { value: "splice", label: "Splice all" },
-                    ]}
-                    value={draft.defaultAction}
-                    onChange={(v) => setDraft((d) => ({ ...d, defaultAction: v as "inspect" | "splice" }))}
-                  />
-                  <span className="text-[12px] text-[var(--cds-alias-typography-color-200)]">
-                    Traffic not on the do-not-inspect list is {draft.defaultAction === "inspect" ? "decrypted" : "passed through"}.
-                  </span>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <span className="clr-smallcaption">
-                    Do-not-inspect (spliced) domains
-                  </span>
-                  <NoInspectEditor domains={draft.noInspect} onChange={(next) => setDraft((d) => ({ ...d, noInspect: next }))} />
-                  <label className="clr-checkbox-wrapper cursor-pointer mt-1">
-                    <input
-                      type="checkbox"
-                      checked={draft.defaultExclusions}
-                      onChange={(e) => setDraft((d) => ({ ...d, defaultExclusions: e.target.checked }))}
-                    />
-                    <span className="text-[13px] text-[var(--cds-alias-typography-color-400)]">
-                      Apply the shipped baseline (banking, healthcare, government, cert-pinned/update endpoints)
-                    </span>
-                  </label>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <span className="clr-smallcaption">
-                    Upstream certificate validation
-                  </span>
-                  <Segmented
-                    items={[
-                      { value: "block", label: "Block invalid" },
-                      { value: "allow", label: "Allow invalid" },
-                    ]}
-                    value={draft.upstreamInvalid}
-                    onChange={(v) => setDraft((d) => ({ ...d, upstreamInvalid: v as "block" | "allow" }))}
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button kind="primary" size="sm" onClick={onSave} disabled={!dirty || saving}>
-                    {saving ? "Applying…" : "Apply Changes"}
-                  </Button>
-                  {dirty && (
-                    <Button kind="secondary" size="sm" onClick={() => setDraft(config)} disabled={saving}>
-                      Discard
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </section>
-
-            {/* Content filter — inert seam */}
-            <section className="card opacity-90">
-              <div className="card-header">
-                Content Filter (ICAP)
-                <span className="badge badge-muted">Not attached</span>
-              </div>
-              <div className="card-block flex flex-col gap-3">
-                <p className="text-[13px] text-[var(--cds-alias-typography-color-300)] m-0">
-                  No content-filtering engine is attached yet. When one is added (e2guardian in ICAP mode, or
-                  c-icap/ClamAV), it runs <em>behind</em> Squid and receives already-decrypted plaintext HTTP —
-                  it never does its own TLS interception and never holds its own CA. These fields are the seam it
-                  will plug into.
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="clr-form-control" style={{ marginTop: 0 }}>
-                    <label className="clr-control-label">ICAP host</label>
-                    <input disabled value={draft.contentFilter?.icapHost ?? "127.0.0.1"} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
-                  </div>
-                  <div className="clr-form-control" style={{ marginTop: 0 }}>
-                    <label className="clr-control-label">ICAP port</label>
-                    <input disabled value={draft.contentFilter?.icapPort ?? 1344} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
-                  </div>
-                  <div className="clr-form-control" style={{ marginTop: 0 }}>
-                    <label className="clr-control-label">Fail mode</label>
-                    <input disabled value={draft.contentFilter?.failMode ?? "closed (fail closed)"} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
-                  </div>
-                </div>
-              </div>
-            </section>
+            <div className="flex flex-col gap-2">
+              <span className="clr-smallcaption">
+                Upstream certificate validation
+              </span>
+              <Segmented
+                items={[
+                  { value: "block", label: "Block invalid" },
+                  { value: "allow", label: "Allow invalid" },
+                ]}
+                value={draft.upstreamInvalid}
+                onChange={(v) => setDraft((d) => ({ ...d, upstreamInvalid: v as "block" | "allow" }))}
+              />
+            </div>
           </div>
-        )}
+        </section>
+
+        {/* Applies the draft: policy settings and the Exclusions card above. */}
+        <div className="flex items-center gap-2">
+          <Button kind="primary" size="sm" onClick={onSave} disabled={!dirty || saving}>
+            {saving ? "Applying…" : "Apply Changes"}
+          </Button>
+          {dirty && (
+            <Button kind="secondary" size="sm" onClick={() => setDraft(config)} disabled={saving}>
+              Discard
+            </Button>
+          )}
+        </div>
+
+        {/* Content filter — inert seam */}
+        <section className="card opacity-90">
+          <div className="card-header">
+            Content Filter (ICAP)
+            <span className="badge badge-muted">Not attached</span>
+          </div>
+          <div className="card-block flex flex-col gap-3">
+            <p className="text-[13px] text-[var(--cds-alias-typography-color-300)] m-0">
+              No content-filtering engine is attached yet. When one is added (e2guardian in ICAP mode, or
+              c-icap/ClamAV), it runs <em>behind</em> Squid and receives already-decrypted plaintext HTTP —
+              it never does its own TLS interception and never holds its own CA. These fields are the seam it
+              will plug into.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="clr-form-control" style={{ marginTop: 0 }}>
+                <label className="clr-control-label">ICAP host</label>
+                <input disabled value={draft.contentFilter?.icapHost ?? "127.0.0.1"} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
+              </div>
+              <div className="clr-form-control" style={{ marginTop: 0 }}>
+                <label className="clr-control-label">ICAP port</label>
+                <input disabled value={draft.contentFilter?.icapPort ?? 1344} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
+              </div>
+              <div className="clr-form-control" style={{ marginTop: 0 }}>
+                <label className="clr-control-label">Fail mode</label>
+                <input disabled value={draft.contentFilter?.failMode ?? "closed (fail closed)"} className="clr-input" style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }} />
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
       {confirm === "enable" && (
@@ -797,7 +854,7 @@ export default function SslInspectionPage() {
           </p>
           <p>
             Make sure the inspection CA has already been distributed to and installed on your clients
-            (download it from the Inspection root CA section below) before enabling.
+            (download it from the Inspection CA card) before enabling.
           </p>
         </ConfirmModal>
       )}

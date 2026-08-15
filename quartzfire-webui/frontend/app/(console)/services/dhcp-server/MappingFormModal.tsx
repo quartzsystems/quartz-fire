@@ -107,7 +107,7 @@ export function MappingFormModal({
   return (
     <ModalShell onClose={onClose} maxWidth={520}>
       <ModalHeader
-        title={`${isEdit ? "Edit" : "Create"} Static Mapping`}
+        title="Static Mapping"
         subtitle={`DHCP server ${server}`}
         onClose={onClose}
       />

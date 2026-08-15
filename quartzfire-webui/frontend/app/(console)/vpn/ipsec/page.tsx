@@ -54,7 +54,7 @@ function ikeColumns(): Column<IkeGroup>[] {
   return [
     { key: "name", header: "Name", value: (r) => r.name, mono: true, sortable: true, width: 180 },
     { key: "ke", header: "Key exchange", value: (r) => r.key_exchange ?? "", render: (r) => dash(r.key_exchange), mono: true, width: 140 },
-    { key: "lifetime", header: "Lifetime", value: (r) => r.lifetime ?? -1, render: (r) => (r.lifetime == null ? "—" : `${r.lifetime}s`), mono: true, width: 120 },
+    { key: "lifetime", header: "Lifetime", value: (r) => r.lifetime ?? -1, render: (r) => (r.lifetime == null ? "—" : `${r.lifetime} s`), mono: true, width: 120 },
     {
       key: "proposals",
       header: "Proposals",
@@ -69,7 +69,7 @@ function espColumns(): Column<EspGroup>[] {
     { key: "name", header: "Name", value: (r) => r.name, mono: true, sortable: true, width: 180 },
     { key: "pfs", header: "PFS", value: (r) => r.pfs ?? "", render: (r) => dash(r.pfs), mono: true, width: 130 },
     { key: "mode", header: "Mode", value: (r) => r.mode ?? "", render: (r) => dash(r.mode), mono: true, width: 120 },
-    { key: "lifetime", header: "Lifetime", value: (r) => r.lifetime ?? -1, render: (r) => (r.lifetime == null ? "—" : `${r.lifetime}s`), mono: true, width: 120 },
+    { key: "lifetime", header: "Lifetime", value: (r) => r.lifetime ?? -1, render: (r) => (r.lifetime == null ? "—" : `${r.lifetime} s`), mono: true, width: 120 },
     {
       key: "proposals",
       header: "Proposals",
@@ -120,15 +120,14 @@ export default function IpsecPage() {
   };
 
   // Header "Add" control follows the active tab (DC pattern: one primary
-  // button in the page-header row whose label tracks the tab).
-  const addAction: { label: string; onClick: () => void } | null =
-    tab === "peers"
-      ? { label: "Add Peer", onClick: () => setPeerModal({}) }
-      : tab === "ike"
-        ? { label: "Add IKE Group", onClick: () => setIkeModal({}) }
-        : tab === "esp"
-          ? { label: "Add ESP Group", onClick: () => setEspModal({}) }
-          : null;
+  // button in the page-header row whose label tracks the tab; every other tab
+  // falls back to "Add Peer", as in the mock's ipsecAddLabel).
+  const addAction: { label: string; onClick: () => void } =
+    tab === "ike"
+      ? { label: "Add IKE Group", onClick: () => setIkeModal({}) }
+      : tab === "esp"
+        ? { label: "Add ESP Group", onClick: () => setEspModal({}) }
+        : { label: "Add Peer", onClick: () => setPeerModal({}) };
 
   const saved = (msg: string) => {
     setPeerModal(null);
@@ -166,26 +165,36 @@ export default function IpsecPage() {
     }
   };
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-start gap-2">
-        <div className="mr-auto">
-          <h2 className="m-0">IPsec</h2>
-          <p className="clr-secondary" style={{ marginTop: 4 }}>
-            Site-to-site IPsec — IKE/ESP proposals, policy- or route-based (VTI) tunnels.
-          </p>
-        </div>
-        {status === "ready" && (
-          <>
-            <Button kind="outline" onClick={refresh} disabled={refreshing}>
-              {refreshing ? "Refreshing…" : "Refresh"}
-            </Button>
-            {addAction && <Button kind="primary" onClick={addAction.onClick}>{addAction.label}</Button>}
-          </>
-        )}
-      </div>
+  const headerBlock = (
+    <div>
+      <h2 className="m-0">IPsec</h2>
+      <p className="clr-secondary" style={{ marginTop: 4 }}>
+        Site-to-site IPsec — IKE/ESP proposals, policy- or route-based (VTI) tunnels.
+      </p>
+    </div>
+  );
 
-      {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading IPsec configuration…</div>}
+  const tabStrip = cfg && (
+    <Tabs
+      items={[
+        { value: "peers", label: "Peers", count: cfg.peers.length },
+        { value: "ike", label: "IKE Groups", count: cfg.ike_groups.length },
+        { value: "esp", label: "ESP Groups", count: cfg.esp_groups.length },
+        { value: "interfaces", label: "Interfaces", count: cfg.interfaces.length },
+        { value: "status", label: "Status" },
+      ]}
+      value={tab}
+      onChange={(v) => setTab(v as Tab)}
+    />
+  );
+
+  const addButton = <Button kind="primary" onClick={addAction.onClick}>{addAction.label}</Button>;
+
+  return (
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      {status !== "ready" && headerBlock}
+
+      {status === "loading" && <div className="clr-secondary">Loading IPsec configuration…</div>}
       {status === "error" && (
         <div className="alert alert-danger alert-sm">
           <Icon shape="exclamation-circle" size={14} className="alert-icon" />
@@ -198,68 +207,82 @@ export default function IpsecPage() {
         </div>
       )}
       {status === "ready" && cfg && (
-        <div className="flex flex-col gap-5">
-          <Tabs
-            items={[
-              { value: "peers", label: "Peers", count: cfg.peers.length },
-              { value: "ike", label: "IKE Groups", count: cfg.ike_groups.length },
-              { value: "esp", label: "ESP Groups", count: cfg.esp_groups.length },
-              { value: "interfaces", label: "Interfaces", count: cfg.interfaces.length },
-              { value: "status", label: "Status" },
-            ]}
-            value={tab}
-            onChange={(v) => setTab(v as Tab)}
-          />
-
+        <>
           {tab === "peers" && (
-            <DataTable
+            <DataTable searchable={false}
               rows={cfg.peers}
               columns={peerColumns()}
               rowId={(r) => r.name}
               storageKey="vpn-ipsec-peers"
               searchPlaceholder="Search peers…"
               emptyMessage="No IPsec peers configured."
+              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setPeerModal({ peer: row })}
+              headerLeft={headerBlock}
+              subHeader={tabStrip}
+              toolbar={addButton}
               actions={(row) => <RowActions label={`peer ${row.name}`} onEdit={() => setPeerModal({ peer: row })} onDelete={() => removePeer(row)} />}
             />
           )}
 
           {tab === "ike" && (
-            <DataTable
+            <DataTable searchable={false}
               rows={cfg.ike_groups}
               columns={ikeColumns()}
               rowId={(r) => r.name}
               storageKey="vpn-ipsec-ike"
               searchPlaceholder="Search IKE groups…"
               emptyMessage="No IKE groups configured."
+              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setIkeModal({ group: row })}
+              headerLeft={headerBlock}
+              subHeader={tabStrip}
+              toolbar={addButton}
               actions={(row) => <RowActions label={`IKE group ${row.name}`} onEdit={() => setIkeModal({ group: row })} onDelete={() => removeIke(row)} />}
             />
           )}
 
           {tab === "esp" && (
-            <DataTable
+            <DataTable searchable={false}
               rows={cfg.esp_groups}
               columns={espColumns()}
               rowId={(r) => r.name}
               storageKey="vpn-ipsec-esp"
               searchPlaceholder="Search ESP groups…"
               emptyMessage="No ESP groups configured."
+              onRefresh={() => load("refresh")}
               onRowOpen={(row) => setEspModal({ group: row })}
+              headerLeft={headerBlock}
+              subHeader={tabStrip}
+              toolbar={addButton}
               actions={(row) => <RowActions label={`ESP group ${row.name}`} onEdit={() => setEspModal({ group: row })} onDelete={() => removeEsp(row)} />}
             />
           )}
 
-          {tab === "interfaces" && (
-            <InterfacesPanel
-              live={cfg.interfaces}
-              interfaces={interfaces}
-              onSaved={(msg) => { setToast(msg); load("refresh"); }}
-            />
+          {(tab === "interfaces" || tab === "status") && (
+            <>
+              <div className="flex items-start gap-2 flex-wrap">
+                <div className="mr-auto">{headerBlock}</div>
+                <div className="flex items-center gap-2">
+                  <Button kind="outline" onClick={refresh} disabled={refreshing}>
+                    {refreshing ? "Refreshing…" : "Refresh"}
+                  </Button>
+                  {addButton}
+                </div>
+              </div>
+              {tabStrip}
+              {tab === "interfaces" ? (
+                <InterfacesPanel
+                  live={cfg.interfaces}
+                  interfaces={interfaces}
+                  onSaved={(msg) => { setToast(msg); load("refresh"); }}
+                />
+              ) : (
+                <IpsecStatusPanel />
+              )}
+            </>
           )}
-
-          {tab === "status" && <IpsecStatusPanel />}
-        </div>
+        </>
       )}
 
       {peerModal && cfg && (

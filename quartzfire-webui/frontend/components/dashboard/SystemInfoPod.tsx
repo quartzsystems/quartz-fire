@@ -42,6 +42,17 @@ function prettyVersion(v: string | null): string {
   return `QuartzFire v${m[1].replace(/-\d{6,}$/, "")}`;
 }
 
+/// "7.1 GiB / 23 GiB" → "7.1 / 23 GiB" — the DC reference drops the first unit
+/// when both figures share it ("119 MiB / 2 GiB" keeps both).
+function usedOfTotal(used: number | null, total: number | null): string {
+  const u = formatBytes(used);
+  const t = formatBytes(total);
+  const ui = u.indexOf(" ");
+  const ti = t.indexOf(" ");
+  if (ui === -1 || ti === -1 || u.slice(ui + 1) !== t.slice(ti + 1)) return `${u} / ${t}`;
+  return `${u.slice(0, ui)} / ${t}`;
+}
+
 /// Progress variant by utilisation: green → amber → red.
 function progressVariant(pct: number | null): string {
   if (pct == null) return "";
@@ -230,7 +241,7 @@ export function SystemInfoPod() {
                   className="w-[96px] flex-shrink-0 text-right text-[11px] text-[var(--cds-alias-typography-color-200)]"
                   style={{ fontFamily: "var(--qz-font-mono)" }}
                 >
-                  {formatBytes(s.used_bytes)} / {formatBytes(s.size_bytes)}
+                  {usedOfTotal(s.used_bytes, s.size_bytes)}
                 </span>
               </div>
             ))}

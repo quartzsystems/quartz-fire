@@ -165,18 +165,17 @@ export function WireguardFormModal({ initial, existingNames, interfaces, onClose
       <form onSubmit={submit} className="flex flex-col gap-4">
         <datalist id="wg-interfaces">{interfaces.map((n) => <option key={n} value={n} />)}</datalist>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Interface" required hint="wg0, wg1, …">
+        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+          <Field label="Name" required hint="wg0, wg1, …">
             <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="wg0" className="clr-input" style={monoSt} />
+          </Field>
+          <Field label="Addresses" hint="Comma-separated (e.g. 10.0.0.1/24).">
+            <input value={addresses} onChange={(e) => setAddresses(e.target.value)} placeholder="10.0.0.1/24" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Listen port" hint="UDP port this endpoint listens on.">
             <input value={port} onChange={(e) => setPort(e.target.value)} placeholder="51820" className="clr-input" style={monoSt} />
           </Field>
         </div>
-
-        <Field label="Addresses" hint="Tunnel interface addresses, comma-separated (e.g. 10.0.0.1/24).">
-          <input value={addresses} onChange={(e) => setAddresses(e.target.value)} placeholder="10.0.0.1/24" className="clr-input" style={monoSt} />
-        </Field>
 
         <Field label="Private key" required={!isEdit} hint="Base64 key from `generate pki wireguard key-pair`. Leave blank to keep the current key.">
           <input value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} type="password" placeholder="base64 private key" className="clr-input" style={monoSt} />
@@ -196,11 +195,8 @@ export function WireguardFormModal({ initial, existingNames, interfaces, onClose
           Interface enabled
         </label>
 
-        {/* Peers */}
-        <div className="flex items-center justify-between mt-1">
-          <span className="clr-smallcaption">Peers</span>
-          <Button kind="ghost" size="sm" icon="plus" onClick={addPeer}>Add Peer</Button>
-        </div>
+        {/* Peers — nested bordered cards, "Add Peer" bottom-left per the mock. */}
+        <span className="clr-smallcaption mt-1">Peers</span>
 
         {peers.length === 0 && (
           <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-typography-color-300)" }}>No peers yet. A tunnel needs at least one peer to pass traffic.</p>
@@ -217,20 +213,20 @@ export function WireguardFormModal({ initial, existingNames, interfaces, onClose
                 </label>
                 <IconButton icon="trash" onClick={() => removePeer(peer.key)} label="Remove peer" />
               </div>
-              <Field label="Public key" required>
-                <input value={peer.public_key} onChange={(e) => updatePeer(peer.key, { public_key: e.target.value })} placeholder="peer base64 public key" className="clr-input" style={monoSt} />
-              </Field>
-              <Field label="Allowed IPs" hint="Networks routed into the tunnel for this peer, comma-separated.">
-                <input value={peer.allowed_ips} onChange={(e) => updatePeer(peer.key, { allowed_ips: e.target.value })} placeholder="10.0.0.2/32, 192.168.20.0/24" className="clr-input" style={monoSt} />
-              </Field>
-              <div className="grid gap-3" style={{ gridTemplateColumns: "2fr 1fr 1fr" }}>
-                <Field label="Endpoint host" hint="Remote address (leave blank for roaming).">
-                  <input value={peer.endpoint_address} onChange={(e) => updatePeer(peer.key, { endpoint_address: e.target.value })} placeholder="vpn.example.com" className="clr-input" style={monoSt} />
+              <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <Field label="Public key" required>
+                  <input value={peer.public_key} onChange={(e) => updatePeer(peer.key, { public_key: e.target.value })} placeholder="peer base64 public key" className="clr-input" style={monoSt} />
                 </Field>
-                <Field label="Port">
-                  <input value={peer.endpoint_port} onChange={(e) => updatePeer(peer.key, { endpoint_port: e.target.value })} placeholder="51820" className="clr-input" style={monoSt} />
+                <Field label="Allowed IPs" hint="Networks routed into the tunnel, comma-separated.">
+                  <input value={peer.allowed_ips} onChange={(e) => updatePeer(peer.key, { allowed_ips: e.target.value })} placeholder="10.0.0.2/32, 192.168.20.0/24" className="clr-input" style={monoSt} />
                 </Field>
-                <Field label="Keepalive" hint="Seconds.">
+                <Field label="Endpoint" hint="Remote host and port (blank for roaming).">
+                  <div className="flex gap-2">
+                    <input value={peer.endpoint_address} onChange={(e) => updatePeer(peer.key, { endpoint_address: e.target.value })} placeholder="vpn.example.com" className="clr-input flex-1" style={monoSt} />
+                    <input value={peer.endpoint_port} onChange={(e) => updatePeer(peer.key, { endpoint_port: e.target.value })} placeholder="51820" className="clr-input" style={{ ...monoSt, width: 90, flex: "none" }} />
+                  </div>
+                </Field>
+                <Field label="Persistent keepalive" hint="Seconds.">
                   <input value={peer.persistent_keepalive} onChange={(e) => updatePeer(peer.key, { persistent_keepalive: e.target.value })} placeholder="25" className="clr-input" style={monoSt} />
                 </Field>
               </div>
@@ -239,6 +235,10 @@ export function WireguardFormModal({ initial, existingNames, interfaces, onClose
               </Field>
             </div>
           ))}
+        </div>
+
+        <div>
+          <Button kind="outline" size="sm" onClick={addPeer}>Add Peer</Button>
         </div>
 
         {error && (

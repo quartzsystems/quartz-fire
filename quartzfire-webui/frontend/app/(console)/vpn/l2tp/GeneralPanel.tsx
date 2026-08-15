@@ -9,30 +9,21 @@ import {
   L2tpAuthMode,
   L2tpAuthProtocol,
   L2tpGeneral,
+  L2tpPool,
   applyL2tpGeneral,
 } from "@/lib/l2tp";
 
-const inputSt = { maxWidth: "none" } as const;
-const monoSt = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
+const inputSt = { maxWidth: "none", width: "100%" } as const;
+const monoSt = { maxWidth: "none", width: "100%", fontFamily: "var(--qz-font-mono)" } as const;
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/// One cell of the mock's `1fr 1fr` settings grid. `first` kills the top margin
+/// on the leading row, per the DC card layout.
+function Field({ label, hint, first, span, children }: { label: string; hint?: string; first?: boolean; span?: boolean; children: React.ReactNode }) {
   return (
-    <div className="clr-form-control" style={{ marginTop: 0 }}>
+    <div className="clr-form-control" style={{ marginTop: first ? 0 : undefined, gridColumn: span ? "1 / -1" : undefined }}>
       <label className="clr-control-label">{label}</label>
       {children}
       {hint && <div className="clr-subtext">{hint}</div>}
-    </div>
-  );
-}
-
-function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <div className="card">
-      <div className="card-header flex-col items-start gap-0">
-        <span className="text-[14px]">{title}</span>
-        {subtitle && <span className="text-[12px] font-normal" style={{ color: "var(--cds-alias-typography-color-300)" }}>{subtitle}</span>}
-      </div>
-      <div className="card-block flex flex-col gap-4">{children}</div>
     </div>
   );
 }
@@ -50,8 +41,8 @@ const toList = (s: string) => s.split(/[\s,]+/).map((x) => x.trim()).filter(Bool
 /// Diffs against `live` and applies on Save.
 export function GeneralPanel({ live, pools, onSaved }: {
   live: L2tpGeneral;
-  /** Configured pool names, offered for the default-pool picker. */
-  pools: string[];
+  /** Configured pools, offered for the client-IP-pool picker. */
+  pools: L2tpPool[];
   onSaved: (message: string) => void;
 }) {
   const [outside, setOutside] = useState(live.outside_address ?? "");
@@ -94,57 +85,56 @@ export function GeneralPanel({ live, pools, onSaved }: {
     }
   };
 
-  return (
-    <div className="flex flex-col gap-4 max-w-[720px]">
-      <datalist id="l2tp-pools">{pools.map((n) => <option key={n} value={n} />)}</datalist>
+  // The current pool may reference a name that no longer exists — keep it
+  // selectable so the live value round-trips.
+  const poolOptions = useMemo(() => {
+    const opts = pools.map((p) => ({ value: p.name, label: p.range ? `${p.name} — ${p.range}` : p.name }));
+    if (defaultPool && !pools.some((p) => p.name === defaultPool)) opts.push({ value: defaultPool, label: defaultPool });
+    return opts;
+  }, [pools, defaultPool]);
 
-      <Section title="Server" subtitle="Where the L2TP server listens and what it hands clients.">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Outside address" hint="Public address the server binds to.">
+  return (
+    <div className="card" style={{ maxWidth: 720 }}>
+      <div className="card-block">
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+          <Field label="Outside address" first hint="Public address the server binds to.">
             <input value={outside} onChange={(e) => setOutside(e.target.value)} placeholder="203.0.113.1" className="clr-input" style={monoSt} />
           </Field>
-          <Field label="Gateway address" hint="Server's address inside the tunnel.">
+          <Field label="Gateway address" first hint="Server's address inside the tunnel.">
             <input value={gateway} onChange={(e) => setGateway(e.target.value)} placeholder="10.10.0.1" className="clr-input" style={monoSt} />
           </Field>
-          <Field label="Name servers" hint="DNS pushed to clients, comma-separated.">
-            <input value={nameServers} onChange={(e) => setNameServers(e.target.value)} placeholder="10.10.0.1, 1.1.1.1" className="clr-input" style={monoSt} />
-          </Field>
-          <Field label="Default pool" hint="client-ip-pool clients draw from by default.">
-            <input list="l2tp-pools" value={defaultPool} onChange={(e) => setDefaultPool(e.target.value)} placeholder="l2tp-pool" className="clr-input" style={monoSt} />
-          </Field>
-          <Field label="MTU">
-            <input value={mtu} onChange={(e) => setMtu(e.target.value)} placeholder="1400" className="clr-input" style={monoSt} />
-          </Field>
-        </div>
-      </Section>
-
-      <Section title="Authentication" subtitle="How clients prove who they are.">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Mode">
+          <Field label="Client IP pool" hint="Pool clients draw from by default.">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
-              <select value={authMode} onChange={(e) => setAuthMode(e.target.value as L2tpAuthMode | "")} className="clr-select" style={monoSt}>
-                <option value="">Default (local)</option>
-                <option value="local">local</option>
-                <option value="radius">radius</option>
+              <select value={defaultPool} onChange={(e) => setDefaultPool(e.target.value)} className="clr-select" style={{ maxWidth: "none", width: "100%" }}>
+                <option value="">None</option>
+                {poolOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
           </Field>
-        </div>
-        <Field label="Protocols" hint="Allowed PPP authentication protocols.">
-          <div className="flex flex-wrap gap-3">
-            {L2TP_AUTH_PROTOCOLS.map((proto) => (
-              <div key={proto} className="clr-checkbox-wrapper">
-                <input id={`l2tp-proto-${proto}`} type="checkbox" checked={protocols.includes(proto)} onChange={() => toggleProto(proto)} />
-                <label htmlFor={`l2tp-proto-${proto}`} style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</label>
-              </div>
-            ))}
-          </div>
-        </Field>
-      </Section>
-
-      <Section title="IPsec" subtitle="L2TP is carried inside an IPsec transport tunnel.">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Authentication mode">
+          <Field label="DNS servers" hint="DNS pushed to clients, comma-separated.">
+            <input value={nameServers} onChange={(e) => setNameServers(e.target.value)} placeholder="10.10.0.1, 1.1.1.1" className="clr-input" style={monoSt} />
+          </Field>
+          <Field label="IPsec pre-shared secret" hint={ipsecMode === "pre-shared-secret" ? "Leave blank to keep the current secret." : "Applies when IPsec authentication is pre-shared-secret."}>
+            <input
+              value={psk}
+              onChange={(e) => setPsk(e.target.value)}
+              type="password"
+              placeholder="shared secret"
+              disabled={ipsecMode !== "pre-shared-secret"}
+              className="clr-input"
+              style={inputSt}
+            />
+          </Field>
+          <Field label="Authentication">
+            <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+              <select value={authMode} onChange={(e) => setAuthMode(e.target.value as L2tpAuthMode | "")} className="clr-select" style={{ maxWidth: "none", width: "100%" }}>
+                <option value="">Local users (default)</option>
+                <option value="local">Local users</option>
+                <option value="radius">RADIUS</option>
+              </select>
+            </div>
+          </Field>
+          <Field label="IPsec authentication" hint="L2TP is carried inside an IPsec transport tunnel.">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
               <select value={ipsecMode} onChange={(e) => setIpsecMode(e.target.value as IpsecAuthMode | "")} className="clr-select" style={monoSt}>
                 <option value="">None</option>
@@ -153,23 +143,30 @@ export function GeneralPanel({ live, pools, onSaved }: {
               </select>
             </div>
           </Field>
-          {ipsecMode === "pre-shared-secret" && (
-            <Field label="Pre-shared secret" hint="Leave blank to keep the current secret.">
-              <input value={psk} onChange={(e) => setPsk(e.target.value)} type="password" placeholder="shared secret" className="clr-input" style={inputSt} />
-            </Field>
-          )}
+          <Field label="MTU">
+            <input value={mtu} onChange={(e) => setMtu(e.target.value)} placeholder="1400" className="clr-input" style={monoSt} />
+          </Field>
+          <Field label="Protocols" span hint="Allowed PPP authentication protocols.">
+            <div className="flex flex-wrap gap-3">
+              {L2TP_AUTH_PROTOCOLS.map((proto) => (
+                <div key={proto} className="clr-checkbox-wrapper">
+                  <input id={`l2tp-proto-${proto}`} type="checkbox" checked={protocols.includes(proto)} onChange={() => toggleProto(proto)} />
+                  <label htmlFor={`l2tp-proto-${proto}`} style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</label>
+                </div>
+              ))}
+            </div>
+          </Field>
         </div>
-      </Section>
 
-      {error && (
-        <div className="alert alert-danger alert-sm">
-          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
-          <span className="alert-text">{error}</span>
-        </div>
-      )}
-
-      <div className="flex justify-end">
-        <Button kind="primary" icon="check" onClick={save} disabled={saving}>
+        {error && (
+          <div className="alert alert-danger alert-sm" style={{ marginTop: 16 }}>
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <span className="alert-text">{error}</span>
+          </div>
+        )}
+      </div>
+      <div className="card-footer">
+        <Button kind="primary" onClick={save} disabled={saving}>
           {saving ? "Applying…" : "Save L2TP Settings"}
         </Button>
       </div>

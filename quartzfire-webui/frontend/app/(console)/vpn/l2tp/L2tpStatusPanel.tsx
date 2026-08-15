@@ -61,14 +61,14 @@ export function L2tpStatusPanel() {
   const active = stateCol >= 0 ? table.rows.filter((r) => isActive(r[stateCol] ?? "")).length : 0;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-3">
       <StatusHeader
         lastUpdated={lastUpdated}
         onRefresh={reload}
         tiles={
           <>
             <StatTile label="Sessions" value={String(total)} />
-            <StatTile label="Active" value={`${active}/${total}`} sub="active / total" />
+            <StatTile label="Active" value={`${active} / ${total}`} sub="active / total" />
           </>
         }
       />

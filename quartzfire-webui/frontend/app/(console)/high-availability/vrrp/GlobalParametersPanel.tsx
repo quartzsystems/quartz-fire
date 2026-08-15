@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Segmented } from "@/components/ui/Segmented";
 import { Field, TextInput, ErrorText, numOrNull } from "../formkit";
 import { VrrpGlobalParameters, applyGlobal } from "@/lib/vrrp";
 
@@ -39,22 +38,27 @@ export function GlobalParametersPanel({
   };
 
   return (
-    <div className="card" style={{ maxWidth: 620 }}>
+    <div className="card" style={{ maxWidth: 560 }}>
       <div className="card-block flex flex-col gap-4">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Startup delay" hint="seconds before VRRP starts after boot">
+          <Field label="Startup delay (s)">
             <TextInput value={g.startup_delay?.toString() ?? ""} onChange={(v) => setG((p) => ({ ...p, startup_delay: numOrNull(v) }))} placeholder="0" mono />
           </Field>
-          <Field label="Default protocol version">
-            <Segmented
-              items={[
-                { value: "inherit", label: "Default" },
-                { value: "2", label: "v2" },
-                { value: "3", label: "v3" },
-              ]}
-              value={g.version == null ? "inherit" : String(g.version)}
-              onChange={(v) => setG((p) => ({ ...p, version: v === "inherit" ? null : Number(v) }))}
-            />
+          <Field label="Version">
+            <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+              <select
+                value={g.version == null ? "" : String(g.version)}
+                onChange={(e) =>
+                  setG((p) => ({ ...p, version: e.target.value === "" ? null : Number(e.target.value) }))
+                }
+                className="clr-select"
+                style={{ maxWidth: "none", width: "100%" }}
+              >
+                <option value="">Default</option>
+                <option value="3">3</option>
+                <option value="2">2</option>
+              </select>
+            </div>
           </Field>
         </div>
 
@@ -83,7 +87,7 @@ export function GlobalParametersPanel({
       </div>
       <div className="card-footer">
         <button type="button" className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? "Applying…" : "Apply Global Parameters"}
+          {saving ? "Applying…" : "Save VRRP Settings"}
         </button>
       </div>
     </div>

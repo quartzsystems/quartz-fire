@@ -27,7 +27,7 @@ export default function VpnPage() {
         <p className="clr-secondary" style={{ marginTop: 4 }}>Site-to-site and remote-access tunnels.</p>
       </div>
 
-      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
         {ENTRIES.map(({ href, icon, title, desc }) => (
           <Link key={href} href={href} className="card clickable no-underline">
             <div className="card-block flex items-start gap-[14px]">

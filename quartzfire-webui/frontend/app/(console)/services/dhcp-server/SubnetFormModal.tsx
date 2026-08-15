@@ -106,7 +106,7 @@ export function SubnetFormModal({
   return (
     <ModalShell onClose={onClose} maxWidth={520}>
       <ModalHeader
-        title={`${isEdit ? "Edit" : "Create"} Subnet`}
+        title="DHCP Subnet"
         subtitle={`DHCP server ${server}`}
         onClose={onClose}
       />

@@ -82,11 +82,13 @@ function PendingBanner({ state }: { state: Extract<GuardState, { phase: "pending
   }, []);
 
   const remaining = Math.max(0, Math.ceil((pending.expiresAt - now) / 1000));
+  // DC countdown format: "m:ss".
+  const countdown = `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`;
 
   return (
     <div style={{ position: "relative" }}>
       <div className="alert alert-warning alert-app-level">
-        <Icon shape="shield-x" size={16} className="alert-icon" />
+        <Icon shape="exclamation-triangle" size={16} className="alert-icon" />
         <div className="alert-text">
           <strong>{pending.description}</strong> is live —{" "}
           {remaining > 0 ? (
@@ -95,13 +97,13 @@ function PendingBanner({ state }: { state: Extract<GuardState, { phase: "pending
               <span
                 style={{
                   fontFamily: "var(--qz-font-mono)",
-                  fontWeight: 600,
+                  fontWeight: 700,
                   fontVariantNumeric: "tabular-nums",
                 }}
               >
-                {remaining}s
+                {countdown}
               </span>{" "}
-              or it will be automatically reverted.
+              or it is reverted automatically.
             </>
           ) : (
             <>checking whether it was reverted…</>

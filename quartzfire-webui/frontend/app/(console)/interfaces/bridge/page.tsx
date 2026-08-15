@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
-import { StatePill } from "@/components/ui/Badge";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { MtuCell } from "@/components/dashboard/MtuCell";
 import { RowActions } from "@/components/dashboard/RowActions";
@@ -20,6 +19,18 @@ import {
 import { useDashboard } from "@/lib/DashboardContext";
 import { BridgeFormModal } from "./BridgeFormModal";
 
+/// Clarity status pill (mono uppercase), per the design reference.
+const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" } as const;
+const dim = (t: string) => <span style={{ color: "var(--cds-alias-typography-color-200)" }}>{t}</span>;
+
+function StatusPill({ enabled }: { enabled: boolean }) {
+  return (
+    <span className={`label${enabled ? " label-success" : ""}`} style={pillStyle}>
+      {enabled ? "ENABLED" : "DISABLED"}
+    </span>
+  );
+}
+
 const columns: Column<BridgeInterface>[] = [
   { key: "name", header: "Interface", value: (r) => r.name, mono: true, sortable: true, width: 120 },
   { key: "description", header: "Description", value: (r) => r.description ?? "", sortable: true },
@@ -27,14 +38,14 @@ const columns: Column<BridgeInterface>[] = [
     key: "members",
     header: "Members",
     value: (r) => r.members.join(", "),
-    render: (r) => (r.members.length ? r.members.join(", ") : "—"),
+    render: (r) => (r.members.length ? r.members.join(", ") : dim("—")),
     mono: true,
   },
   {
     key: "addresses",
     header: "IP address",
     value: (r) => r.addresses.join(", "),
-    render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
+    render: (r) => (r.addresses.length ? r.addresses.join(", ") : dim("—")),
     mono: true,
   },
   {
@@ -43,11 +54,11 @@ const columns: Column<BridgeInterface>[] = [
     value: (r) => (r.vlan_aware ? "yes" : "no"),
     render: (r) =>
       r.vlan_aware ? (
-        <span className="badge badge-info">
-          Aware{r.vifs.length ? ` · ${r.vifs.length} VIF${r.vifs.length === 1 ? "" : "s"}` : ""}
+        <span className="label label-info" style={pillStyle}>
+          {r.vifs.length ? `AWARE · ${r.vifs.length} VIF${r.vifs.length === 1 ? "" : "s"}` : "AWARE"}
         </span>
       ) : (
-        <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
+        dim("—")
       ),
     sortable: true,
     width: 130,
@@ -57,7 +68,7 @@ const columns: Column<BridgeInterface>[] = [
     key: "status",
     header: "Status",
     value: (r) => (r.enabled ? "enabled" : "disabled"),
-    render: (r) => <StatePill enabled={r.enabled} />,
+    render: (r) => <StatusPill enabled={r.enabled} />,
     sortable: true,
     width: 120,
   },

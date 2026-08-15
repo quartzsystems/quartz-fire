@@ -230,12 +230,12 @@ export function RouteMapFormModal({
 
   return (
     <ModalShell onClose={onClose} maxWidth={720}>
-      <ModalHeader title={`${isEdit ? "Edit" : "Create"} Route Map`} subtitle={isEdit ? initial!.name : "Ordered match/set policy"} onClose={onClose} />
+      <ModalHeader title={isEdit ? `Edit Route-map — ${initial!.name}` : "Create Route-map"} subtitle="Ordered match/set policy" onClose={onClose} />
 
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="clr-form-control" style={{ marginTop: 0 }}>
           <label className="clr-control-label">Name <span className="clr-required">*</span></label>
-          <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="RM-EVPN-IN" className="clr-input" style={monoStyle} />
+          <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="RM-EXPORT" className="clr-input" style={monoStyle} />
         </div>
 
         <div className="clr-form-control" style={{ marginTop: 0 }}>
@@ -266,7 +266,7 @@ export function RouteMapFormModal({
         <ModalFooter>
           <button type="button" className="btn btn-neutral" onClick={onClose}>Cancel</button>
           <button type="submit" className="btn btn-primary" disabled={saving}>
-            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Route-Map"}
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Route-map"}
           </button>
         </ModalFooter>
       </form>

@@ -62,14 +62,14 @@ export function OpenvpnStatusPanel() {
   const up = slCol >= 0 ? table.rows.filter((r) => isUp(r[slCol] ?? "")).length : 0;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-3">
       <StatusHeader
         lastUpdated={lastUpdated}
         onRefresh={reload}
         tiles={
           <>
             <StatTile label="Tunnels" value={String(total)} />
-            <StatTile label="Up" value={`${up}/${total}`} sub="up / total" />
+            <StatTile label="Up" value={`${up} / ${total}`} sub="up / total" />
           </>
         }
       />

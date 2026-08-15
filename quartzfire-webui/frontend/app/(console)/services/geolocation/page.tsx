@@ -85,6 +85,9 @@ type Tab = "actions" | "policies" | "alerts";
 
 const dash = <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;
 
+/// Clarity status pill (mono uppercase), per the design reference.
+const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" } as const;
+
 const time = (ts: number | null | undefined) =>
   ts ? new Date(ts * 1000).toLocaleString(undefined, { hour12: false }) : "never";
 
@@ -244,9 +247,6 @@ function StatusCard({
           )}
           {item("Schedule", update?.schedule === "daily" ? "Daily (automatic)" : "Daily after first boot")}
           <div className="ml-auto flex items-center gap-2">
-            <Button kind="outline" size="sm" onClick={onRefresh}>
-              Refresh
-            </Button>
             <Button kind="primary" size="sm" onClick={updateNow} disabled={updating}>
               {updating ? "Requesting…" : "Update Now"}
             </Button>
@@ -273,17 +273,31 @@ function ActionsTab({
   countries,
   status,
   onChanged,
+  pendingCreate,
+  onCreateConsumed,
 }: {
   config: GeolocationConfig;
   countries: GeoCountries;
   status: GeoStatus | null;
   onChanged: () => void;
+  /** Set when the page-header "New Action" button was clicked — open the editor. */
+  pendingCreate: boolean;
+  onCreateConsumed: () => void;
 }) {
   const { setToast } = useDashboard();
   const [editing, setEditing] = useState<GeoAction | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<GeoAction | null>(null);
   const resize = useColumnResize("geo-actions", GEO_ACTION_COLS);
+
+  // The create button lives in the page-header row (DC anatomy); it survives
+  // tab switches because the request is page state consumed here.
+  useEffect(() => {
+    if (!pendingCreate) return;
+    onCreateConsumed();
+    setEditing(null);
+    setCreating(true);
+  }, [pendingCreate, onCreateConsumed]);
 
   const hits = status?.counters?.actions ?? {};
 
@@ -331,23 +345,6 @@ function ActionsTab({
 
   return (
     <div className="flex flex-col gap-4 max-w-[1050px]">
-      <div className="flex items-center gap-3">
-        <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0 flex-1">
-          An action is a reusable country policy — block the listed countries, or only allow
-          them. Attach actions to firewall rules on the Policies tab.
-        </p>
-        <Button
-          kind="primary"
-          size="sm"
-          onClick={() => {
-            setCreating(true);
-            setEditing(null);
-          }}
-        >
-          Add Action
-        </Button>
-      </div>
-
       <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
@@ -637,16 +634,6 @@ function PoliciesTab({
 
   return (
     <div className="flex flex-col gap-3 max-w-[1050px]">
-      <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0">
-        Attach a geolocation action to a firewall Allow rule and its traffic is country-filtered
-        before the rule sees it. Every Allow rule (forward, input, or output) is eligible
-        ({boundCount} enforced). Create rules under{" "}
-        <Link href="/firewall/rules" className="text-[var(--cds-alias-typography-color-300)]">
-          Firewall → Rules
-        </Link>
-        .
-      </p>
-
       <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
@@ -756,6 +743,16 @@ function PoliciesTab({
             )}
           </tbody>
         </table>
+      </div>
+
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        Attach a geolocation action to a firewall Allow rule and its traffic is country-filtered
+        before the rule sees it. Every Allow rule (forward, input, or output) is eligible
+        ({boundCount} enforced). Create rules under{" "}
+        <Link href="/firewall/rules" className="text-[var(--cds-alias-typography-color-300)]">
+          Firewall → Rules
+        </Link>
+        .
       </div>
 
       {orphans.length > 0 && (
@@ -1015,12 +1012,6 @@ function AlertsTab() {
 
   return (
     <div className="flex flex-col gap-3 max-w-[1050px]">
-      <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0">
-        Live country-block events — one row per connection dropped by an action with logging
-        enabled (the action&apos;s <span className="mono">Log</span> switch). Turn logging on for
-        an action on the Actions tab to see its blocks here.
-      </p>
-
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
           <Icon shape="search" size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--cds-alias-typography-color-200)]" />
@@ -1103,6 +1094,12 @@ function AlertsTab() {
           </tbody>
         </table>
       </div>
+
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        Live country-block events — one row per connection dropped by an action with logging
+        enabled (the action&apos;s <span className="mono">Log</span> switch). Turn logging on for
+        an action on the Actions tab to see its blocks here.
+      </div>
     </div>
   );
 }
@@ -1116,6 +1113,8 @@ export default function GeolocationPage() {
   const [status, setStatus] = useState<GeoStatus | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
+  // Set by the page-header "New Action" button; consumed by the Actions tab.
+  const [pendingCreate, setPendingCreate] = useState(false);
 
   const load = useCallback(async (mode: "load" | "refresh" = "load") => {
     if (mode === "load") setState("loading");
@@ -1147,35 +1146,47 @@ export default function GeolocationPage() {
 
   const applyError = status?.status?.apply?.ok === false ? status.status.apply.error : null;
 
+  // Header pill, per the DC reference: "DB <date> · ENFORCING".
+  const db = status?.status?.db;
+  const dbPart = db?.present && db.version ? `DB ${new Date(db.version * 1000).toISOString().slice(0, 10)}` : "NO DB";
+  const enforcing = !!status?.status?.active;
+  const anyEnabled = config.policies.some((p) => p.enabled);
+  const pill = enforcing ? (
+    <span className="label label-success" style={pillStyle}>{dbPart} · ENFORCING</span>
+  ) : anyEnabled ? (
+    <span className="label label-warning" style={pillStyle}>{dbPart} · NOT ENFORCING</span>
+  ) : (
+    <span className="label" style={pillStyle}>{dbPart} · NO POLICIES</span>
+  );
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
-        <h2>Geolocation</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Country-based filtering attached to Allow rules — actions name the countries, policies attach them.
-        </p>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">Geolocation</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Country-based filtering attached to Allow rules — actions name the countries, policies attach them.
+          </p>
+        </div>
+        <span className="flex items-center gap-2">
+          {pill}
+          <button type="button" className="btn" onClick={() => load("refresh")}>
+            Refresh
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              setTab("actions");
+              setPendingCreate(true);
+            }}
+          >
+            New Action
+          </button>
+        </span>
       </div>
 
       <StatusCard status={status} onRefresh={() => load("refresh")} />
-
-      <Tabs
-        items={[
-          { value: "actions", label: "Actions", count: config.actions.length },
-          { value: "policies", label: "Policies", count: config.policies.length },
-          { value: "alerts", label: "Alerts" },
-        ]}
-        value={tab}
-        onChange={(v) => setTab(v as Tab)}
-        trailing={
-          status?.status?.active ? (
-            <span className="badge badge-ok">Enforcing</span>
-          ) : config.policies.some((p) => p.enabled) ? (
-            <span className="badge badge-warn">Not enforcing</span>
-          ) : (
-            <span className="badge badge-muted">No enabled policies</span>
-          )
-        }
-      />
 
       {applyError && (
         <div className="alert alert-danger alert-sm">
@@ -1183,6 +1194,16 @@ export default function GeolocationPage() {
           <div className="alert-text">{applyError}</div>
         </div>
       )}
+
+      <Tabs
+        items={[
+          { value: "actions", label: "Actions", count: config.actions.length },
+          { value: "policies", label: "Policies", count: config.policies.length },
+          { value: "alerts", label: "Log" },
+        ]}
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+      />
 
       <div>
         {state === "loading" && <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading Geolocation…</div>}
@@ -1202,7 +1223,14 @@ export default function GeolocationPage() {
         {state === "ready" && (
           <>
             {tab === "actions" && (
-              <ActionsTab config={config} countries={countries} status={status} onChanged={onChanged} />
+              <ActionsTab
+                config={config}
+                countries={countries}
+                status={status}
+                onChanged={onChanged}
+                pendingCreate={pendingCreate}
+                onCreateConsumed={() => setPendingCreate(false)}
+              />
             )}
             {tab === "policies" && (
               <PoliciesTab config={config} status={status} onChanged={onChanged} />

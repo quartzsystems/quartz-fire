@@ -181,13 +181,20 @@ export function BondFormModal({
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Uplink LAG"
+            placeholder="Core uplink LAG"
             className="clr-input"
             style={wide}
           />
         </Field>
 
-        <Field label="Member interfaces">
+        <Field
+          label="Member interfaces"
+          hint={
+            candidates.length > 0
+              ? "Only free ethernet interfaces are offered — no addresses, no bridge, no other bond."
+              : undefined
+          }
+        >
           {candidates.length === 0 ? (
             <div className="clr-subtext">
               No free ethernet interfaces — members must have no addresses and not belong to
@@ -238,7 +245,7 @@ export function BondFormModal({
                   <input
                     value={a.value}
                     onChange={(e) => updateAddr(a.key, e.target.value)}
-                    placeholder="10.0.0.1/24 or dhcp"
+                    placeholder="10.99.0.1/31"
                     className="clr-input"
                     style={wideMono}
                   />

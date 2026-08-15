@@ -407,17 +407,7 @@ export default function TrafficFlowPage() {
     }
   }, [views]);
 
-  const [viewsOpen, setViewsOpen] = useState(false);
   const [viewName, setViewName] = useState("");
-  const viewsRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!viewsOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (viewsRef.current && !viewsRef.current.contains(e.target as Node)) setViewsOpen(false);
-    };
-    window.addEventListener("mousedown", onDown);
-    return () => window.removeEventListener("mousedown", onDown);
-  }, [viewsOpen]);
 
   const applyView = (v: SankeyView) => {
     setOrder(v.order);
@@ -434,7 +424,6 @@ export default function TrafficFlowPage() {
       [name]: { order, metric, window: window_, verdict: verdictFilter },
     }));
     setViewName("");
-    setViewsOpen(false);
   };
 
   const move = (id: FacetId, dir: -1 | 1) =>
@@ -474,17 +463,26 @@ export default function TrafficFlowPage() {
     });
 
   // ── filtered flows + layout ──
+  /** Free-text filter over a flow's addresses, names, interfaces, and service. */
+  const [query, setQuery] = useState("");
+
   const filtered = useMemo(() => {
     const all = resp?.flows ?? [];
+    const q = query.trim().toLowerCase();
     return all.filter((r) => {
       if (verdictFilter !== "all" && verdictOf(r) !== verdictFilter) return false;
       for (const [facet, keys] of filters) {
         const k = FACET_BY_ID.get(facet)!.key(r) ?? "\x00none";
         if (!keys.has(k)) return false;
       }
-      return true;
+      if (!q) return true;
+      const hay = [r.src, r.src_name, r.dst, r.dst_name, r.in_if, r.out_if, r.proto, r.dport, r.chain, r.rule]
+        .filter((v) => v != null && v !== "")
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
     });
-  }, [resp, filters, verdictFilter]);
+  }, [resp, filters, verdictFilter, query]);
 
   // Metric weight + its value formatter, together so they can't disagree.
   const weight = useCallback(
@@ -626,7 +624,7 @@ export default function TrafficFlowPage() {
   const topFlows = useMemo(() => filtered.slice(0, 10), [filtered]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Page header per the DC reference: title/sub left; save-view input +
           plain Save View / Refresh buttons right-aligned beside it. */}
       <div className="flex items-start gap-2 flex-wrap">
@@ -655,8 +653,19 @@ export default function TrafficFlowPage() {
 
       <div>
         <div className="flex flex-col gap-3">
-          {/* Controls */}
-          <div className="flex items-center gap-3 flex-wrap">
+          {/* Controls — DC row order: verdict tabs · grouping · filter input,
+              saved views right-aligned. Window/metric selectors and Pause are
+              kept as extras beyond the reference. */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Segmented
+              items={[
+                { value: "all", label: "All" },
+                { value: "allow", label: "Allowed" },
+                { value: "block", label: "Blocked" },
+              ]}
+              value={verdictFilter}
+              onChange={(v) => setVerdictFilter(v as typeof verdictFilter)}
+            />
             <Segmented
               items={[
                 { value: "5m", label: "5 min" },
@@ -674,64 +683,14 @@ export default function TrafficFlowPage() {
               value={metric}
               onChange={(v) => setMetric(v as FlowMetric)}
             />
-            <Segmented
-              items={[
-                { value: "all", label: "All" },
-                { value: "allow", label: "Allowed" },
-                { value: "block", label: "Blocked" },
-              ]}
-              value={verdictFilter}
-              onChange={(v) => setVerdictFilter(v as typeof verdictFilter)}
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter flows…"
+              className="clr-input"
+              style={{ width: 240, maxWidth: 240 }}
             />
             <div className="ml-auto flex items-center gap-3">
-              {/* Named views: save the current columns/metric/window/verdict, recall by name */}
-              <div className="clr-dropdown" ref={viewsRef}>
-                <Button kind="outline" size="sm" onClick={() => setViewsOpen((o) => !o)}>
-                  Views
-                </Button>
-                {viewsOpen && (
-                  <div className="dropdown-menu right" style={{ minWidth: 240 }}>
-                    <div className="dropdown-header">Saved views</div>
-                    {Object.keys(views).length === 0 && (
-                      <div className="px-3 py-[6px]" style={{ fontSize: 12.5, color: "var(--cds-alias-typography-color-200)" }}>
-                        No saved views yet.
-                      </div>
-                    )}
-                    {Object.entries(views).map(([name, v]) => (
-                      <div key={name} className="flex items-center w-full">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            applyView(v);
-                            setViewsOpen(false);
-                          }}
-                          className="dropdown-item flex-1 min-w-0 truncate"
-                          title={`${v.order.map((id) => FACET_BY_ID.get(id)?.label ?? id).join(" → ")}`}
-                        >
-                          {name}
-                          <span className="ml-2" style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}>
-                            {v.window} · {v.metric === "bytes" ? "Bytes" : "Hits"}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setViews((prev) => {
-                              const next = { ...prev };
-                              delete next[name];
-                              return next;
-                            })
-                          }
-                          className="btn btn-sm btn-link-neutral btn-icon flex-shrink-0 mr-1"
-                          title="Delete view"
-                        >
-                          <Icon shape="trash" size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
               <Button
                 kind="outline"
                 size="sm"
@@ -744,19 +703,49 @@ export default function TrafficFlowPage() {
               >
                 {paused ? "Resume" : "Pause"}
               </Button>
-              <span className="text-[12px] text-[var(--qz-fg-4)]">
-                {resp ? (
-                  <>
-                    {metric === "bytes"
-                      ? formatBytes(resp.total_bytes)
-                      : `${resp.total_conns.toLocaleString()} hits`}
-                    {" · "}
-                    {resp.flow_count} flows
-                    {attributedPct !== null && <> · {attributedPct}% rule-attributed</>}
-                  </>
-                ) : (
-                  "Loading…"
-                )}
+              {/* Saved views, inline per the DC reference: name links that
+                  recall a saved column/metric/window/verdict combination. */}
+              <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+                Saved views:{" "}
+                {Object.keys(views).length === 0
+                  ? "none yet"
+                  : Object.entries(views).map(([name, v], i) => (
+                      <span key={name}>
+                        {i > 0 && " · "}
+                        <a
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            applyView(v);
+                          }}
+                          title={`${v.order.map((id) => FACET_BY_ID.get(id)?.label ?? id).join(" → ")} · ${v.window} · ${v.metric === "bytes" ? "Bytes" : "Hits"}`}
+                        >
+                          {name}
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setViews((prev) => {
+                              const next = { ...prev };
+                              delete next[name];
+                              return next;
+                            })
+                          }
+                          title="Delete this view"
+                          aria-label={`Delete view ${name}`}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            padding: "0 2px",
+                            cursor: "pointer",
+                            color: "var(--cds-alias-typography-color-200)",
+                            fontSize: 11,
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ))}
               </span>
             </div>
           </div>
@@ -850,7 +839,19 @@ export default function TrafficFlowPage() {
           )}
 
           {/* The diagram */}
-          <div className="card relative">
+          <div className="card">
+            <div className="card-header">
+              Where Traffic Goes
+              <span
+                className="ml-auto"
+                style={{ fontSize: 12, fontWeight: 400, color: "var(--cds-alias-typography-color-200)" }}
+              >
+                {metric === "bytes" ? "bytes" : "hits"} over the last{" "}
+                {window_ === "1h" ? "hour" : window_ === "15m" ? "15 min" : "5 min"} · green flows allowed, red
+                blocked
+              </span>
+            </div>
+            <div className="card-block">
             {resp && !resp.available ? (
               <div className="p-8 text-center text-[13px] text-[var(--qz-fg-4)]">
                 Flow recording isn&apos;t available yet. It needs a qfdevd build with per-flow
@@ -958,6 +959,7 @@ export default function TrafficFlowPage() {
                 )}
               </div>
             )}
+            </div>
           </div>
 
           {/* Legend (verdict is a status encoding — never color alone) */}
@@ -972,6 +974,17 @@ export default function TrafficFlowPage() {
               </span>
             ))}
             <span className="text-[var(--qz-fg-4)]">
+              {resp && (
+                <>
+                  {metric === "bytes"
+                    ? formatBytes(resp.total_bytes)
+                    : `${resp.total_conns.toLocaleString()} hits`}
+                  {" · "}
+                  {resp.flow_count} flows
+                  {attributedPct !== null && <> · {attributedPct}% rule-attributed</>}
+                  {" · "}
+                </>
+              )}
               Click a node to filter · only rules with logging enabled attribute flows to rules
               {resp?.truncated && <> · showing the top {resp.flows.length} of {resp.flow_count} flows</>}
             </span>

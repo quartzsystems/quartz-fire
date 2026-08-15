@@ -114,17 +114,11 @@ export function IsisStatusPanel() {
   const primaryArea = summary?.areas[0];
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 flex-1 min-w-[280px]">
-          <StatTile label="System ID" value={dash(primaryArea?.system_id)} sub={primaryArea?.is_type ?? undefined} />
-          <StatTile label="NET" value={dash(primaryArea?.net)} />
-          <StatTile label="Adjacencies" value={`${upNeighbors}/${totalNeighbors}`} sub="up / total" />
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
-          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
-        </div>
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <StatTile label="System ID" value={dash(primaryArea?.system_id)} sub={primaryArea?.net ?? undefined} />
+        <StatTile label="IS type" value={dash(primaryArea?.is_type)} />
+        <StatTile label="Adjacencies" value={`${upNeighbors} / ${totalNeighbors}`} sub="up / total" />
       </div>
 
       {!running ? (
@@ -136,7 +130,7 @@ export function IsisStatusPanel() {
       ) : (
         <div className="flex flex-col gap-2">
           <h3 className="clr-section" style={{ margin: 0, color: "var(--cds-alias-typography-color-450)" }}>Adjacencies</h3>
-          <DataTable
+          <DataTable searchable={false}
             rows={summary!.neighbors}
             columns={neighborColumns()}
             rowId={(r) => `${r.interface ?? ""}-${r.system_id ?? ""}`}
@@ -146,6 +140,9 @@ export function IsisStatusPanel() {
           />
         </div>
       )}
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        Live state from isisd — refreshes every 5 seconds{lastUpdated ? `, last updated ${lastUpdated.toLocaleTimeString()}` : ""}.
+      </div>
     </div>
   );
 }

@@ -20,13 +20,16 @@ import { RowActions } from "@/components/dashboard/RowActions";
 import { ZoneFormModal } from "./ZoneFormModal";
 
 /// What a zone does with traffic no rule allowed. VyOS has no accept default
-/// for zones — unset still denies, it just doesn't say how.
+/// for zones — unset still denies, so it reads DENY like an explicit drop
+/// (per the DC mock); the tooltip carries the nuance.
 function DefaultActionPill({ zone }: { zone: FirewallZone }) {
   if (zone.default_action === "reject") return <span className="badge badge-warn">Reject</span>;
-  if (zone.default_action === "drop") return <span className="badge badge-crit">Deny</span>;
   return (
-    <span className="badge badge-muted" title="Not set — VyOS drops traffic no rule allowed.">
-      Deny (default)
+    <span
+      className="badge badge-crit"
+      title={zone.default_action ? undefined : "Not set — VyOS drops traffic no rule allowed."}
+    >
+      Deny
     </span>
   );
 }
@@ -99,9 +102,9 @@ export default function FirewallZonesPage() {
       header: "Name",
       value: (z) => z.display,
       render: (z) => (
-        <span title={`Device name: ${z.name}`}>
+        <span className="inline-flex items-center gap-[6px]" title={`Device name: ${z.name}`}>
           {z.display}
-          {z.local && <span className="badge badge-info ml-2">Firewall</span>}
+          {z.local && <span className="badge badge-info">Firewall</span>}
         </span>
       ),
       mono: true,

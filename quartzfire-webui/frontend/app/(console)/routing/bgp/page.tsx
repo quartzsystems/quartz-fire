@@ -87,6 +87,7 @@ export default function BgpPage() {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [section, setSection] = useState<Section>("global");
+  const [refreshing, setRefreshing] = useState(false);
 
   // null = closed; { peer: undefined } = create; { peer } = edit.
   const [neighborModal, setNeighborModal] = useState<{ peer?: BgpPeer } | null>(null);
@@ -115,6 +116,16 @@ export default function BgpPage() {
   }, [load]);
 
   const peerGroupNames = useMemo(() => (cfg?.peerGroups ?? []).map((g) => g.name), [cfg]);
+
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await load("refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const saved = (msg: string) => {
     setNeighborModal(null);
@@ -149,86 +160,89 @@ export default function BgpPage() {
     ["status", "Status", null],
   ];
 
+  // Header "Add" control follows the active tab (DC pattern: one primary
+  // button in the page-header row whose label tracks the tab).
+  const addAction =
+    section === "peer-groups"
+      ? { label: "Add Peer-Group", onClick: () => setGroupModal({}) }
+      : { label: "Add Neighbor", onClick: () => setNeighborModal({}) };
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h2 style={{ margin: 0 }}>BGP</h2>
-        <p className="clr-secondary" style={{ marginTop: 4 }}>
-          Border Gateway Protocol — underlay peering and the L2VPN-EVPN overlay for a spine/leaf fabric.
-        </p>
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      <div className="flex items-start gap-2">
+        <div className="mr-auto">
+          <h2 className="m-0">BGP</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
+            Border Gateway Protocol — underlay peering and the L2VPN-EVPN overlay for a spine/leaf fabric.
+          </p>
+        </div>
+        {status === "ready" && (
+          <>
+            <Button kind="outline" onClick={refresh} disabled={refreshing}>
+              {refreshing ? "Refreshing…" : "Refresh"}
+            </Button>
+            <Button kind="primary" onClick={addAction.onClick}>{addAction.label}</Button>
+          </>
+        )}
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="clr-secondary">Loading BGP configuration…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="alert alert-danger alert-sm">
-              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
-              <div className="alert-text">{errorMsg}</div>
-            </div>
-            <div>
-              <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading BGP configuration…</div>}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">{errorMsg}</div>
           </div>
-        )}
-        {status === "ready" && cfg && (
-          <div className="flex flex-col gap-5">
-            <Tabs
-              items={tabs.map(([id, label, count]) => ({ value: id, label, count: count ?? undefined }))}
-              value={section}
-              onChange={(v) => setSection(v as Section)}
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
+          </div>
+        </div>
+      )}
+      {status === "ready" && cfg && (
+        <>
+          <Tabs
+            items={tabs.map(([id, label, count]) => ({ value: id, label, count: count ?? undefined }))}
+            value={section}
+            onChange={(v) => setSection(v as Section)}
+          />
+
+          {section === "global" && (
+            <BgpGlobalPanel live={cfg.global} onSaved={(msg) => { setToast(msg); load("refresh"); }} />
+          )}
+
+          {section === "status" && <BgpStatusPanel />}
+
+          {section === "neighbors" && (
+            <DataTable searchable={false}
+              rows={cfg.neighbors}
+              columns={peerColumns(true)}
+              rowId={(r) => r.name}
+              storageKey="routing-bgp-neighbors"
+              searchPlaceholder="Search neighbors…"
+              emptyMessage="No BGP neighbors configured."
+              onRowOpen={(row) => setNeighborModal({ peer: row })}
+              actions={(row) => (
+                <RowActions label={`neighbor ${row.name}`} onEdit={() => setNeighborModal({ peer: row })} onDelete={() => removeNeighbor(row)} />
+              )}
             />
+          )}
 
-            {section === "global" && (
-              <BgpGlobalPanel live={cfg.global} onSaved={(msg) => { setToast(msg); load("refresh"); }} />
-            )}
-
-            {section === "status" && <BgpStatusPanel />}
-
-            {section === "neighbors" && (
-              <DataTable
-                rows={cfg.neighbors}
-                columns={peerColumns(true)}
-                rowId={(r) => r.name}
-                storageKey="routing-bgp-neighbors"
-                searchPlaceholder="Search neighbors…"
-                emptyMessage="No BGP neighbors configured."
-                onRefresh={() => load("refresh")}
-                onRowOpen={(row) => setNeighborModal({ peer: row })}
-                toolbar={
-                  <Button kind="primary" size="sm" onClick={() => setNeighborModal({})}>
-                    Add Neighbor
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions label={`neighbor ${row.name}`} onEdit={() => setNeighborModal({ peer: row })} onDelete={() => removeNeighbor(row)} />
-                )}
-              />
-            )}
-
-            {section === "peer-groups" && (
-              <DataTable
-                rows={cfg.peerGroups}
-                columns={peerColumns(false)}
-                rowId={(r) => r.name}
-                storageKey="routing-bgp-peer-groups"
-                searchPlaceholder="Search peer-groups…"
-                emptyMessage="No BGP peer-groups configured."
-                onRefresh={() => load("refresh")}
-                onRowOpen={(row) => setGroupModal({ peer: row })}
-                toolbar={
-                  <Button kind="primary" size="sm" onClick={() => setGroupModal({})}>
-                    Add Peer-Group
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions label={`peer-group ${row.name}`} onEdit={() => setGroupModal({ peer: row })} onDelete={() => removeGroup(row)} />
-                )}
-              />
-            )}
-          </div>
-        )}
-      </div>
+          {section === "peer-groups" && (
+            <DataTable searchable={false}
+              rows={cfg.peerGroups}
+              columns={peerColumns(false)}
+              rowId={(r) => r.name}
+              storageKey="routing-bgp-peer-groups"
+              searchPlaceholder="Search peer-groups…"
+              emptyMessage="No BGP peer-groups configured."
+              onRowOpen={(row) => setGroupModal({ peer: row })}
+              actions={(row) => (
+                <RowActions label={`peer-group ${row.name}`} onEdit={() => setGroupModal({ peer: row })} onDelete={() => removeGroup(row)} />
+              )}
+            />
+          )}
+        </>
+      )}
 
       {neighborModal && cfg && (
         <PeerFormModal

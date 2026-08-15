@@ -133,8 +133,8 @@ export function StaticNatFormModal({
           ))}
         </datalist>
 
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Rule number" required>
+        <div className="grid" style={{ gridTemplateColumns: "100px 1fr", gap: 12 }}>
+          <Field label="Rule #" required>
             <input
               type="number"
               min={1}
@@ -146,43 +146,43 @@ export function StaticNatFormModal({
               style={wideMono}
             />
           </Field>
-          <Field label="Interface" hint="Optional — leave blank to match any interface.">
+          <Field label="Description">
             <input
-              list="static-nat-interfaces"
-              value={iface}
-              onChange={(e) => setIface(e.target.value)}
-              placeholder="eth0"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Mail server 1-to-1"
               className="clr-input"
-              style={wideMono}
+              style={wide}
             />
           </Field>
         </div>
 
-        <Field label="Description">
+        <Field label="Interface" hint="Optional — leave blank to match any interface.">
           <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Web server 1:1"
+            list="static-nat-interfaces"
+            value={iface}
+            onChange={(e) => setIface(e.target.value)}
+            placeholder="eth0"
             className="clr-input"
-            style={wide}
+            style={wideMono}
           />
         </Field>
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Internal address" required hint="The private host (LAN side).">
-            <input
-              value={internalAddress}
-              onChange={(e) => setInternalAddress(e.target.value)}
-              placeholder="192.168.1.10"
-              className="clr-input"
-              style={wideMono}
-            />
-          </Field>
           <Field label="External address" required hint="The public address (WAN side).">
             <input
               value={externalAddress}
               onChange={(e) => setExternalAddress(e.target.value)}
               placeholder="203.0.113.10"
+              className="clr-input"
+              style={wideMono}
+            />
+          </Field>
+          <Field label="Internal address" required hint="The private host (LAN side).">
+            <input
+              value={internalAddress}
+              onChange={(e) => setInternalAddress(e.target.value)}
+              placeholder="172.16.10.30"
               className="clr-input"
               style={wideMono}
             />

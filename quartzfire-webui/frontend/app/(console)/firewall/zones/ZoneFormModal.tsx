@@ -74,11 +74,20 @@ export function ZoneFormModal({
   // Only one Firewall zone is allowed, so hide the option when another zone
   // already is it.
   const otherLocal = localZone(config.zones.filter((z) => z.name !== initial?.name));
-  const ifaceLabel = (n: string) => (descriptions[n] ? `${descriptions[n]} (${n})` : n);
-  // An interface can only be in one zone — VyOS rejects the commit otherwise.
-  const addable = interfaces.filter(
-    (n) => !members.includes(n) && interfaceZone(config.zones, n, initial?.name ?? null) === null,
-  );
+  // Checkbox labels per the DC mock: "br0 — LAN bridge".
+  const ifaceLabel = (n: string) => (descriptions[n] ? `${n} — ${descriptions[n]}` : n);
+  // An interface can only be in one zone — VyOS rejects the commit otherwise,
+  // so only this zone's members and unclaimed interfaces are offered. A member
+  // no longer configured (e.g. a deleted VLAN) still shows so it can be
+  // unchecked.
+  const pickable = [
+    ...interfaces.filter(
+      (n) => members.includes(n) || interfaceZone(config.zones, n, initial?.name ?? null) === null,
+    ),
+    ...members.filter((n) => !interfaces.includes(n)),
+  ];
+  const toggleMember = (n: string) =>
+    setMembers((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
 
   const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -138,7 +147,7 @@ export function ZoneFormModal({
             locked
               ? `In use by ${usedByRules} rule${usedByRules === 1 ? "" : "s"} — the name and kind are locked.`
               : /\s/.test(name.trim())
-                ? `Spaces are fine here — stored on the device as ${sanitizeAliasName(name)}.`
+                ? `Spaces are fine — stored on the device as ${sanitizeAliasName(name)}.`
                 : undefined
           }
         >
@@ -153,14 +162,7 @@ export function ZoneFormModal({
         </Field>
 
         {(!otherLocal || local) && (
-          <Field
-            label="Kind"
-            hint={
-              local
-                ? "The firewall itself. It has no interfaces — pick it as a rule's From or To via the built-in Firewall endpoint."
-                : "A group of interfaces."
-            }
-          >
+          <Field label="Kind">
             <div className="flex gap-4">
               <div className="clr-radio-wrapper">
                 <input
@@ -171,7 +173,7 @@ export function ZoneFormModal({
                   disabled={locked}
                   onChange={() => setLocal(false)}
                 />
-                <label htmlFor="zone-kind-network">Network zone</label>
+                <label htmlFor="zone-kind-network">Network zone — a group of interfaces</label>
               </div>
               <div className="clr-radio-wrapper">
                 <input
@@ -182,7 +184,7 @@ export function ZoneFormModal({
                   disabled={locked}
                   onChange={() => setLocal(true)}
                 />
-                <label htmlFor="zone-kind-local">Firewall zone</label>
+                <label htmlFor="zone-kind-local">Firewall zone — this device itself</label>
               </div>
             </div>
           </Field>
@@ -191,68 +193,31 @@ export function ZoneFormModal({
         {!local && (
           <Field
             label="Interfaces"
-            hint="An interface can only belong to one zone — those already claimed aren't listed."
+            hint="An interface can belong to one zone only — those already claimed aren't listed."
           >
-            <div
-              className="overflow-y-auto"
-              style={{
-                border: "1px solid var(--cds-alias-object-border-color)",
-                borderRadius: 4,
-                ...monoFont,
-                minHeight: 84,
-                maxHeight: 150,
-                padding: members.length ? "4px 0" : 0,
-              }}
-            >
-              {members.length === 0 ? (
-                <div
-                  className="flex items-center justify-center h-[84px]"
-                  style={{ fontSize: 13, color: "var(--cds-alias-typography-color-200)" }}
-                >
-                  No interfaces
-                </div>
-              ) : (
-                members.map((m) => (
-                  <div
-                    key={m}
-                    className="flex items-center gap-2 px-3 py-[5px]"
-                    style={{ fontSize: 13, color: "var(--cds-alias-typography-color-450)" }}
-                  >
-                    <span>{descriptions[m] ?? m}</span>
-                    {descriptions[m] && (
-                      <span style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}>{m}</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setMembers(members.filter((x) => x !== m))}
-                      title={`Remove ${m}`}
-                      className="btn btn-sm btn-link-neutral btn-icon ml-auto flex-shrink-0"
-                      style={{ margin: "0 0 0 auto" }}
-                    >
-                      <Icon shape="times" size={12} />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="clr-select-wrapper" style={{ maxWidth: "none", marginTop: 8 }}>
-              <select
-                value=""
-                onChange={(e) => e.target.value && setMembers([...members, e.target.value])}
-                disabled={addable.length === 0}
-                className="clr-select"
-                style={{ maxWidth: "none", width: "100%", ...monoFont }}
+            {pickable.length === 0 ? (
+              <div className="clr-subtext">No unassigned interfaces left.</div>
+            ) : (
+              <div
+                className="flex flex-col overflow-auto"
+                style={{
+                  gap: 6,
+                  maxHeight: 170,
+                  border: "1px solid var(--cds-alias-object-border-color)",
+                  borderRadius: 4,
+                  padding: "10px 12px",
+                }}
               >
-                <option value="" disabled>
-                  {addable.length ? "Add interface…" : "No unassigned interfaces left"}
-                </option>
-                {addable.map((n) => (
-                  <option key={n} value={n}>
-                    {ifaceLabel(n)}
-                  </option>
+                {pickable.map((n) => (
+                  <label key={n} className="clr-checkbox-wrapper" style={{ cursor: "pointer" }}>
+                    <input type="checkbox" checked={members.includes(n)} onChange={() => toggleMember(n)} />
+                    <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)", ...monoFont }}>
+                      {interfaces.includes(n) ? ifaceLabel(n) : `${n} (not configured)`}
+                    </span>
+                  </label>
                 ))}
-              </select>
-            </div>
+              </div>
+            )}
           </Field>
         )}
 
@@ -307,7 +272,7 @@ export function ZoneFormModal({
           <div className="alert alert-warning alert-sm">
             <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
             <div className="alert-text">
-              Traffic to this zone is denied until a rule allows it. The change is applied under commit-confirm, so it
+              Traffic to this zone is denied until a rule allows it. The change applies under commit-confirm, so it
               reverts on its own if it cuts off your session.
             </div>
           </div>

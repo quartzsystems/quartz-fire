@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
-import { StatePill } from "@/components/ui/Badge";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { MtuCell } from "@/components/dashboard/MtuCell";
 import { RowActions } from "@/components/dashboard/RowActions";
@@ -24,19 +23,41 @@ import { EthernetFormModal } from "./EthernetFormModal";
 /// negotiated speed.
 type EthRow = EthernetInterface & { link: LinkState; phy: PhyInfo | null };
 
+/// Clarity status pill (mono uppercase), per the design reference.
+const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" } as const;
+const dim = (t: string) => <span style={{ color: "var(--cds-alias-typography-color-200)" }}>{t}</span>;
+
+function StatusPill({ enabled }: { enabled: boolean }) {
+  return (
+    <span className={`label${enabled ? " label-success" : ""}`} style={pillStyle}>
+      {enabled ? "ENABLED" : "DISABLED"}
+    </span>
+  );
+}
+
 function LinkPill({ link }: { link: LinkState }) {
-  if (link === "unknown") return <span className="badge badge-muted">Unknown</span>;
-  return <span className={link === "up" ? "badge badge-ok" : "badge badge-crit"}>{link === "up" ? "Up" : "Down"}</span>;
+  if (link === "unknown") return <span className="label" style={pillStyle}>UNKNOWN</span>;
+  return (
+    <span className={link === "up" ? "label label-success" : "label label-danger"} style={pillStyle}>
+      {link === "up" ? "UP" : "DOWN"}
+    </span>
+  );
 }
 
 const columns: Column<EthRow>[] = [
   { key: "name", header: "Interface", value: (r) => r.name, mono: true, sortable: true, width: 130 },
-  { key: "description", header: "Description", value: (r) => r.description ?? "", sortable: true },
+  {
+    key: "description",
+    header: "Description",
+    value: (r) => r.description ?? "",
+    render: (r) => r.description || dim("—"),
+    sortable: true,
+  },
   {
     key: "addresses",
     header: "IP address",
     value: (r) => r.addresses.join(", "),
-    render: (r) => (r.addresses.length ? r.addresses.join(", ") : "—"),
+    render: (r) => (r.addresses.length ? r.addresses.join(", ") : dim("—")),
     mono: true,
   },
   { key: "mtu", header: "MTU", value: (r) => effectiveMtu(r.mtu, "ethernet"), render: (r) => <MtuCell mtu={r.mtu} kind="ethernet" />, mono: true, sortable: true, width: 80 },
@@ -56,7 +77,7 @@ const columns: Column<EthRow>[] = [
     value: (r) => r.phy?.speed_mbps ?? 0,
     render: (r) => {
       const s = formatSpeed(r.phy?.speed_mbps ?? null);
-      if (!s) return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
+      if (!s) return dim("—");
       return <span title={r.phy?.duplex ? `${r.phy.duplex} duplex` : undefined}>{s}</span>;
     },
     mono: true,
@@ -67,7 +88,7 @@ const columns: Column<EthRow>[] = [
     key: "status",
     header: "Status",
     value: (r) => (r.enabled ? "enabled" : "disabled"),
-    render: (r) => <StatePill enabled={r.enabled} />,
+    render: (r) => <StatusPill enabled={r.enabled} />,
     sortable: true,
     width: 120,
   },

@@ -165,7 +165,7 @@ export function GeolocationMapTile() {
           className="ml-auto text-[12px] flex-shrink-0"
           style={{ fontWeight: 400, color: "var(--cds-alias-typography-color-200)" }}
         >
-          traffic by country
+          active connections · sampled every 15 s
         </span>
         <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
       </div>

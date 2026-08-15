@@ -160,7 +160,7 @@ export function NatRuleFormModal({
       return;
     }
     if (!masquerade && translationAddress.trim() === "") {
-      setError(isSource ? "Enter a translation address, or use masquerade." : "Enter a forward-to address.");
+      setError(isSource ? "Enter a translation address, or use masquerade." : "Enter a translation address.");
       return;
     }
     if (sourceMode === "alias" && !sourceGroup) {
@@ -220,8 +220,8 @@ export function NatRuleFormModal({
           ))}
         </datalist>
 
-        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label="Rule number" required>
+        <div className="grid" style={{ gridTemplateColumns: "100px 1fr", gap: 12 }}>
+          <Field label="Rule #" required>
             <input
               type="number"
               min={1}
@@ -232,6 +232,44 @@ export function NatRuleFormModal({
               className="clr-input"
               style={wideMono}
             />
+          </Field>
+          <Field label="Description">
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder={isSource ? "Masquerade LAN behind the WAN address" : "Publish web01 on 443"}
+              className="clr-input"
+              style={wide}
+            />
+          </Field>
+        </div>
+
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label={ifaceLabel}>
+            {ifaceOptions.length > 0 ? (
+              <div className="clr-select-wrapper" style={wide}>
+                <select
+                  value={iface}
+                  onChange={(e) => setIface(e.target.value)}
+                  className="clr-select"
+                  style={wideMono}
+                >
+                  {ifaceOptions.map((n) => (
+                    <option key={n} value={n}>
+                      {descriptions?.[n] ? `${n} — ${descriptions[n]}` : n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <input
+                value={iface}
+                onChange={(e) => setIface(e.target.value)}
+                placeholder="eth0"
+                className="clr-input"
+                style={wideMono}
+              />
+            )}
           </Field>
           <Field label="Protocol">
             <input
@@ -245,50 +283,13 @@ export function NatRuleFormModal({
           </Field>
         </div>
 
-        <Field label="Description">
-          <input
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder={isSource ? "Office Outbound NAT" : "Web Server Port-Forward"}
-            className="clr-input"
-            style={wide}
-          />
-        </Field>
-
-        <Field label={ifaceLabel} hint="Interface this rule applies to.">
-          {ifaceOptions.length > 0 ? (
-            <div className="clr-select-wrapper" style={wide}>
-              <select
-                value={iface}
-                onChange={(e) => setIface(e.target.value)}
-                className="clr-select"
-                style={wideMono}
-              >
-                {ifaceOptions.map((n) => (
-                  <option key={n} value={n}>
-                    {descriptions?.[n] ? `${n} — ${descriptions[n]}` : n}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <input
-              value={iface}
-              onChange={(e) => setIface(e.target.value)}
-              placeholder="eth0"
-              className="clr-input"
-              style={wideMono}
-            />
-          )}
-        </Field>
-
         <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 12 }}>
           <Field
             label="Source"
             hint={
               sourceMode === "alias"
                 ? "Interface networks come from each interface's address; aliases are managed under Firewall → Aliases."
-                : undefined
+                : "Address, CIDR, or an alias."
             }
           >
             <div className="flex gap-2">
@@ -390,7 +391,7 @@ export function NatRuleFormModal({
         {!masquerade && (
           <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 12 }}>
             <Field
-              label={isSource ? "Translation address" : "Forward-to address"}
+              label="Translation address"
               required
               hint="An IP, CIDR block, or range (192.168.1.10-192.168.1.20)."
             >
@@ -402,7 +403,7 @@ export function NatRuleFormModal({
                 style={wideMono}
               />
             </Field>
-            <Field label="Translation port">
+            <Field label="Port">
               <input
                 value={translationPort}
                 onChange={(e) => setTranslationPort(e.target.value)}

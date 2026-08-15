@@ -127,7 +127,7 @@ export function GeneralFormModal({
               style={monoSt}
             />
           </Field>
-          <Field label="Domain name" hint="Optional DNS domain of this device.">
+          <Field label="Domain name">
             <input
               value={domainName}
               onChange={(e) => setDomainName(e.target.value)}
@@ -138,30 +138,28 @@ export function GeneralFormModal({
           </Field>
         </div>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="DNS servers" hint="One address per line — used by the firewall itself.">
-            <textarea
-              value={dnsText}
-              onChange={(e) => setDnsText(e.target.value)}
-              placeholder={"1.1.1.1\n8.8.8.8"}
-              rows={3}
-              className="clr-textarea resize-y"
-              style={monoSt}
-            />
-          </Field>
-          <Field label="NTP servers" hint="One server per line. Clearing the list disables NTP.">
-            <textarea
-              value={ntpText}
-              onChange={(e) => setNtpText(e.target.value)}
-              placeholder={"time1.vyos.net"}
-              rows={3}
-              className="clr-textarea resize-y"
-              style={monoSt}
-            />
-          </Field>
-        </div>
+        <Field label="DNS servers" hint="One address per line — used by the firewall itself.">
+          <textarea
+            value={dnsText}
+            onChange={(e) => setDnsText(e.target.value)}
+            placeholder={"1.1.1.1\n8.8.8.8"}
+            rows={2}
+            className="clr-textarea resize-y"
+            style={monoSt}
+          />
+        </Field>
+        <Field label="NTP servers" hint="Clearing the list disables NTP.">
+          <textarea
+            value={ntpText}
+            onChange={(e) => setNtpText(e.target.value)}
+            placeholder={"time1.vyos.net"}
+            rows={2}
+            className="clr-textarea resize-y"
+            style={monoSt}
+          />
+        </Field>
 
-        <Field label="Time zone" hint="IANA zone name, e.g. America/New_York. Defaults to UTC when empty.">
+        <Field label="Time zone" hint="IANA zone name. Defaults to UTC when empty.">
           <input
             value={timezone}
             onChange={(e) => setTimezone(e.target.value)}

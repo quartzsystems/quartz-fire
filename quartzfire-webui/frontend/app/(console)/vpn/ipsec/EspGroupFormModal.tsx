@@ -76,9 +76,9 @@ export function EspGroupFormModal({ initial, existingNames, onClose, onSaved }: 
     <ModalShell onClose={onClose} maxWidth={560}>
       <ModalHeader title={`${isEdit ? "Edit" : "Add"} ESP Group`} subtitle={isEdit ? initial!.name : "ESP (phase-2) proposals and PFS"} onClose={onClose} />
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
           <Field label="Name" required>
-            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="ESP-DEFAULT" className="clr-input" style={monoSt} />
+            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="ESP-MAIN" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Mode">
             <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
@@ -89,16 +89,14 @@ export function EspGroupFormModal({ initial, existingNames, onClose, onSaved }: 
               </select>
             </div>
           </Field>
-        </div>
-
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="PFS" hint="Perfect forward secrecy: enable / disable / dh-group<N>.">
-            <input value={pfs} onChange={(e) => setPfs(e.target.value)} placeholder="enable" className="clr-input" style={monoSt} />
-          </Field>
-          <Field label="Lifetime" hint="ESP SA lifetime in seconds (default 3600).">
+          <Field label="Lifetime (s)" hint="ESP SA lifetime (default 3600).">
             <input value={lifetime} onChange={(e) => setLifetime(e.target.value)} placeholder="3600" className="clr-input" style={monoSt} />
           </Field>
         </div>
+
+        <Field label="PFS" hint="Perfect forward secrecy: enable / disable / dh-group<N>.">
+          <input value={pfs} onChange={(e) => setPfs(e.target.value)} placeholder="enable" className="clr-input" style={monoSt} />
+        </Field>
 
         <ProposalsEditor rows={proposals} onChange={setProposals} withDh={false} />
 

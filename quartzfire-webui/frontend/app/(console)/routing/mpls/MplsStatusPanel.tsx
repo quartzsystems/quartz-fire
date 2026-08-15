@@ -51,7 +51,7 @@ function StatTile({ label, value, sub }: { label: string; value: string; sub?: s
 }
 
 const neighborCols: Column<LdpNeighbor>[] = [
-  { key: "neighbor_id", header: "Neighbor", value: (r) => r.neighbor_id ?? "", render: (r) => dash(r.neighbor_id), mono: true, sortable: true },
+  { key: "neighbor_id", header: "LDP neighbor", value: (r) => r.neighbor_id ?? "", render: (r) => dash(r.neighbor_id), mono: true, sortable: true },
   { key: "af", header: "AF", value: (r) => r.address_family ?? "", render: (r) => dash(r.address_family), mono: true, width: 90 },
   { key: "state", header: "State", value: (r) => r.state ?? "", render: (r) => <span className={statePill(r.state)} style={pillStyle}>{dash(r.state)}</span>, sortable: true, width: 150 },
   { key: "transport", header: "Transport", value: (r) => r.transport_address ?? "", render: (r) => dash(r.transport_address), mono: true, width: 160 },
@@ -144,14 +144,9 @@ export function MplsStatusPanel() {
 
   if (!status?.ldp_running && bindings.length === 0 && table.length === 0) {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="flex justify-end">
-          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
-        </div>
-        <div className="card" style={{ marginTop: 0 }}>
-          <div className="card-block clr-secondary" style={{ padding: 24, textAlign: "center" }}>
-            LDP is not running, and the MPLS forwarding table is empty. Enable MPLS/LDP in the Global tab.
-          </div>
+      <div className="card" style={{ marginTop: 0 }}>
+        <div className="card-block clr-secondary" style={{ padding: 24, textAlign: "center" }}>
+          LDP is not running, and the MPLS forwarding table is empty. Enable MPLS/LDP in the Global tab.
         </div>
       </div>
     );
@@ -168,17 +163,11 @@ export function MplsStatusPanel() {
   const totalNeighbors = status?.neighbors.length ?? 0;
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 flex-1 min-w-[280px]">
-          <StatTile label="LDP Neighbors" value={`${operationalNeighbors}/${totalNeighbors}`} sub="operational / total" />
-          <StatTile label="Label Bindings" value={String(bindings.length)} />
-          <StatTile label="Forwarding Entries" value={String(table.length)} />
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
-          <Button kind="secondary" size="sm" onClick={() => load("poll")}>Refresh</Button>
-        </div>
+    <div className="flex flex-col" style={{ gap: 12 }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        <StatTile label="LDP Neighbors" value={`${operationalNeighbors} / ${totalNeighbors}`} sub="operational / total" />
+        <StatTile label="Label Bindings" value={String(bindings.length)} />
+        <StatTile label="Forwarding Entries" value={String(table.length)} />
       </div>
 
       <Tabs
@@ -188,7 +177,7 @@ export function MplsStatusPanel() {
       />
 
       {view === "neighbors" && (
-        <DataTable rows={status?.neighbors ?? []} columns={neighborCols} rowId={(r) => `${r.neighbor_id}-${r.address_family}`} storageKey="routing-mpls-neighbors" searchPlaceholder="Search neighbors…" emptyMessage="No LDP neighbors." />
+        <DataTable searchable={false} rows={status?.neighbors ?? []} columns={neighborCols} rowId={(r) => `${r.neighbor_id}-${r.address_family}`} storageKey="routing-mpls-neighbors" searchPlaceholder="Search neighbors…" emptyMessage="No LDP neighbors." />
       )}
       {view === "discovery" && (
         <DataTable rows={status?.discovery ?? []} columns={discoveryCols} rowId={(r) => `${r.interface}-${r.neighbor_id}-${r.address_family}`} storageKey="routing-mpls-discovery" searchPlaceholder="Search adjacencies…" emptyMessage="No hello adjacencies." />
@@ -199,6 +188,9 @@ export function MplsStatusPanel() {
       {view === "table" && (
         <DataTable rows={table} columns={tableCols} rowId={(r) => `${r.in_label}-${r.nexthop}-${r.interface}`} storageKey="routing-mpls-table" searchPlaceholder="Search labels…" emptyMessage="No MPLS forwarding entries." />
       )}
+      <div style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+        Live state from ldpd — refreshes every 5 seconds{lastUpdated ? `, last updated ${lastUpdated.toLocaleTimeString()}` : ""}.
+      </div>
     </div>
   );
 }

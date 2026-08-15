@@ -41,7 +41,7 @@ function Bar({ value, max, color, up }: { value: number; max: number; color: str
         <div className="h-full" style={{ width: `${pct}%`, background: color }} />
       </div>
       <span
-        className="w-[72px] text-right text-[12px] text-[var(--cds-alias-typography-color-300)]"
+        className="w-[62px] text-right text-[11px] text-[var(--cds-alias-typography-color-300)]"
         style={{ fontFamily: "var(--qz-font-mono)" }}
       >
         {formatBytes(value)}
@@ -113,7 +113,7 @@ export function InterfaceStatsTile() {
               );
             })}
             {rows.length === 0 && (
-              <div className="py-3 text-[12px] text-[var(--cds-alias-typography-color-200)]">No interfaces match.</div>
+              <div className="py-3 text-[12px] text-[var(--cds-alias-typography-color-200)]">No interfaces found.</div>
             )}
           </div>
         )}

@@ -169,29 +169,21 @@ export function OpenvpnFormModal({ initial, existingNames, onClose, onSaved }: {
         onClose={onClose}
       />
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="Interface" required hint="vtun0, vtun1, …">
-            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="vtun0" className="clr-input" style={monoSt} />
-          </Field>
-          <Field label="Mode">
-            <Segmented
-              items={[
-                { value: "site-to-site", label: "Site-to-site" },
-                { value: "client", label: "Client" },
-                { value: "server", label: "Server" },
-              ]}
-              value={mode}
-              onChange={(v) => setMode(v as OpenvpnMode)}
-            />
-          </Field>
-        </div>
+        <Field label="Mode">
+          <Segmented
+            items={[
+              { value: "server", label: "Server" },
+              { value: "client", label: "Client" },
+              { value: "site-to-site", label: "Site-to-site" },
+            ]}
+            value={mode}
+            onChange={(v) => setMode(v as OpenvpnMode)}
+          />
+        </Field>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <Field label="Device type" hint="Default tun (L3).">
-            <MonoSelect value={deviceType} onChange={(e) => setDeviceType(e.target.value as OpenvpnDeviceType | "")}>
-              <option value="">Default</option>
-              {OPENVPN_DEVICE_TYPES.map((d) => <option key={d} value={d}>{d}</option>)}
-            </MonoSelect>
+          <Field label="Name" required hint="vtun0, vtun1, …">
+            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="vtun0" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Protocol">
             <MonoSelect value={protocol} onChange={(e) => setProtocol(e.target.value as OpenvpnProtocol | "")}>
@@ -205,13 +197,20 @@ export function OpenvpnFormModal({ initial, existingNames, onClose, onSaved }: {
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <Field label="Device type" hint="Default tun (L3).">
+            <MonoSelect value={deviceType} onChange={(e) => setDeviceType(e.target.value as OpenvpnDeviceType | "")}>
+              <option value="">Default</option>
+              {OPENVPN_DEVICE_TYPES.map((d) => <option key={d} value={d}>{d}</option>)}
+            </MonoSelect>
+          </Field>
           <Field label="Local host" hint="Address to bind to (optional).">
             <input value={localHost} onChange={(e) => setLocalHost(e.target.value)} placeholder="203.0.113.1" className="clr-input" style={monoSt} />
           </Field>
-          <Field label="Description">
-            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Branch office link" className="clr-input" style={inputSt} />
-          </Field>
         </div>
+
+        <Field label="Description">
+          <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Branch office link" className="clr-input" style={inputSt} />
+        </Field>
 
         {/* Mode-specific */}
         {mode === "site-to-site" && (

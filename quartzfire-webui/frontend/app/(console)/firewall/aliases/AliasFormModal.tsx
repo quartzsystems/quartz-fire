@@ -175,8 +175,8 @@ export function AliasFormModal({
           <div style={locked ? { opacity: 0.5, pointerEvents: "none" } : undefined}>
             <Segmented
               items={[
-                { value: "host", label: "IPv4 Host" },
-                { value: "network", label: "IPv4 Network" },
+                { value: "host", label: "IPv4 host" },
+                { value: "network", label: "IPv4 network" },
                 { value: "fqdn", label: "FQDN" },
                 { value: "iface", label: "Interfaces" },
               ]}
@@ -190,14 +190,14 @@ export function AliasFormModal({
           label="Name"
           hint={
             /\s/.test(name.trim())
-              ? `Spaces are fine here — stored on the device as ${sanitizeAliasName(name)}.`
+              ? `Spaces are fine — stored on the device as ${sanitizeAliasName(name)}.`
               : undefined
           }
         >
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Approved DNS Servers"
+            placeholder="Approved DNS servers"
             disabled={locked}
             className="clr-input"
             style={{ maxWidth: "none", ...monoFont }}
