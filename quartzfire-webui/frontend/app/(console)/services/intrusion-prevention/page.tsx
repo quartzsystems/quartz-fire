@@ -11,8 +11,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Eraser, Pause, Play, Plus, RotateCw, Search, ShieldAlert, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
 import { Segmented } from "@/components/ui/Segmented";
@@ -44,12 +44,10 @@ import {
 
 type Tab = "settings" | "policies" | "alerts";
 
-const inputStyle = {
-  background: "var(--qz-input-bg)",
-  border: "1px solid var(--qz-border)",
-} as const;
+const dash = <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;
 
-const dash = <span className="text-[var(--qz-fg-4)]">—</span>;
+/// Clarity status pill (mono uppercase), per the design reference.
+const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" } as const;
 
 // ── Settings tab ──────────────────────────────────────────────────────────────
 
@@ -141,242 +139,228 @@ function SettingsTab({
   const time = (ts: number) => new Date(ts * 1000).toLocaleString(undefined, { hour12: false });
 
   return (
-    <div className="flex flex-col gap-7 max-w-[860px]">
+    <div className="flex flex-col gap-4 max-w-[860px]">
       {apply?.error && (
-        <div
-          className="flex items-center gap-3 px-3 py-2 rounded-md"
-          style={{
-            background: "color-mix(in oklab, var(--qz-danger) 12%, transparent)",
-            border: "1px solid color-mix(in oklab, var(--qz-danger) 35%, transparent)",
-          }}
-        >
-          <AlertTriangle size={15} className="text-[var(--qz-danger)] flex-shrink-0" />
-          <span className="text-[13px] text-[var(--qz-fg-1)]">{apply.error}</span>
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{apply.error}</div>
         </div>
       )}
       {!apply && (
-        <div
-          className="flex items-center gap-3 px-3 py-2 rounded-md"
-          style={{
-            background: "var(--qz-accent-soft)",
-            border: "1px solid color-mix(in oklab, var(--qz-accent) 30%, transparent)",
-          }}
-        >
-          <AlertTriangle size={15} className="text-[var(--qz-fg-2)] flex-shrink-0" />
-          <span className="text-[13px] text-[var(--qz-fg-1)]">
+        <div className="alert alert-info alert-sm">
+          <Icon shape="info-circle" size={14} className="alert-icon" />
+          <div className="alert-text">
             The IPS service has not reported yet — on a device this appears after the first apply run.
-          </span>
+          </div>
         </div>
       )}
 
-      <section
-        className="rounded-lg px-5 py-4 flex flex-col gap-5"
-        style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-      >
-        <div className="flex items-center gap-3">
-          <Switch on={draft.enabled} onChange={(v) => setDraft((d) => ({ ...d, enabled: v }))} />
-          <span className="text-[14px] font-semibold text-[var(--qz-fg-1)]">
-            Enable Intrusion Prevention
-          </span>
-          <div className="ml-auto flex items-center gap-2">
-            <StatusBadge status={status} />
-            <Button kind="secondary" size="sm" icon={RotateCw} onClick={onRefresh}>
-              Refresh
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <span className="text-[13px] text-[var(--qz-fg-3)] w-[100px]">Scan Mode:</span>
-          <Segmented
-            items={[
-              { value: "full", label: "Full Scan" },
-              { value: "fast", label: "Fast Scan" },
-            ]}
-            value={draft.scan_mode}
-            onChange={(v) => setDraft((d) => ({ ...d, scan_mode: v as ScanMode }))}
-          />
-          <span className="text-[12px] text-[var(--qz-fg-4)]">
-            {draft.scan_mode === "full"
-              ? "Inspect entire flows."
-              : "Stop inspecting long and encrypted flows early — faster, less thorough."}
-          </span>
-        </div>
-
-        {/* Threat level policy table */}
-        <div>
-          <div
-            className="grid items-center gap-3 py-[6px] text-[12px] font-semibold text-[var(--qz-fg-3)]"
-            style={{ gridTemplateColumns: "16px 110px 160px 70px 70px 1fr" }}
-          >
-            <span />
-            <span>Threat Level</span>
-            <span>Action</span>
-            <span className="text-center">Alarm</span>
-            <span className="text-center">Log</span>
-            <span className="text-right">Signatures</span>
-          </div>
-          {THREAT_LEVELS.map(({ level, label, color }) => {
-            const pol = draft[level];
-            return (
-              <div
-                key={level}
-                className="grid items-center gap-3 py-[8px]"
-                style={{
-                  gridTemplateColumns: "16px 110px 160px 70px 70px 1fr",
-                  borderTop: "1px solid var(--qz-border)",
-                }}
-              >
-                <span
-                  className="inline-block w-[10px] h-[18px] rounded-[3px]"
-                  style={{ background: color }}
-                />
-                <span className="text-[13px] text-[var(--qz-fg-1)]">{label}</span>
-                <select
-                  value={pol.action}
-                  onChange={(e) => setLevel(level, { action: e.target.value as LevelAction })}
-                  className="rounded-md px-2 py-[6px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-                  style={inputStyle}
-                >
-                  {(Object.keys(LEVEL_ACTION_LABEL) as LevelAction[]).map((a) => (
-                    <option key={a} value={a}>
-                      {LEVEL_ACTION_LABEL[a]}
-                    </option>
-                  ))}
-                </select>
-                <span className="text-center">
-                  <input
-                    type="checkbox"
-                    checked={pol.alarm}
-                    disabled={pol.action === "disable"}
-                    onChange={(e) => setLevel(level, { alarm: e.target.checked })}
-                    style={{ accentColor: "var(--qz-accent)" }}
-                    aria-label={`Alarm on ${label}`}
-                  />
-                </span>
-                <span className="text-center">
-                  <input
-                    type="checkbox"
-                    checked={pol.log}
-                    disabled={pol.action === "disable"}
-                    onChange={(e) => setLevel(level, { log: e.target.checked })}
-                    style={{ accentColor: "var(--qz-accent)" }}
-                    aria-label={`Log ${label}`}
-                  />
-                </span>
-                <span className="text-right text-[12px] text-[var(--qz-fg-4)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
-                  {counts?.[level] ?? "—"}
-                </span>
-              </div>
-            );
-          })}
-          <p className="text-[12px] text-[var(--qz-fg-4)] mt-2 mb-0">
-            Drop blocks matching traffic inline; Allow only records it; Disabled removes the level&apos;s
-            signatures. Alarm and Log control the Alerts view. Levels map from signature priority
-            (1 = Critical … 4 = Low; unclassified = Information).
-          </p>
-        </div>
-
-        {/* Exceptions */}
-        <div className="flex items-start gap-4">
-          <span className="text-[13px] text-[var(--qz-fg-3)] w-[100px] pt-[7px] flex-shrink-0">Exceptions:</span>
-          <div className="flex-1 flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <input
-                value={newSid}
-                onChange={(e) => setNewSid(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addException();
-                  }
-                }}
-                inputMode="numeric"
-                placeholder="Signature ID, e.g. 2100498"
-                className="w-[220px] rounded-md px-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none"
-                style={{ ...inputStyle, fontFamily: "var(--qz-font-mono)" }}
-              />
-              <Button kind="secondary" size="sm" icon={Plus} onClick={addException} disabled={!newSid.trim()}>
-                Add
+      <section className="card">
+        <div className="card-block flex flex-col gap-5">
+          <div className="flex items-center gap-3">
+            <Switch on={draft.enabled} onChange={(v) => setDraft((d) => ({ ...d, enabled: v }))} />
+            <span className="text-[14px] font-semibold text-[var(--cds-alias-typography-color-450)]">
+              Enable Intrusion Prevention
+            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <StatusBadge status={status} />
+              <Button kind="secondary" size="sm" icon="refresh" onClick={onRefresh}>
+                Refresh
               </Button>
             </div>
-            {draft.exceptions.length > 0 && (
-              <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-                {draft.exceptions.map((sid, i) => {
-                  const name = sigNames[sid];
-                  return (
-                    <div
-                      key={sid}
-                      className="flex items-center gap-3 px-3 py-[6px]"
-                      style={{ borderTop: i > 0 ? "1px solid var(--qz-border)" : undefined }}
+          </div>
+
+          <div className="flex items-center gap-4">
+            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)] w-[100px]">Scan Mode:</span>
+            <Segmented
+              items={[
+                { value: "full", label: "Full Scan" },
+                { value: "fast", label: "Fast Scan" },
+              ]}
+              value={draft.scan_mode}
+              onChange={(v) => setDraft((d) => ({ ...d, scan_mode: v as ScanMode }))}
+            />
+            <span className="text-[12px] text-[var(--cds-alias-typography-color-200)]">
+              {draft.scan_mode === "full"
+                ? "Inspect entire flows."
+                : "Stop inspecting long and encrypted flows early — faster, less thorough."}
+            </span>
+          </div>
+
+          {/* Threat level policy table */}
+          <div>
+            <div
+              className="grid items-center gap-3 py-[6px] text-[12px] font-semibold text-[var(--cds-alias-typography-color-300)]"
+              style={{ gridTemplateColumns: "16px 110px 160px 70px 70px 1fr" }}
+            >
+              <span />
+              <span>Threat Level</span>
+              <span>Action</span>
+              <span className="text-center">Alarm</span>
+              <span className="text-center">Log</span>
+              <span className="text-right">Signatures</span>
+            </div>
+            {THREAT_LEVELS.map(({ level, label, color }) => {
+              const pol = draft[level];
+              return (
+                <div
+                  key={level}
+                  className="grid items-center gap-3 py-[8px]"
+                  style={{
+                    gridTemplateColumns: "16px 110px 160px 70px 70px 1fr",
+                    borderTop: "1px solid var(--cds-alias-object-border-subtle)",
+                  }}
+                >
+                  <span
+                    className="inline-block w-[10px] h-[18px] rounded-[3px]"
+                    style={{ background: color }}
+                  />
+                  <span className="text-[13px] text-[var(--cds-alias-typography-color-450)]">{label}</span>
+                  <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+                    <select
+                      value={pol.action}
+                      onChange={(e) => setLevel(level, { action: e.target.value as LevelAction })}
+                      className="clr-select"
+                      style={{ maxWidth: "none" }}
                     >
-                      <span
-                        className="text-[13px] text-[var(--qz-fg-1)] flex-shrink-0"
-                        style={{ fontFamily: "var(--qz-font-mono)" }}
-                      >
-                        {sid}
-                      </span>
-                      <span
-                        className={`text-[12px] truncate flex-1 min-w-0 ${name ? "text-[var(--qz-fg-3)]" : "text-[var(--qz-fg-4)] italic"}`}
-                        title={name ?? undefined}
-                      >
-                        {name ?? "Not in recent alerts"}
-                      </span>
-                      <button
-                        type="button"
-                        title={`Remove exception ${sid}`}
-                        aria-label={`Remove exception ${sid}`}
-                        onClick={() => removeException(sid)}
-                        className="grid place-items-center w-6 h-6 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer flex-shrink-0"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
-              Excepted signatures are never blocked — matching traffic is allowed but still logged
-              as an alert (use the SID from an alert).
+                      {(Object.keys(LEVEL_ACTION_LABEL) as LevelAction[]).map((a) => (
+                        <option key={a} value={a}>
+                          {LEVEL_ACTION_LABEL[a]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <span className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={pol.alarm}
+                      disabled={pol.action === "disable"}
+                      onChange={(e) => setLevel(level, { alarm: e.target.checked })}
+                      aria-label={`Alarm on ${label}`}
+                    />
+                  </span>
+                  <span className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={pol.log}
+                      disabled={pol.action === "disable"}
+                      onChange={(e) => setLevel(level, { log: e.target.checked })}
+                      aria-label={`Log ${label}`}
+                    />
+                  </span>
+                  <span className="text-right text-[12px] text-[var(--cds-alias-typography-color-200)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
+                    {counts?.[level] ?? "—"}
+                  </span>
+                </div>
+              );
+            })}
+            <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] mt-2 mb-0">
+              Drop blocks matching traffic inline; Allow only records it; Disabled removes the level&apos;s
+              signatures. Alarm and Log control the Alerts view. Levels map from signature priority
+              (1 = Critical … 4 = Low; unclassified = Information).
             </p>
           </div>
-        </div>
 
-        <div>
-          <Button kind="primary" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save settings"}
-          </Button>
+          {/* Exceptions */}
+          <div className="flex items-start gap-4">
+            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)] w-[100px] pt-[7px] flex-shrink-0">Exceptions:</span>
+            <div className="flex-1 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <input
+                  value={newSid}
+                  onChange={(e) => setNewSid(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addException();
+                    }
+                  }}
+                  inputMode="numeric"
+                  placeholder="Signature ID, e.g. 2100498"
+                  className="clr-input"
+                  style={{ width: 220, maxWidth: "none", fontFamily: "var(--qz-font-mono)" }}
+                />
+                <Button kind="secondary" size="sm" icon="plus" onClick={addException} disabled={!newSid.trim()}>
+                  Add
+                </Button>
+              </div>
+              {draft.exceptions.length > 0 && (
+                <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+                  {draft.exceptions.map((sid, i) => {
+                    const name = sigNames[sid];
+                    return (
+                      <div
+                        key={sid}
+                        className="flex items-center gap-3 px-3 py-[6px]"
+                        style={{ borderTop: i > 0 ? "1px solid var(--cds-alias-object-border-subtle)" : undefined }}
+                      >
+                        <span
+                          className="text-[13px] text-[var(--cds-alias-typography-color-450)] flex-shrink-0"
+                          style={{ fontFamily: "var(--qz-font-mono)" }}
+                        >
+                          {sid}
+                        </span>
+                        <span
+                          className={`text-[12px] truncate flex-1 min-w-0 ${name ? "text-[var(--cds-alias-typography-color-300)]" : "text-[var(--cds-alias-typography-color-200)] italic"}`}
+                          title={name ?? undefined}
+                        >
+                          {name ?? "Not in recent alerts"}
+                        </span>
+                        <button
+                          type="button"
+                          title={`Remove exception ${sid}`}
+                          aria-label={`Remove exception ${sid}`}
+                          onClick={() => removeException(sid)}
+                          className="btn btn-sm btn-link-neutral btn-icon flex-shrink-0"
+                        >
+                          <Icon shape="trash" size={13} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0">
+                Excepted signatures are never blocked — matching traffic is allowed but still logged
+                as an alert (use the SID from an alert).
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <Button kind="primary" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : "Save Settings"}
+            </Button>
+          </div>
         </div>
       </section>
 
       {/* Signature updates */}
-      <section
-        className="rounded-lg px-5 py-4 flex flex-col gap-3"
-        style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-      >
-        <h2 className="text-[15px] font-semibold text-[var(--qz-fg-1)] m-0">Signature Updates</h2>
-        <div className="flex items-center gap-4">
-          <span className="text-[13px] text-[var(--qz-fg-3)] w-[100px] flex-shrink-0">Update Server:</span>
-          <input
-            value={draft.update_url ?? ""}
-            onChange={(e) => setDraft((d) => ({ ...d, update_url: e.target.value || null }))}
-            placeholder="Default (Emerging Threats Open)"
-            className="flex-1 rounded-md px-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none"
-            style={{ ...inputStyle, fontFamily: "var(--qz-font-mono)" }}
-          />
-          <Button kind="secondary" onClick={updateNow} disabled={updating || !status.settings.enabled}>
-            {updating ? "Requesting…" : "Update now"}
-          </Button>
+      <section className="card">
+        <div className="card-header">Signature Updates</div>
+        <div className="card-block flex flex-col gap-3">
+          <div className="flex items-center gap-4">
+            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)] w-[100px] flex-shrink-0">Update Server:</span>
+            <input
+              value={draft.update_url ?? ""}
+              onChange={(e) => setDraft((d) => ({ ...d, update_url: e.target.value || null }))}
+              placeholder="Default (Emerging Threats Open)"
+              className="clr-input flex-1"
+              style={{ maxWidth: "none", fontFamily: "var(--qz-font-mono)" }}
+            />
+            <Button kind="secondary" onClick={updateNow} disabled={updating || !status.settings.enabled}>
+              {updating ? "Requesting…" : "Update Now"}
+            </Button>
+          </div>
+          <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0">
+            {lastUpdate
+              ? lastUpdate.ok
+                ? `Last update ${time(lastUpdate.time)} — OK.`
+                : `Last update ${time(lastUpdate.time)} failed: ${lastUpdate.message ?? "unknown error"}`
+              : "No signature update has run yet — signatures are fetched automatically when IPS is first enabled."}
+            {!status.settings.enabled && " Enable IPS to update signatures."}
+          </p>
         </div>
-        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
-          {lastUpdate
-            ? lastUpdate.ok
-              ? `Last update ${time(lastUpdate.time)} — OK.`
-              : `Last update ${time(lastUpdate.time)} failed: ${lastUpdate.message ?? "unknown error"}`
-            : "No signature update has run yet — signatures are fetched automatically when IPS is first enabled."}
-          {!status.settings.enabled && " Enable IPS to update signatures."}
-        </p>
       </section>
     </div>
   );
@@ -436,16 +420,16 @@ function PoliciesTab() {
   };
 
   if (state === "loading")
-    return <div className="text-[13px] text-[var(--qz-fg-4)]">Loading firewall rules…</div>;
+    return <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading firewall rules…</div>;
   if (state === "error")
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-          <AlertTriangle size={15} />
-          {errorMsg}
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
         </div>
         <div>
-          <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
+          <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
         </div>
       </div>
     );
@@ -455,7 +439,7 @@ function PoliciesTab() {
   return (
     <div className="flex flex-col gap-3 max-w-[860px]">
       <div className="flex items-center gap-3">
-        <p className="text-[13px] text-[var(--qz-fg-4)] m-0 flex-1">
+        <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0 flex-1">
           Only traffic hitting IPS-enabled Allow rules is inspected — everything else flows
           untouched. Deny rules never need inspection.
         </p>
@@ -465,7 +449,7 @@ function PoliciesTab() {
           disabled={busy || eligible.every((r) => r.ips)}
           onClick={() => toggle(eligible.filter((r) => !r.ips).map((rule) => ({ rule, enabled: true })))}
         >
-          Enable on all
+          Enable on All
         </Button>
         <Button
           kind="secondary"
@@ -473,11 +457,11 @@ function PoliciesTab() {
           disabled={busy || eligible.every((r) => !r.ips)}
           onClick={() => toggle(eligible.filter((r) => r.ips).map((rule) => ({ rule, enabled: false })))}
         >
-          Disable on all
+          Disable on All
         </Button>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={rulesResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: rulesResize.tableLayout }}>
           <colgroup>
             {IPS_RULE_COLS.map((c) => (
@@ -497,19 +481,19 @@ function PoliciesTab() {
           <tbody>
             {config.rules.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={5} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
                   No firewall rules yet — create them under{" "}
-                  <Link href="/firewall/rules" className="text-[var(--qz-fg-3)]">Firewall → Rules</Link>.
+                  <Link href="/firewall/rules" className="text-[var(--cds-alias-typography-color-300)]">Firewall → Rules</Link>.
                 </td>
               </tr>
             ) : (
               config.rules.map((r) => (
                 <tr key={`${r.chain}:${r.rule}`} style={{ cursor: "default", opacity: r.enabled ? 1 : 0.55 }}>
-                  <td className="mono text-[var(--qz-fg-3)]">{r.rule}</td>
+                  <td className="mono text-[var(--cds-alias-typography-color-300)]">{r.rule}</td>
                   <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {r.name ?? <span className="text-[var(--qz-fg-4)]">Rule {r.rule}</span>}
+                    {r.name ?? <span className="text-[var(--cds-alias-typography-color-200)]">Rule {r.rule}</span>}
                     {r.chain !== "forward" && (
-                      <span className="text-[11px] text-[var(--qz-fg-4)]"> · {r.chain}</span>
+                      <span className="text-[11px] text-[var(--cds-alias-typography-color-200)]"> · {r.chain}</span>
                     )}
                   </td>
                   <td className="mono">{policyLabel(r)}</td>
@@ -528,12 +512,12 @@ function PoliciesTab() {
                     {r.action === "accept" ? (
                       <div className="flex items-center gap-2">
                         <Switch on={r.ips} onChange={(v) => !busy && toggle([{ rule: r, enabled: v }])} />
-                        <span className={`text-[12px] ${r.ips ? "text-[var(--qz-accent)]" : "text-[var(--qz-fg-4)]"}`}>
+                        <span className={`text-[12px] ${r.ips ? "text-[var(--cds-alias-interaction-action)]" : "text-[var(--cds-alias-typography-color-200)]"}`}>
                           {r.ips ? "Enabled" : "Disabled"}
                         </span>
                       </div>
                     ) : (
-                      <span className="text-[12px] text-[var(--qz-fg-4)]">n/a</span>
+                      <span className="text-[12px] text-[var(--cds-alias-typography-color-200)]">n/a</span>
                     )}
                   </td>
                 </tr>
@@ -554,10 +538,17 @@ const MAX_ALERTS = 500;
 
 function LevelPill({ level }: { level: ThreatLevel }) {
   const meta = THREAT_LEVELS.find((l) => l.level === level) ?? THREAT_LEVELS[4];
+  const kind =
+    level === "critical"
+      ? " label-danger"
+      : level === "high" || level === "medium"
+        ? " label-warning"
+        : level === "low"
+          ? " label-info"
+          : "";
   return (
-    <span className="inline-flex items-center gap-[6px]">
-      <span className="inline-block w-[8px] h-[8px] rounded-full" style={{ background: meta.color }} />
-      <span className="text-[12.5px]">{meta.label}</span>
+    <span className={`label${kind}`} style={pillStyle}>
+      {meta.label.toUpperCase()}
     </span>
   );
 }
@@ -575,7 +566,7 @@ interface IpsAlertCol {
 }
 
 const IPS_ALERT_COLUMNS: IpsAlertCol[] = [
-  { key: "time", header: "Time", width: 90, className: "mono text-[var(--qz-fg-3)]" },
+  { key: "time", header: "Time", width: 90, className: "mono text-[var(--cds-alias-typography-color-300)]" },
   { key: "level", header: "Level", width: 110 },
   { key: "action", header: "Action", width: 95 },
   { key: "signature", header: "Signature", ellipsis: true, title: (r) => `SID ${r.sid}${r.category ? ` · ${r.category}` : ""}` },
@@ -591,35 +582,35 @@ function ipsAlertCell(key: string, r: AlertRow, alarm: boolean): React.ReactNode
     case "level":
       return (
         <span className="inline-flex items-center gap-[5px]">
-          {alarm && <ShieldAlert size={13} className="text-[var(--qz-danger)]" />}
+          {alarm && <Icon shape="shield-x" size={13} className="text-[var(--cds-alias-status-danger)]" />}
           <LevelPill level={r.level} />
         </span>
       );
     case "action":
       return r.action === "blocked" ? (
-        <span className="badge badge-crit">Blocked</span>
+        <span className="label label-danger" style={pillStyle}>BLOCKED</span>
       ) : (
-        <span className="badge badge-ok">Allowed</span>
+        <span className="label label-success" style={pillStyle}>ALLOWED</span>
       );
     case "signature":
       return (
         <>
           {r.signature}
-          <span className="text-[11px] text-[var(--qz-fg-4)]"> · {r.sid}</span>
+          <span className="text-[11px] text-[var(--cds-alias-typography-color-200)]"> · {r.sid}</span>
         </>
       );
     case "src":
       return (
         <>
           {r.src ?? dash}
-          {r.spt != null && <span className="text-[var(--qz-fg-4)]">:{r.spt}</span>}
+          {r.spt != null && <span className="text-[var(--cds-alias-typography-color-200)]">:{r.spt}</span>}
         </>
       );
     case "dst":
       return (
         <>
           {r.dst ?? dash}
-          {r.dpt != null && <span className="text-[var(--qz-fg-4)]">:{r.dpt}</span>}
+          {r.dpt != null && <span className="text-[var(--cds-alias-typography-color-200)]">:{r.dpt}</span>}
         </>
       );
     case "proto":
@@ -738,13 +729,13 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
-          <Search size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]" />
+          <Icon shape="search" size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--cds-alias-typography-color-200)]" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter alerts…"
-            className="rounded-md pl-8 pr-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[240px]"
-            style={inputStyle}
+            className="clr-input"
+            style={{ width: 240, maxWidth: "none", paddingLeft: 30 }}
           />
         </div>
         <Segmented
@@ -756,40 +747,41 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
           value={actionFilter}
           onChange={(v) => setActionFilter(v as typeof actionFilter)}
         />
-        <select
-          value={levelFilter}
-          onChange={(e) => setLevelFilter(e.target.value as typeof levelFilter)}
-          title="Filter by threat level"
-          className="rounded-md px-2 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-          style={inputStyle}
-        >
-          <option value="all">All levels</option>
-          {THREAT_LEVELS.map((l) => (
-            <option key={l.level} value={l.level}>
-              {l.label}
-            </option>
-          ))}
-        </select>
+        <div className="clr-select-wrapper" style={{ width: "auto" }}>
+          <select
+            value={levelFilter}
+            onChange={(e) => setLevelFilter(e.target.value as typeof levelFilter)}
+            title="Filter by threat level"
+            className="clr-select"
+          >
+            <option value="all">All levels</option>
+            {THREAT_LEVELS.map((l) => (
+              <option key={l.level} value={l.level}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <div className="ml-auto flex items-center gap-3">
           <ColumnsMenu vis={vis} />
-          <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => { clear(); setStream("connecting"); setStreamGen((g) => g + 1); }}>
+          <Button kind="secondary" size="sm" icon="refresh" onClick={() => { clear(); setStream("connecting"); setStreamGen((g) => g + 1); }}>
             Refresh
           </Button>
-          <Button kind="secondary" size="sm" icon={paused ? Play : Pause} onClick={togglePause}>
+          <Button kind="secondary" size="sm" icon={paused ? "play" : "pause"} onClick={togglePause}>
             {paused ? "Resume" : "Pause"}
           </Button>
-          <Button kind="secondary" size="sm" icon={Eraser} onClick={clear}>
+          <Button kind="secondary" size="sm" icon="times" onClick={clear}>
             Clear
           </Button>
-          <span className="inline-flex items-center gap-[6px] text-[12px] text-[var(--qz-fg-4)]">
+          <span className="inline-flex items-center gap-[6px] text-[12px] text-[var(--cds-alias-typography-color-200)]">
             <span
               className="inline-block w-[7px] h-[7px] rounded-full"
               style={{
                 background: paused
-                  ? "var(--qz-fg-4)"
+                  ? "var(--cds-alias-typography-color-200)"
                   : stream === "live"
-                    ? "var(--qz-success)"
-                    : "var(--qz-warn)",
+                    ? "var(--cds-alias-status-success)"
+                    : "var(--cds-alias-status-warning)",
               }}
             />
             {paused ? "Paused" : stream === "live" ? "Live" : stream === "connecting" ? "Connecting…" : "Reconnecting…"}
@@ -799,7 +791,7 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
         </div>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {cols.map((c) => (
@@ -819,7 +811,7 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={cols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={cols.length} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
                   {rows.length === 0
                     ? "No alerts yet — alerts appear when inspected traffic matches a signature."
                     : "No alerts match the filter."}
@@ -833,9 +825,7 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
                     key={r.id}
                     style={{
                       cursor: "default",
-                      background: alarm
-                        ? "color-mix(in oklab, var(--qz-danger) 7%, transparent)"
-                        : undefined,
+                      background: alarm ? "var(--cds-alias-status-danger-tint)" : undefined,
                     }}
                   >
                     {cols.map((c) => (
@@ -856,7 +846,7 @@ function AlertsTab({ settings }: { settings: IpsSettings }) {
         </table>
       </div>
 
-      <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+      <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0">
         Live alerts stream from the IPS engine; history is read from the persistent alert log on the
         device (survives reboots, rotated at 10&nbsp;MB). The newest {MAX_ALERTS} are shown. Levels
         with Log unchecked are hidden; levels with Alarm are highlighted. Add a false positive&apos;s SID
@@ -928,42 +918,38 @@ export default function IntrusionPreventionPage() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Intrusion Prevention
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Intrusion Prevention</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Inline traffic inspection (Suricata) for firewall rules with IPS enabled
         </p>
       </div>
 
-      <div className="px-[36px] pb-4 flex-shrink-0">
-        <Tabs
-          items={[
-            { value: "settings", label: "Settings" },
-            { value: "policies", label: "Policies" },
-            { value: "alerts", label: "Alerts" },
-          ]}
-          value={tab}
-          onChange={(v) => setTab(v as Tab)}
-        />
-      </div>
+      <Tabs
+        items={[
+          { value: "settings", label: "Settings" },
+          { value: "policies", label: "Policies" },
+          { value: "alerts", label: "Alerts" },
+        ]}
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+      />
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
+      <div>
         {tab === "settings" && (
           <>
             {state === "loading" && (
-              <div className="text-[13px] text-[var(--qz-fg-4)]">Loading IPS status…</div>
+              <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading IPS status…</div>
             )}
             {state === "error" && (
               <div className="flex flex-col gap-3">
-                <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-                  <AlertTriangle size={15} />
-                  {errorMsg}
+                <div className="alert alert-danger alert-sm">
+                  <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+                  <div className="alert-text">{errorMsg}</div>
                 </div>
                 <div>
-                  <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
+                  <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
                 </div>
               </div>
             )}

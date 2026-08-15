@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Sidebar } from "@/components/dashboard/Sidebar";
+import { AppHeader, AppSubnav, AppVerticalNav } from "@/components/clarity/ClarityShell";
 import { CommandPalette } from "@/components/dashboard/CommandPalette";
 import { CommitGuard } from "@/components/dashboard/CommitGuard";
 import { SaveIndicator } from "@/components/dashboard/SaveIndicator";
@@ -27,14 +27,15 @@ function Shell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div
-      className="h-screen overflow-hidden"
-      style={{ display: "grid", gridTemplateColumns: "240px 1fr", gridTemplateRows: "minmax(0, 1fr)" }}
-    >
-      <Sidebar onOpenPalette={() => setPaletteOpen(true)} />
-      <main className="overflow-auto" style={{ background: "var(--qz-bg)" }}>
-        {children}
-      </main>
+    <div className="main-container">
+      {/* App-level alert slot — commit-confirm banners render above the header. */}
+      <CommitGuard />
+      <AppHeader onOpenPalette={() => setPaletteOpen(true)} />
+      <AppSubnav />
+      <div className="content-container">
+        <AppVerticalNav />
+        <main className="content-area">{children}</main>
+      </div>
 
       <CommandPalette
         open={paletteOpen}
@@ -42,7 +43,6 @@ function Shell({ children }: { children: React.ReactNode }) {
         onNavigate={(href) => nextRouter.push(href)}
       />
       <SaveIndicator />
-      <CommitGuard />
       <DefaultPasswordGate />
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>

@@ -12,19 +12,7 @@
 // without disturbing the user's filters, sort, page, or an open detail row.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Activity,
-  ArrowDown,
-  ArrowUp,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  Circle,
-  Pencil,
-  RotateCw,
-  Search,
-  X,
-} from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
@@ -273,61 +261,61 @@ export default function DevicesPage() {
   );
 
   return (
-    <div className="p-[28px_36px]">
+    <div>
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-            Devices
-          </h1>
-          <p className="text-[13px] text-[var(--qz-fg-4)] mt-1 mb-0">
+          <h2>Devices</h2>
+          <p className="clr-secondary" style={{ marginTop: 4, marginBottom: 0 }}>
             Clients seen on the network — identity, activity, and usage.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[12px] text-[var(--qz-fg-4)]">Usage window</span>
+          <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>Usage window</span>
           <Segmented items={WINDOWS} value={usageWindow} onChange={(v) => setUsageWindow(v as UsageWindow)} />
         </div>
       </div>
 
       {/* Usage and clients — combined throughput + application mix */}
-      <div className="mt-6 rounded-md p-5" style={{ border: "1px solid var(--qz-border)", background: "var(--qz-surface)" }}>
-        <div className="grid gap-6" style={{ gridTemplateColumns: "minmax(0, 1.9fr) minmax(260px, 1fr)" }}>
-          {/* Usage graph */}
-          <div>
-            <div className="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
-              <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Network Usage</span>
-              {usageSeries && (
-                <span className="text-[12px] text-[var(--qz-fg-4)]">
-                  {formatBytes(usageSeries.bytes_in + usageSeries.bytes_out)}
-                  <span className="mx-1">·</span>
-                  {formatBytes(usageSeries.bytes_in)} ↓ / {formatBytes(usageSeries.bytes_out)} ↑
+      <div className="card mt-6">
+        <div className="card-block">
+          <div className="grid gap-6" style={{ gridTemplateColumns: "minmax(0, 1.9fr) minmax(260px, 1fr)" }}>
+            {/* Usage graph */}
+            <div>
+              <div className="flex items-baseline justify-between gap-3 mb-2 flex-wrap">
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}>Network Usage</span>
+                {usageSeries && (
+                  <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+                    {formatBytes(usageSeries.bytes_in + usageSeries.bytes_out)}
+                    <span className="mx-1">·</span>
+                    {formatBytes(usageSeries.bytes_in)} ↓ / {formatBytes(usageSeries.bytes_out)} ↑
+                  </span>
+                )}
+              </div>
+              <UsageChart
+                points={usageSeries?.points ?? []}
+                windowSecs={WINDOW_SECS[usageWindow]}
+                nowSecs={usageSeries?.now}
+                height={190}
+              />
+              <UsageLegend />
+            </div>
+            {/* Applications pie — live App Control mix (matches the dashboard) */}
+            <div style={{ borderLeft: "1px solid var(--cds-alias-object-border-subtle)" }} className="pl-6">
+              <div className="flex items-baseline gap-2 mb-3">
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}>Applications</span>
+                <span style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }} title={APP_MIX_HINT}>
+                  by traffic volume
                 </span>
+              </div>
+              {appsEmpty ? (
+                <div className="grid place-items-center" style={{ minHeight: 150, fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+                  {appsEmpty}
+                </div>
+              ) : (
+                <TopAppsDonut apps={appSlices} totalBytes={appTotal} centerSub="classified" />
               )}
             </div>
-            <UsageChart
-              points={usageSeries?.points ?? []}
-              windowSecs={WINDOW_SECS[usageWindow]}
-              nowSecs={usageSeries?.now}
-              height={190}
-            />
-            <UsageLegend />
-          </div>
-          {/* Applications pie — live App Control mix (matches the dashboard) */}
-          <div style={{ borderLeft: "1px solid var(--qz-border)" }} className="pl-6">
-            <div className="flex items-baseline gap-2 mb-3">
-              <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Applications</span>
-              <span className="text-[11px] text-[var(--qz-fg-4)]" title={APP_MIX_HINT}>
-                by traffic volume
-              </span>
-            </div>
-            {appsEmpty ? (
-              <div className="grid place-items-center text-[12px] text-[var(--qz-fg-4)]" style={{ minHeight: 150 }}>
-                {appsEmpty}
-              </div>
-            ) : (
-              <TopAppsDonut apps={appSlices} totalBytes={appTotal} centerSub="classified" />
-            )}
           </div>
         </div>
       </div>
@@ -335,15 +323,18 @@ export default function DevicesPage() {
       {/* Controls */}
       <div className="flex items-center gap-3 flex-wrap mt-6">
         <div className="relative">
-          <Search size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]" />
+          <Icon
+            shape="search"
+            size={14}
+            className="absolute left-[9px] top-1/2 -translate-y-1/2"
+            style={{ color: "var(--cds-alias-typography-color-200)" }}
+          />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search description, hostname, MAC, IP…"
-            className="rounded-md pl-8 pr-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[300px]"
-            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
-            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
+            className="clr-input"
+            style={{ paddingLeft: 30, width: 300, maxWidth: 300 }}
           />
         </div>
 
@@ -351,26 +342,24 @@ export default function DevicesPage() {
 
         <div className="ml-auto flex items-center gap-3">
           <ColumnsMenu vis={vis} />
-          <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load(true)} disabled={refreshing}>
+          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load(true)} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
-          <span className="text-[12px] text-[var(--qz-fg-4)]">
+          <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
             {total} {total === 1 ? "device" : "devices"}
           </span>
         </div>
       </div>
 
       {collectorDown && (
-        <div
-          className="mt-4 px-3 py-2 rounded-md text-[12.5px] text-[var(--qz-warn)]"
-          style={{ background: "var(--qz-warn-soft)", border: "1px solid color-mix(in oklab, var(--qz-warn) 30%, transparent)" }}
-        >
-          {collectorDown}
+        <div className="alert alert-warning alert-sm mt-4">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{collectorDown}</div>
         </div>
       )}
 
       {/* Table */}
-      <div className="mt-4 rounded-md overflow-x-auto" style={{ border: "1px solid var(--qz-border)" }}>
+      <div className="mt-4 rounded-md overflow-x-auto" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ tableLayout: resize.tableLayout, width: "100%" }}>
           <colgroup>
             <col style={{ width: 34 }} />
@@ -390,7 +379,14 @@ export default function DevicesPage() {
                 >
                   <span className="inline-flex items-center gap-1">
                     {c.header}
-                    {sort === c.sort && (dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
+                    {sort === c.sort && (
+                      <Icon
+                        shape="arrow"
+                        dir={dir === "asc" ? "up" : "down"}
+                        size={12}
+                        style={{ color: "var(--cds-alias-interaction-action)" }}
+                      />
+                    )}
                   </span>
                   {resize.handle(i)}
                 </th>
@@ -508,12 +504,13 @@ function DeviceRowView({
       style: ELLIPSIS,
       node: (
         <span className="inline-flex items-center gap-[7px]">
-          <Circle
-            size={9}
+          <span
             className="flex-shrink-0"
             style={{
-              fill: device.online ? "var(--qz-success)" : "var(--qz-ink-7)",
-              color: device.online ? "var(--qz-success)" : "var(--qz-ink-7)",
+              width: 9,
+              height: 9,
+              borderRadius: 999,
+              background: device.online ? "var(--cds-alias-status-success)" : "var(--qz-ink-7)",
             }}
           />
           <span className={device.online ? "text-[var(--qz-fg-1)]" : "text-[var(--qz-fg-4)]"}>
@@ -590,7 +587,7 @@ function DeviceRowView({
             aria-label={expanded ? "Collapse" : "Expand"}
             className="text-[var(--qz-fg-4)] hover:text-[var(--qz-fg-1)] bg-transparent border-0 p-0 cursor-pointer align-middle"
           >
-            {expanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+            <Icon shape="angle" dir={expanded ? "down" : "right"} size={14} />
           </button>
         </td>
 
@@ -672,13 +669,13 @@ function DescriptionCell({
           placeholder={device.hostname ?? device.mac}
           disabled={saving}
           className="flex-1 min-w-0 rounded-md px-2 py-[4px] text-[13px] text-[var(--qz-fg-1)] outline-none"
-          style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-accent)" }}
+          style={{ background: "var(--qz-input-bg)", border: "1px solid var(--cds-alias-interaction-action)" }}
         />
-        <button type="button" onClick={save} disabled={saving} title="Save" className="text-[var(--qz-success)] bg-transparent border-0 p-0 cursor-pointer">
-          <Check size={15} />
+        <button type="button" onClick={save} disabled={saving} title="Save" className="bg-transparent border-0 p-0 cursor-pointer" style={{ color: "var(--cds-alias-status-success)" }}>
+          <Icon shape="check" size={14} />
         </button>
         <button type="button" onClick={() => setEditing(false)} title="Cancel" className="text-[var(--qz-fg-4)] hover:text-[var(--qz-fg-1)] bg-transparent border-0 p-0 cursor-pointer">
-          <X size={15} />
+          <Icon shape="times" size={14} />
         </button>
       </span>
     );
@@ -699,7 +696,7 @@ function DescriptionCell({
         aria-label="Edit description"
         className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--qz-fg-4)] hover:text-[var(--qz-accent)] bg-transparent border-0 p-0 cursor-pointer flex-shrink-0"
       >
-        <Pencil size={13} />
+        <Icon shape="pencil" size={12} />
       </button>
     </span>
   );
@@ -822,7 +819,7 @@ function DeviceDetailPanel({ mac, usageWindow }: { mac: string; usageWindow: Usa
             return <TopAppsDonut apps={slices} centerSub="classified" />;
           })()}
         </div>
-        <div style={{ borderLeft: "1px solid var(--qz-border)" }} className="pl-6">
+        <div style={{ borderLeft: "1px solid var(--cds-alias-object-border-subtle)" }} className="pl-6">
           <PingWidget mac={mac} pingable={isIpv4(detail.current_ip)} />
         </div>
       </div>
@@ -949,8 +946,8 @@ function PingWidget({ mac, pingable }: { mac: string; pingable: boolean }) {
             </span>
           )}
           <span title={pingable ? "Send an ICMP burst" : "No IPv4 address to ping"}>
-            <Button kind="secondary" size="sm" icon={Activity} onClick={run} disabled={running || !pingable}>
-              {running ? "Pinging…" : done || error ? "Run again" : "Run"}
+            <Button kind="secondary" size="sm" icon="play" onClick={run} disabled={running || !pingable}>
+              {running ? "Pinging…" : done || error ? "Run Again" : "Run"}
             </Button>
           </span>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, AlertTriangle, HardDrive, MemoryStick, Server } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { DeviceSystemInfo, fetchSystemInfo } from "@/lib/vyos";
 import { formatBytes } from "@/lib/format";
 
@@ -31,54 +31,57 @@ function prettyVersion(v: string | null): string {
   return `QuartzFire v${m[1].replace(/-\d{6,}$/, "")}`;
 }
 
-/// Bar colour by utilisation: green → amber → red.
-function barColor(pct: number | null): string {
-  if (pct == null) return "var(--qz-fg-4)";
-  if (pct >= 90) return "var(--qz-danger)";
-  if (pct >= 70) return "var(--qz-warn)";
-  return "var(--qz-success)";
+/// Progress variant by utilisation: green → amber → red.
+function progressVariant(pct: number | null): string {
+  if (pct == null) return "";
+  if (pct >= 90) return " danger";
+  if (pct >= 70) return " warning";
+  return " success";
 }
 
 function Bar({ pct }: { pct: number | null }) {
   const width = Math.max(0, Math.min(100, pct ?? 0));
   return (
-    <div className="h-[3px] rounded-full overflow-hidden" style={{ background: "var(--qz-border)" }}>
-      <div
-        className="h-full rounded-full transition-[width] duration-500"
-        style={{ width: `${width}%`, background: barColor(pct) }}
-      />
+    <div className={`progress progress-sm${progressVariant(pct)}`}>
+      <div className="progress-fill" style={{ width: `${width}%` }} />
     </div>
   );
 }
 
-function SectionTitle({ icon: Icon, label, right }: { icon: typeof Activity; label: string; right?: React.ReactNode }) {
+/// Uppercase Clarity section label, with an optional right-hand annotation.
+function SectionTitle({ label, right }: { label: string; right?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between mb-[10px]">
-      <div className="flex items-center gap-[7px] text-[13px] font-semibold text-[var(--qz-fg-1)]">
-        <Icon size={14} className="text-[var(--qz-fg-3)]" />
+    <div className="flex items-center justify-between mb-[8px]">
+      <div
+        className="text-[11px] uppercase"
+        style={{ letterSpacing: "0.04em", color: "var(--cds-alias-typography-color-200)" }}
+      >
         {label}
       </div>
-      {right != null && <div className="text-[12px] text-[var(--qz-fg-3)]">{right}</div>}
+      {right != null && <div className="text-[12px] text-[var(--cds-alias-typography-color-300)]">{right}</div>}
     </div>
   );
 }
 
 function MetricRow({ label, value, pct }: { label: string; value: string; pct: number | null }) {
   return (
-    <div className="mb-3 last:mb-0">
-      <div className="flex items-baseline justify-between mb-[5px]">
-        <span className="text-[12px] text-[var(--qz-fg-3)]">{label}</span>
-        <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
-          {value}
-        </span>
+    <div className="flex items-center gap-2 mb-[6px] last:mb-0">
+      <span className="w-[44px] flex-shrink-0 text-[12px] text-[var(--cds-alias-typography-color-300)]">{label}</span>
+      <div className="flex-1 min-w-0">
+        <Bar pct={pct} />
       </div>
-      <Bar pct={pct} />
+      <span
+        className="w-[40px] flex-shrink-0 text-right text-[12px] text-[var(--cds-alias-typography-color-400)]"
+        style={{ fontFamily: "var(--qz-font-mono)" }}
+      >
+        {value}
+      </span>
     </div>
   );
 }
 
 function Divider() {
-  return <div className="my-4" style={{ borderTop: "1px solid var(--qz-border)" }} />;
+  return <div className="my-3" style={{ borderTop: "1px solid var(--cds-alias-object-border-subtle)" }} />;
 }
 
 export function SystemInfoPod() {
@@ -105,109 +108,132 @@ export function SystemInfoPod() {
 
   const mem = info?.memory;
   const hardware = [info?.hardware_vendor, info?.hardware_model].filter(Boolean).join(" ");
+  const uptime = shortUptime(info?.uptime ?? null);
 
   return (
-    <div className="p-6 h-full">
-      {/* Header */}
-      <div className="flex items-center gap-[9px] mb-5">
-        <Server size={18} className="text-[var(--qz-accent)]" />
-        <h2 className="text-[16px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.01em" }}>
-          System Information
-        </h2>
+    <>
+      <div className="card-header flex-shrink-0">
+        System Information
+        {uptime && (
+          <span
+            style={{
+              marginLeft: "auto",
+              fontSize: 11,
+              fontWeight: 400,
+              fontFamily: "var(--qz-font-mono)",
+              color: "var(--cds-alias-typography-color-200)",
+            }}
+          >
+            Uptime {uptime}
+          </span>
+        )}
       </div>
 
-      {status === "loading" && (
-        <div className="text-[13px] text-[var(--qz-fg-4)] py-2">Loading system information…</div>
-      )}
+      <div className="card-block flex-1 min-h-0 overflow-auto">
+        {status === "loading" && (
+          <div className="text-[13px] text-[var(--cds-alias-typography-color-200)] py-2">Loading system information…</div>
+        )}
 
-      {status === "error" && (
-        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)] py-2">
-          <AlertTriangle size={15} />
-          {errorMsg}
-        </div>
-      )}
+        {status === "error" && (
+          <div className="flex items-center gap-2 text-[13px] py-2" style={{ color: "var(--cds-alias-status-danger)" }}>
+            <Icon shape="exclamation-triangle" size={14} />
+            {errorMsg}
+          </div>
+        )}
 
-      {status === "ready" && info && (
-        <>
-          {/* Identity */}
-          <div className="flex items-center gap-[10px] mb-1 flex-wrap">
-            <span
-              className="text-[22px] font-bold"
-              style={{ color: "var(--qz-accent)", fontFamily: "var(--qz-font-mono)" }}
+        {status === "ready" && info && (
+          <>
+            {/* Identity */}
+            <div
+              className="text-[20px] font-semibold"
+              style={{ color: "var(--cds-alias-interaction-action)", fontFamily: "var(--qz-font-mono)" }}
             >
               {prettyVersion(info.version)}
-            </span>
-          </div>
-          {info.hostname && (
-            <div className="text-[13px] mb-1 flex items-center gap-[7px]">
-              <span className="text-[var(--qz-fg-4)]">Hostname</span>
-              <span className="text-[var(--qz-fg-2)]">{info.hostname}</span>
             </div>
-          )}
-          {hardware && (
-            <div className="text-[13px] mb-2 flex items-center gap-[7px]">
-              <span className="text-[var(--qz-fg-4)]">Model</span>
-              <span className="text-[var(--qz-fg-2)]">{hardware}</span>
+            <div className="grid gap-x-3 gap-y-[2px] text-[12px] mt-2" style={{ gridTemplateColumns: "auto 1fr" }}>
+              {info.hostname && (
+                <>
+                  <span style={{ color: "var(--cds-alias-typography-color-200)" }}>Hostname</span>
+                  <span style={{ color: "var(--cds-alias-typography-color-400)", fontFamily: "var(--qz-font-mono)" }}>
+                    {info.hostname}
+                  </span>
+                </>
+              )}
+              {hardware && (
+                <>
+                  <span style={{ color: "var(--cds-alias-typography-color-200)" }}>Model</span>
+                  <span style={{ color: "var(--cds-alias-typography-color-400)" }}>{hardware}</span>
+                </>
+              )}
+              {info.built_on && (
+                <>
+                  <span style={{ color: "var(--cds-alias-typography-color-200)" }}>Built</span>
+                  <span style={{ color: "var(--cds-alias-typography-color-400)", fontFamily: "var(--qz-font-mono)" }}>
+                    {info.built_on}
+                  </span>
+                </>
+              )}
             </div>
-          )}
-          {info.built_on && (
-            <div className="text-[11px] text-[var(--qz-fg-4)] mt-2">Built: {info.built_on}</div>
-          )}
 
-          <Divider />
+            <Divider />
 
-          {/* Load average */}
-          <SectionTitle
-            icon={Activity}
-            label="Load Average"
-            right={info.uptime ? <>Uptime {shortUptime(info.uptime)}</> : undefined}
-          />
-          <MetricRow label="1 min" value={info.load.one != null ? `${info.load.one}%` : "—"} pct={info.load.one} />
-          <MetricRow label="5 min" value={info.load.five != null ? `${info.load.five}%` : "—"} pct={info.load.five} />
-          <MetricRow label="15 min" value={info.load.fifteen != null ? `${info.load.fifteen}%` : "—"} pct={info.load.fifteen} />
+            {/* Load average */}
+            <SectionTitle label="Load Average" />
+            <MetricRow label="1 min" value={info.load.one != null ? `${info.load.one}%` : "—"} pct={info.load.one} />
+            <MetricRow label="5 min" value={info.load.five != null ? `${info.load.five}%` : "—"} pct={info.load.five} />
+            <MetricRow label="15 min" value={info.load.fifteen != null ? `${info.load.fifteen}%` : "—"} pct={info.load.fifteen} />
 
-          <Divider />
+            <Divider />
 
-          {/* Memory */}
-          <SectionTitle
-            icon={MemoryStick}
-            label="Memory"
-            right={mem?.used_pct != null ? `${mem.used_pct.toFixed(1)}%` : undefined}
-          />
-          <div className="flex items-baseline justify-between mb-[5px]">
-            <span className="text-[12px] text-[var(--qz-fg-3)]">
-              Used: <span className="text-[var(--qz-fg-1)] font-semibold" style={{ fontFamily: "var(--qz-font-mono)" }}>{formatBytes(mem?.used_bytes ?? null)}</span>
-            </span>
-          </div>
-          <Bar pct={mem?.used_pct ?? null} />
-          <div className="flex items-baseline justify-between mt-[6px] text-[12px] text-[var(--qz-fg-3)]">
-            <span>Free: {formatBytes(mem?.free_bytes ?? null)}</span>
-            <span>Total: {formatBytes(mem?.total_bytes ?? null)}</span>
-          </div>
-
-          <Divider />
-
-          {/* Disk usage */}
-          <SectionTitle icon={HardDrive} label="Disk Usage" />
-          {info.storage.length === 0 && (
-            <div className="text-[12px] text-[var(--qz-fg-4)]">No storage data available.</div>
-          )}
-          {info.storage.map((s) => (
-            <div key={s.filesystem} className="mb-3 last:mb-0">
-              <div className="flex items-baseline justify-between mb-[5px]">
-                <span className="text-[12px] text-[var(--qz-fg-2)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
-                  {s.filesystem}
+            {/* Memory */}
+            <SectionTitle
+              label="Memory"
+              right={mem?.used_pct != null ? `${mem.used_pct.toFixed(1)}%` : undefined}
+            />
+            <div className="flex items-baseline justify-between mb-[5px]">
+              <span className="text-[12px] text-[var(--cds-alias-typography-color-300)]">
+                Used:{" "}
+                <span
+                  className="text-[var(--cds-alias-typography-color-450)] font-semibold"
+                  style={{ fontFamily: "var(--qz-font-mono)" }}
+                >
+                  {formatBytes(mem?.used_bytes ?? null)}
                 </span>
-                <span className="text-[12px] text-[var(--qz-fg-3)]">
-                  {formatBytes(s.used_bytes)} / {formatBytes(s.size_bytes)}
-                  {s.used_pct != null && ` (${s.used_pct}%)`}
-                </span>
+              </span>
+            </div>
+            <Bar pct={mem?.used_pct ?? null} />
+            <div className="flex items-baseline justify-between mt-[6px] text-[12px] text-[var(--cds-alias-typography-color-300)]">
+              <span>Free: {formatBytes(mem?.free_bytes ?? null)}</span>
+              <span>Total: {formatBytes(mem?.total_bytes ?? null)}</span>
+            </div>
+
+            <Divider />
+
+            {/* Disk usage */}
+            <SectionTitle label="Disk Usage" />
+            {info.storage.length === 0 && (
+              <div className="text-[12px] text-[var(--cds-alias-typography-color-200)]">No storage data available.</div>
+            )}
+            {info.storage.map((s) => (
+              <div key={s.filesystem} className="mb-3 last:mb-0">
+                <div className="flex items-baseline justify-between mb-[5px]">
+                  <span
+                    className="text-[12px] text-[var(--cds-alias-typography-color-400)]"
+                    style={{ fontFamily: "var(--qz-font-mono)" }}
+                  >
+                    {s.filesystem}
+                  </span>
+                  <span className="text-[12px] text-[var(--cds-alias-typography-color-300)]">
+                    {formatBytes(s.used_bytes)} / {formatBytes(s.size_bytes)}
+                    {s.used_pct != null && ` (${s.used_pct}%)`}
+                  </span>
+                </div>
+                <Bar pct={s.used_pct} />
               </div>
-              <Bar pct={s.used_pct} />
-            </div>
-          ))}
-        </>
-      )}
-    </div>
+            ))}
+          </>
+        )}
+      </div>
+    </>
   );
 }

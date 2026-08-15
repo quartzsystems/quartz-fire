@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { applyBond, BondInterface } from "@/lib/interfaces";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
+const mono = { fontFamily: "var(--qz-font-mono)" } as const;
+const wide = { maxWidth: "none" } as const;
+const wideMono = { ...wide, ...mono } as const;
 
 // Bond modes VyOS accepts; 802.3ad is the default when the leaf is absent.
 const MODE_OPTIONS = [
@@ -21,11 +21,28 @@ const MODE_OPTIONS = [
   { value: "xor-hash", label: "XOR hash" },
 ];
 
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
+/// Clarity field: label + control + optional helper sentence.
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">
+        {label}
+        {required && <span className="clr-required">*</span>}
+      </label>
+      {children}
+      {hint && <div className="clr-subtext">{hint}</div>}
+    </div>
+  );
 }
 
 interface AddrRow {
@@ -128,125 +145,111 @@ export function BondFormModal({
       />
 
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <div>
-            <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">
-              Name <span style={{ color: "var(--qz-danger)" }}>*</span>
-            </label>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Name" required>
             <input
               value={name}
               disabled={isEdit}
               onChange={(e) => setName(e.target.value)}
               placeholder="bond0"
-              className={`${inputCls} disabled:opacity-70`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
-          </div>
-          <div>
-            <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">Mode</label>
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value)}
-              className={`${inputCls} cursor-pointer`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              {(MODE_OPTIONS.some((o) => o.value === mode)
-                ? MODE_OPTIONS
-                : [{ value: mode, label: mode }, ...MODE_OPTIONS]
-              ).map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          </Field>
+          <Field label="Mode">
+            <div className="clr-select-wrapper" style={wide}>
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value)}
+                className="clr-select"
+                style={wideMono}
+              >
+                {(MODE_OPTIONS.some((o) => o.value === mode)
+                  ? MODE_OPTIONS
+                  : [{ value: mode, label: mode }, ...MODE_OPTIONS]
+                ).map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </Field>
         </div>
 
-        <div>
-          <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">Description</label>
+        <Field label="Description">
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Uplink LAG"
-            className={inputCls}
-            style={inputSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={wide}
           />
-        </div>
+        </Field>
 
-        <div>
-          <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">Member Interfaces</label>
+        <Field label="Member Interfaces">
           {candidates.length === 0 ? (
-            <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+            <div className="clr-subtext">
               No free ethernet interfaces — members must have no addresses and not belong to
               another bond or bridge.
-            </p>
+            </div>
           ) : (
             <div
-              className="flex flex-col gap-[2px] rounded-md p-[6px] max-h-[170px] overflow-auto"
-              style={inputSt}
+              className="flex flex-col overflow-auto"
+              style={{
+                gap: 6,
+                maxHeight: 170,
+                border: "1px solid var(--cds-alias-object-border-color)",
+                borderRadius: 4,
+                padding: "10px 12px",
+              }}
             >
               {candidates.map((n) => (
-                <label
-                  key={n}
-                  className="flex items-center gap-[10px] px-2 py-[6px] rounded cursor-pointer select-none hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors"
-                >
+                <label key={n} className="clr-checkbox-wrapper" style={{ cursor: "pointer" }}>
                   <input
                     type="checkbox"
                     checked={members.includes(n)}
                     onChange={() => toggleMember(n)}
-                    style={{ accentColor: "var(--qz-accent)" }}
                   />
-                  <span className="text-[13px] text-[var(--qz-fg-2)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
+                  <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)", ...mono }}>
                     {n}
                   </span>
                 </label>
               ))}
             </div>
           )}
-        </div>
+        </Field>
 
-        <div>
-          <div className="flex items-center justify-between mb-[6px]">
-            <label className="block text-[12px] text-[var(--qz-fg-3)]">IP Addresses</label>
-            <button
-              type="button"
-              onClick={addAddr}
-              className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0"
-            >
-              <Plus size={13} /> Add address
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <div className="flex items-center justify-between">
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP Addresses</label>
+            <button type="button" onClick={addAddr} className="btn btn-sm btn-link-neutral">
+              <Icon shape="plus" size={12} /> Add Address
             </button>
           </div>
           {addresses.length === 0 ? (
-            <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
-              No addresses — use <span style={{ fontFamily: "var(--qz-font-mono)" }}>dhcp</span> or a CIDR like 10.0.0.1/24.
-            </p>
+            <div className="clr-subtext">
+              No addresses — use <span style={mono}>dhcp</span> or a CIDR like 10.0.0.1/24.
+            </div>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
               {addresses.map((a) => (
                 <div key={a.key} className="flex items-center gap-2">
                   <input
                     value={a.value}
                     onChange={(e) => updateAddr(a.key, e.target.value)}
                     placeholder="10.0.0.1/24 or dhcp"
-                    className={inputCls}
-                    style={monoSt}
-                    onFocus={focusBorder}
-                    onBlur={blurBorder}
+                    className="clr-input"
+                    style={wideMono}
                   />
                   <button
                     type="button"
                     onClick={() => removeAddr(a.key)}
                     title="Remove address"
-                    className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent"
-                    style={{ border: "1px solid var(--qz-border)" }}
+                    className="btn btn-sm btn-link-neutral btn-icon"
+                    style={{ flexShrink: 0 }}
                   >
-                    <Trash2 size={14} />
+                    <Icon shape="trash" size={14} />
                   </button>
                 </div>
               ))}
@@ -254,9 +257,8 @@ export function BondFormModal({
           )}
         </div>
 
-        <div className="grid gap-4 items-end" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <div>
-            <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">MTU</label>
+        <div className="grid items-end" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="MTU">
             <input
               type="number"
               min={68}
@@ -264,42 +266,31 @@ export function BondFormModal({
               value={mtu}
               onChange={(e) => setMtu(e.target.value)}
               placeholder="1500"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
-          </div>
-          <label className="flex items-center gap-[10px] cursor-pointer select-none pb-[9px]">
+          </Field>
+          <label className="flex items-center gap-2 cursor-pointer select-none" style={{ paddingBottom: 8 }}>
             <Switch on={enabled} onChange={setEnabled} />
-            <span className="text-[13px] text-[var(--qz-fg-2)]">Enabled</span>
+            <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Enabled</span>
           </label>
         </div>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
-            {error}
-          </p>
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create bond"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Bond"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

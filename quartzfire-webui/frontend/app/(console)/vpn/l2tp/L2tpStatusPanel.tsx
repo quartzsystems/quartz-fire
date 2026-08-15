@@ -25,9 +25,9 @@ const isActive = (s: string) => {
 };
 
 function stateBadge(value: string) {
-  if (isActive(value)) return <span className="badge badge-ok">{value}</span>;
-  if (value.toLowerCase().startsWith("start") || value.toLowerCase().startsWith("finish")) return <span className="badge badge-muted">{value}</span>;
-  return <span className="badge badge-muted">{value || "—"}</span>;
+  if (isActive(value)) return <span className="label label-success">{value}</span>;
+  if (value.toLowerCase().startsWith("start") || value.toLowerCase().startsWith("finish")) return <span className="label">{value}</span>;
+  return <span className="label">{value || "—"}</span>;
 }
 
 /// Live L2TP remote-access sessions. The unified `show vpn remote-access`

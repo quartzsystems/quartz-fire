@@ -1,40 +1,32 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Save } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Switch } from "@/components/ui/Switch";
 import { Button } from "@/components/ui/Button";
 import { applyOspfGlobal, OspfGlobal, OSPF_REDISTRIBUTE, OspfRedistribute } from "@/lib/ospf";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const inputStyle = { maxWidth: "none", width: "100%" } as const;
+const monoStyle = { ...inputStyle, fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg p-5 flex flex-col gap-4" style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}>
-      <div>
-        <h3 className="text-[14px] font-semibold text-[var(--qz-fg-1)] m-0">{title}</h3>
-        {subtitle && <p className="text-[12px] text-[var(--qz-fg-4)] m-0 mt-[2px]">{subtitle}</p>}
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="card-header">{title}</div>
+      <div className="card-block flex flex-col gap-4">
+        {subtitle && <p className="clr-secondary" style={{ margin: 0 }}>{subtitle}</p>}
+        {children}
       </div>
-      {children}
     </div>
   );
 }
@@ -43,9 +35,9 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
   return (
     <label className="flex items-start gap-[10px] cursor-pointer select-none">
       <div className="pt-[1px]"><Switch on={on} onChange={onChange} /></div>
-      <span className="text-[13px] text-[var(--qz-fg-2)]">
+      <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
         {label}
-        {hint && <span className="block text-[11px] text-[var(--qz-fg-4)]">{hint}</span>}
+        {hint && <span className="block clr-subtext" style={{ marginTop: 0 }}>{hint}</span>}
       </span>
     </label>
   );
@@ -118,16 +110,16 @@ export function OspfGlobalPanel({ live, onSaved }: { live: OspfGlobal; onSaved: 
       <Section title="Router" subtitle="Process identity and path selection.">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Router ID" hint="Usually a loopback address.">
-            <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Reference bandwidth" hint="auto-cost reference-bandwidth (Mbit/s).">
-            <input value={refBw} onChange={(e) => setRefBw(e.target.value)} placeholder="100" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={refBw} onChange={(e) => setRefBw(e.target.value)} placeholder="100" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Administrative distance" hint="distance global (1–255).">
-            <input value={distance} onChange={(e) => setDistance(e.target.value)} placeholder="110" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={distance} onChange={(e) => setDistance(e.target.value)} placeholder="110" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Maximum paths" hint="ECMP width (1–64).">
-            <input value={maxPaths} onChange={(e) => setMaxPaths(e.target.value)} placeholder="4" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={maxPaths} onChange={(e) => setMaxPaths(e.target.value)} placeholder="4" className="clr-input" style={monoStyle} />
           </Field>
         </div>
         <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
@@ -145,38 +137,50 @@ export function OspfGlobalPanel({ live, onSaved }: { live: OspfGlobal; onSaved: 
               <Toggle on={diAlways} onChange={setDiAlways} label="Always" hint="Even without a default in the RIB." />
             </div>
             <Field label="Metric">
-              <input value={diMetric} onChange={(e) => setDiMetric(e.target.value)} placeholder="20" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+              <input value={diMetric} onChange={(e) => setDiMetric(e.target.value)} placeholder="20" className="clr-input" style={monoStyle} />
             </Field>
             <Field label="Metric type">
-              <select value={diMetricType} onChange={(e) => setDiMetricType(e.target.value as "1" | "2" | "")} className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder}>
-                <option value="">Default (2)</option>
-                <option value="1">Type 1</option>
-                <option value="2">Type 2</option>
-              </select>
+              <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+                <select value={diMetricType} onChange={(e) => setDiMetricType(e.target.value as "1" | "2" | "")} className="clr-select" style={inputStyle}>
+                  <option value="">Default (2)</option>
+                  <option value="1">Type 1</option>
+                  <option value="2">Type 2</option>
+                </select>
+              </div>
             </Field>
           </div>
         )}
       </Section>
 
       <Section title="Redistribution" subtitle="Inject routes from other protocols into OSPF.">
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-4">
           {OSPF_REDISTRIBUTE.map((proto) => (
-            <label key={proto} className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
-              <input type="checkbox" checked={redist.includes(proto)} onChange={() => toggleRedist(proto)} style={{ accentColor: "var(--qz-accent)" }} />
-              <span style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</span>
-            </label>
+            <div key={proto} className="clr-checkbox-wrapper">
+              <input
+                type="checkbox"
+                id={`ospf-redist-${proto}`}
+                checked={redist.includes(proto)}
+                onChange={() => toggleRedist(proto)}
+              />
+              <label htmlFor={`ospf-redist-${proto}`} style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</label>
+            </div>
           ))}
         </div>
         <Field label="Default metric" hint="Metric applied to redistributed routes with none of their own.">
-          <input value={defaultMetric} onChange={(e) => setDefaultMetric(e.target.value)} placeholder="20" className={`${inputCls} max-w-[160px]`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={defaultMetric} onChange={(e) => setDefaultMetric(e.target.value)} placeholder="20" className="clr-input" style={{ ...monoStyle, maxWidth: 160 }} />
         </Field>
       </Section>
 
-      {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
+      {error && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{error}</div>
+        </div>
+      )}
 
       <div className="flex justify-end">
-        <Button kind="primary" icon={Save} onClick={save} disabled={saving}>
-          {saving ? "Applying…" : "Save OSPF settings"}
+        <Button kind="primary" onClick={save} disabled={saving}>
+          {saving ? "Applying…" : "Save OSPF Settings"}
         </Button>
       </div>
     </div>

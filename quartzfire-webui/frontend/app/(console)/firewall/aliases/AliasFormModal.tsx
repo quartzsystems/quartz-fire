@@ -1,27 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { ALIAS_GROUP, AliasType, applyAlias, FirewallAlias, sanitizeAliasName } from "@/lib/firewall";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const monoFont = { fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -207,10 +199,8 @@ export function AliasFormModal({
             onChange={(e) => setName(e.target.value)}
             placeholder="Approved DNS Servers"
             disabled={locked}
-            className={inputCls}
-            style={{ ...monoSt, opacity: locked ? 0.5 : 1 }}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={{ maxWidth: "none", ...monoFont }}
           />
         </Field>
 
@@ -220,27 +210,32 @@ export function AliasFormModal({
             hint="In a rule this alias stands alone on its side and matches traffic on any of these interfaces — zone-like grouping, without zone-based mode."
           >
             <div
-              className="rounded-md overflow-y-auto"
-              style={{ ...monoSt, maxHeight: 180, padding: "4px 0" }}
+              className="overflow-y-auto"
+              style={{
+                border: "1px solid var(--cds-alias-object-border-color)",
+                borderRadius: 4,
+                ...monoFont,
+                maxHeight: 180,
+                padding: "4px 0",
+              }}
             >
               {ifaceOptions.length === 0 ? (
-                <div className="px-3 py-2 text-[13px] text-[var(--qz-fg-4)]">
+                <div className="px-3 py-2" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-200)" }}>
                   No configured interfaces found — set up interfaces (or their descriptions) first.
                 </div>
               ) : (
                 ifaceOptions.map((i) => (
-                  <label
-                    key={i.name}
-                    className="flex items-center gap-2 px-3 py-[5px] text-[13px] text-[var(--qz-fg-1)] cursor-pointer"
-                  >
+                  <div key={i.name} className="clr-checkbox-wrapper px-3 py-[2px]">
                     <input
                       type="checkbox"
+                      id={`alias-iface-${i.name}`}
                       checked={ifaceMembers.includes(i.name)}
                       onChange={() => toggleIface(i.name)}
-                      style={{ accentColor: "var(--qz-accent)" }}
                     />
-                    {i.label}
-                  </label>
+                    <label htmlFor={`alias-iface-${i.name}`} style={monoFont}>
+                      {i.label}
+                    </label>
+                  </div>
                 ))
               )}
             </div>
@@ -252,10 +247,8 @@ export function AliasFormModal({
               onChange={(e) => setMembersText(e.target.value)}
               placeholder={MEMBER_INFO[type].placeholder}
               rows={5}
-              className={`${inputCls} resize-y`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-textarea"
+              style={{ maxWidth: "none", ...monoFont }}
             />
           </Field>
         )}
@@ -265,37 +258,26 @@ export function AliasFormModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Internal server subnet"
-            className={inputCls}
-            style={inputSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={{ maxWidth: "none" }}
           />
         </Field>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
-            {error}
-          </p>
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create alias"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Alias"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

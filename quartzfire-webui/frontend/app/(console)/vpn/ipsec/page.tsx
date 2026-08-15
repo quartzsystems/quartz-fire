@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
+import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import {
@@ -43,7 +44,7 @@ function peerColumns(): Column<IpsecPeer>[] {
       key: "auth",
       header: "Auth",
       value: (r) => r.auth_mode ?? "",
-      render: (r) => (r.auth_mode ? <span className="badge badge-info">{r.auth_mode === "pre-shared-secret" ? "PSK" : "x509"}</span> : <span className="text-[var(--qz-fg-4)]">—</span>),
+      render: (r) => (r.auth_mode ? <span className="badge badge-info">{r.auth_mode === "pre-shared-secret" ? "PSK" : "x509"}</span> : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>),
       width: 100,
     },
   ];
@@ -143,114 +144,97 @@ export default function IpsecPage() {
     }
   };
 
-  const tabs: [Tab, string, number | null][] = [
-    ["peers", "Peers", cfg?.peers.length ?? 0],
-    ["ike", "IKE Groups", cfg?.ike_groups.length ?? 0],
-    ["esp", "ESP Groups", cfg?.esp_groups.length ?? 0],
-    ["interfaces", "Interfaces", cfg?.interfaces.length ?? 0],
-    ["status", "Status", null],
-  ];
-
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          IPsec
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2>IPsec</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Site-to-site IPsec — IKE/ESP proposals, policy- or route-based (VTI) tunnels
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading IPsec configuration…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading IPsec configuration…</div>}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 text-[13px]" style={{ color: "var(--cds-alias-status-danger)" }}>
+            <Icon shape="exclamation-triangle" size={16} />
+            {errorMsg}
           </div>
-        )}
-        {status === "ready" && cfg && (
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-1 border-b border-[var(--qz-border)]">
-              {tabs.map(([id, label, count]) => {
-                const active = tab === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTab(id)}
-                    className={[
-                      "px-3 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
-                      active ? "text-[var(--qz-accent)] border-[var(--qz-accent)]" : "text-[var(--qz-fg-3)] border-transparent hover:text-[var(--qz-fg-1)]",
-                    ].join(" ")}
-                  >
-                    {label}
-                    {count !== null && <span className="ml-[6px] text-[12px] text-[var(--qz-fg-4)]">{count}</span>}
-                  </button>
-                );
-              })}
-            </div>
-
-            {tab === "peers" && (
-              <DataTable
-                rows={cfg.peers}
-                columns={peerColumns()}
-                rowId={(r) => r.name}
-                storageKey="vpn-ipsec-peers"
-                searchPlaceholder="Search peers…"
-                emptyMessage="No IPsec peers configured."
-                onRefresh={() => load("refresh")}
-                toolbar={<Button kind="primary" size="sm" icon={Plus} onClick={() => setPeerModal({})}>Add peer</Button>}
-                actions={(row) => <RowActions label={`peer ${row.name}`} onEdit={() => setPeerModal({ peer: row })} onDelete={() => removePeer(row)} />}
-              />
-            )}
-
-            {tab === "ike" && (
-              <DataTable
-                rows={cfg.ike_groups}
-                columns={ikeColumns()}
-                rowId={(r) => r.name}
-                storageKey="vpn-ipsec-ike"
-                searchPlaceholder="Search IKE groups…"
-                emptyMessage="No IKE groups configured."
-                onRefresh={() => load("refresh")}
-                toolbar={<Button kind="primary" size="sm" icon={Plus} onClick={() => setIkeModal({})}>Add IKE group</Button>}
-                actions={(row) => <RowActions label={`IKE group ${row.name}`} onEdit={() => setIkeModal({ group: row })} onDelete={() => removeIke(row)} />}
-              />
-            )}
-
-            {tab === "esp" && (
-              <DataTable
-                rows={cfg.esp_groups}
-                columns={espColumns()}
-                rowId={(r) => r.name}
-                storageKey="vpn-ipsec-esp"
-                searchPlaceholder="Search ESP groups…"
-                emptyMessage="No ESP groups configured."
-                onRefresh={() => load("refresh")}
-                toolbar={<Button kind="primary" size="sm" icon={Plus} onClick={() => setEspModal({})}>Add ESP group</Button>}
-                actions={(row) => <RowActions label={`ESP group ${row.name}`} onEdit={() => setEspModal({ group: row })} onDelete={() => removeEsp(row)} />}
-              />
-            )}
-
-            {tab === "interfaces" && (
-              <InterfacesPanel
-                live={cfg.interfaces}
-                interfaces={interfaces}
-                onSaved={(msg) => { setToast(msg); load("refresh"); }}
-              />
-            )}
-
-            {tab === "status" && <IpsecStatusPanel />}
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      {status === "ready" && cfg && (
+        <div className="flex flex-col gap-5">
+          <Tabs
+            items={[
+              { value: "peers", label: "Peers", count: cfg.peers.length },
+              { value: "ike", label: "IKE Groups", count: cfg.ike_groups.length },
+              { value: "esp", label: "ESP Groups", count: cfg.esp_groups.length },
+              { value: "interfaces", label: "Interfaces", count: cfg.interfaces.length },
+              { value: "status", label: "Status" },
+            ]}
+            value={tab}
+            onChange={(v) => setTab(v as Tab)}
+          />
+
+          {tab === "peers" && (
+            <DataTable
+              rows={cfg.peers}
+              columns={peerColumns()}
+              rowId={(r) => r.name}
+              storageKey="vpn-ipsec-peers"
+              searchPlaceholder="Search peers…"
+              emptyMessage="No IPsec peers configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setPeerModal({ peer: row })}
+              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setPeerModal({})}>Add Peer</Button>}
+              actions={(row) => <RowActions label={`peer ${row.name}`} onEdit={() => setPeerModal({ peer: row })} onDelete={() => removePeer(row)} />}
+            />
+          )}
+
+          {tab === "ike" && (
+            <DataTable
+              rows={cfg.ike_groups}
+              columns={ikeColumns()}
+              rowId={(r) => r.name}
+              storageKey="vpn-ipsec-ike"
+              searchPlaceholder="Search IKE groups…"
+              emptyMessage="No IKE groups configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setIkeModal({ group: row })}
+              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setIkeModal({})}>Add IKE Group</Button>}
+              actions={(row) => <RowActions label={`IKE group ${row.name}`} onEdit={() => setIkeModal({ group: row })} onDelete={() => removeIke(row)} />}
+            />
+          )}
+
+          {tab === "esp" && (
+            <DataTable
+              rows={cfg.esp_groups}
+              columns={espColumns()}
+              rowId={(r) => r.name}
+              storageKey="vpn-ipsec-esp"
+              searchPlaceholder="Search ESP groups…"
+              emptyMessage="No ESP groups configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setEspModal({ group: row })}
+              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setEspModal({})}>Add ESP Group</Button>}
+              actions={(row) => <RowActions label={`ESP group ${row.name}`} onEdit={() => setEspModal({ group: row })} onDelete={() => removeEsp(row)} />}
+            />
+          )}
+
+          {tab === "interfaces" && (
+            <InterfacesPanel
+              live={cfg.interfaces}
+              interfaces={interfaces}
+              onSaved={(msg) => { setToast(msg); load("refresh"); }}
+            />
+          )}
+
+          {tab === "status" && <IpsecStatusPanel />}
+        </div>
+      )}
 
       {peerModal && cfg && (
         <PeerFormModal

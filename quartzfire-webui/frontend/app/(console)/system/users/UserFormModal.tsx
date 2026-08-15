@@ -1,27 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { applyUser, SshPublicKey, SystemUser } from "@/lib/system";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const monoSt = { fontFamily: "var(--qz-font-mono)", maxWidth: "none" } as const;
+const plainSt = { maxWidth: "none" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control">
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -192,10 +184,8 @@ export function UserFormModal({
               placeholder="admin"
               disabled={isEdit}
               autoComplete="off"
-              className={inputCls}
-              style={{ ...monoSt, opacity: isEdit ? 0.6 : 1 }}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={monoSt}
             />
           </Field>
           <Field label="Full Name" hint="Optional display name.">
@@ -203,10 +193,8 @@ export function UserFormModal({
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               placeholder="Jane Admin"
-              className={inputCls}
-              style={inputSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={plainSt}
             />
           </Field>
         </div>
@@ -218,10 +206,8 @@ export function UserFormModal({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
-              className={inputCls}
-              style={inputSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={plainSt}
             />
           </Field>
           <Field label="Confirm Password">
@@ -230,28 +216,27 @@ export function UserFormModal({
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               autoComplete="new-password"
-              className={inputCls}
-              style={inputSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={plainSt}
             />
           </Field>
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-[6px]">
-            <label className="block text-[12px] text-[var(--qz-fg-3)]">SSH Public Keys</label>
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>SSH Public Keys</label>
             <button
               type="button"
               onClick={() => setKeys((rows) => [...rows, { id: "", type: "ssh-ed25519", key: "" }])}
-              className="inline-flex items-center gap-1 text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-fg-1)] transition-colors cursor-pointer bg-transparent border-0 p-0"
+              className="btn btn-sm btn-link-neutral"
+              style={{ margin: 0 }}
             >
-              <Plus size={13} /> Add key
+              <Icon shape="plus" size={13} /> Add Key
             </button>
           </div>
 
           {keys.length === 0 ? (
-            <p className="text-[11px] text-[var(--qz-fg-4)] m-0">
+            <p className="clr-subtext" style={{ margin: 0 }}>
               No keys — this account signs in with its password only.
             </p>
           ) : (
@@ -260,38 +245,37 @@ export function UserFormModal({
                 <div
                   key={i}
                   className="rounded-md p-3 flex flex-col gap-2"
-                  style={{ border: "1px solid var(--qz-border)" }}
+                  style={{ border: "1px solid var(--cds-alias-object-border-color-tint)" }}
                 >
                   <div className="flex items-center gap-2">
                     <input
                       value={k.id}
                       onChange={(e) => setKeyRow(i, { id: e.target.value })}
                       placeholder="user@host"
-                      className={inputCls}
-                      style={monoSt}
-                      onFocus={focusBorder}
-                      onBlur={blurBorder}
+                      className="clr-input"
+                      style={{ ...monoSt, flex: 1 }}
                     />
-                    <select
-                      value={k.type}
-                      onChange={(e) => setKeyRow(i, { type: e.target.value })}
-                      className={`${inputCls} cursor-pointer`}
-                      style={{ ...monoSt, width: 200 }}
-                      onFocus={focusBorder}
-                      onBlur={blurBorder}
-                    >
-                      {KEY_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
+                    <div className="clr-select-wrapper" style={{ width: 200, flexShrink: 0 }}>
+                      <select
+                        value={k.type}
+                        onChange={(e) => setKeyRow(i, { type: e.target.value })}
+                        className="clr-select"
+                        style={{ ...monoSt, width: "100%" }}
+                      >
+                        {KEY_TYPES.map((t) => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
                     <button
                       type="button"
                       title="Remove key"
                       aria-label="Remove key"
                       onClick={() => setKeys((rows) => rows.filter((_, j) => j !== i))}
-                      className="grid place-items-center w-8 h-8 rounded-md flex-shrink-0 bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer"
+                      className="btn btn-sm btn-link-neutral btn-icon"
+                      style={{ margin: 0, flexShrink: 0 }}
                     >
-                      <Trash2 size={14} />
+                      <Icon shape="trash" size={14} />
                     </button>
                   </div>
                   <textarea
@@ -299,10 +283,8 @@ export function UserFormModal({
                     onChange={(e) => onKeyPaste(i, e.target.value)}
                     placeholder="Paste the full OpenSSH public key line, or just its base64 body"
                     rows={2}
-                    className={`${inputCls} resize-y`}
+                    className="clr-textarea resize-y"
                     style={monoSt}
-                    onFocus={focusBorder}
-                    onBlur={blurBorder}
                   />
                 </div>
               ))}
@@ -311,29 +293,19 @@ export function UserFormModal({
         </div>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create user"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create User"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

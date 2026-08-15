@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Search, ArrowUp, ArrowDown, RotateCw, X, Columns3, Check, RotateCcw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 
 export interface Column<T> {
@@ -34,6 +34,10 @@ interface Layout {
   hidden: string[];
 }
 
+/// Clarity-styled datagrid: click-to-sort headers, drag-to-reorder columns,
+/// header-edge resize, multi-row selection (click / shift / ctrl / drag) with
+/// an action bar, double-click to open a row, and a footer carrying the
+/// interaction hint + row count. Column layout persists per table.
 export function DataTable<T>({
   rows,
   columns,
@@ -45,6 +49,9 @@ export function DataTable<T>({
   actions,
   onRefresh,
   storageKey,
+  onRowOpen,
+  onDeleteSelected,
+  footerHint,
 }: {
   rows: T[];
   columns: Column<T>[];
@@ -60,6 +67,12 @@ export function DataTable<T>({
   onRefresh?: () => void | Promise<void>;
   /** Namespace for persisting column layout (order/width/visibility). Falls back to the column set. */
   storageKey?: string;
+  /** Double-clicking a row opens it (usually its edit modal). */
+  onRowOpen?: (row: T) => void;
+  /** Enables "Delete selected" in the selection action bar. */
+  onDeleteSelected?: (ids: string[]) => void | Promise<void>;
+  /** Extra note in the datagrid footer (interaction hints, caveats). */
+  footerHint?: React.ReactNode;
 }) {
   const [query, setQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
@@ -304,6 +317,7 @@ export function DataTable<T>({
   const dragAdditiveRef = useRef(false);
   const dragBaseRef = useRef<Set<string>>(new Set());
   const [isDragging, setIsDragging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     const end = () => {
@@ -378,66 +392,72 @@ export function DataTable<T>({
     setRange(anchorRef.current, index, dragAdditiveRef.current ? dragBaseRef.current : new Set());
   };
 
+  const deleteSelected = async () => {
+    if (!onDeleteSelected || deleting || selected.size === 0) return;
+    setDeleting(true);
+    try {
+      await onDeleteSelected([...selected]);
+      setSelected(new Set());
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const selectedCount = selected.size;
   const colSpan = visibleCols.length + 1 + (actions ? 1 : 0);
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Controls */}
+      {/* Toolbar */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
-          <Search
+          <Icon
+            shape="search"
             size={14}
-            className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]"
+            className="absolute left-[9px] top-1/2 -translate-y-1/2"
+            style={{ color: "var(--cds-alias-typography-color-200)" }}
           />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder={searchPlaceholder}
-            className="rounded-md pl-8 pr-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[240px]"
-            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
-            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
+            className="clr-input"
+            style={{ paddingLeft: 30, width: 240, maxWidth: 240 }}
           />
         </div>
 
         {filters.map((f) => (
           <div key={f.key} className="flex items-center gap-2">
-            <span className="text-[12px] text-[var(--qz-fg-4)]">{f.label}</span>
-            <select
-              value={filterValues[f.key] ?? ALL}
-              onChange={(e) => setFilterValues((p) => ({ ...p, [f.key]: e.target.value }))}
-              className="rounded-md px-2 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-              style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-            >
-              <option value={ALL}>All</option>
-              {f.options.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>
+              {f.label}
+            </span>
+            <div className="clr-select-wrapper" style={{ width: "auto" }}>
+              <select
+                value={filterValues[f.key] ?? ALL}
+                onChange={(e) => setFilterValues((p) => ({ ...p, [f.key]: e.target.value }))}
+                className="clr-select"
+                style={{ width: "auto", minWidth: 100 }}
+              >
+                <option value={ALL}>All</option>
+                {f.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         ))}
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2">
           {/* Columns menu */}
-          <div className="relative" ref={menuRef}>
-            <Button kind="secondary" size="sm" icon={Columns3} onClick={() => setMenuOpen((o) => !o)}>
+          <div className="clr-dropdown" ref={menuRef}>
+            <Button kind="secondary" size="sm" icon="grid-view" onClick={() => setMenuOpen((o) => !o)}>
               Columns
             </Button>
             {menuOpen && (
-              <div
-                className="absolute right-0 mt-1 z-20 rounded-md py-1 min-w-[200px]"
-                style={{
-                  background: "var(--qz-surface)",
-                  border: "1px solid var(--qz-border)",
-                  boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-                }}
-              >
-                <div className="px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--qz-fg-4)]">
-                  Show columns
-                </div>
+              <div className="dropdown-menu right" style={{ minWidth: 200 }}>
+                <div className="dropdown-header">Show columns</div>
                 {orderedKeys.map((k) => {
                   const c = byKey.get(k);
                   if (!c) return null;
@@ -447,219 +467,253 @@ export function DataTable<T>({
                     <button
                       key={k}
                       type="button"
+                      className="dropdown-item"
                       onClick={() => toggleColumn(k)}
                       disabled={lastVisible}
-                      className="flex items-center gap-2 w-full px-3 py-[6px] text-[13px] text-left bg-transparent border-0 text-[var(--qz-fg-2)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <span
-                        className="grid place-items-center w-[15px] h-[15px] rounded-[4px] flex-shrink-0"
-                        style={{
-                          border: "1px solid var(--qz-border-strong)",
-                          background: visible ? "var(--qz-accent)" : "var(--qz-input-bg)",
-                        }}
-                      >
-                        {visible && <Check size={11} style={{ color: "var(--qz-fg-on-accent)" }} />}
-                      </span>
+                      <input
+                        type="checkbox"
+                        className="qz-check"
+                        checked={visible}
+                        readOnly
+                        tabIndex={-1}
+                        style={{ pointerEvents: "none" }}
+                      />
                       {c.header}
                     </button>
                   );
                 })}
-                <div className="my-1 mx-3 border-t" style={{ borderColor: "var(--qz-divider)" }} />
+                <hr className="dropdown-divider" />
                 <button
                   type="button"
+                  className="dropdown-item"
                   onClick={() => {
                     resetLayout();
                     setMenuOpen(false);
                   }}
-                  className="flex items-center gap-2 w-full px-3 py-[6px] text-[13px] text-left bg-transparent border-0 text-[var(--qz-fg-3)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] hover:text-[var(--qz-fg-1)] transition-colors cursor-pointer"
                 >
-                  <RotateCcw size={13} /> Reset layout
+                  <Icon shape="undo" size={13} />
+                  Reset layout
                 </button>
               </div>
             )}
           </div>
 
           {onRefresh && (
-            <Button kind="secondary" size="sm" icon={RotateCw} onClick={handleRefresh} disabled={refreshing}>
+            <Button kind="secondary" size="sm" icon="refresh" onClick={handleRefresh} disabled={refreshing}>
               {refreshing ? "Refreshing…" : "Refresh"}
             </Button>
           )}
           {toolbar}
-          <span className="text-[12px] text-[var(--qz-fg-4)]">
-            {displayed.length} {displayed.length === 1 ? "row" : "rows"}
-          </span>
         </div>
       </div>
 
-      {/* Selection bar */}
-      {selectedCount > 0 && (
-        <div
-          className="flex items-center gap-3 px-3 py-2 rounded-md"
-          style={{ background: "var(--qz-accent-soft)", border: "1px solid color-mix(in oklab, var(--qz-accent) 30%, transparent)" }}
-        >
-          <span className="text-[13px] font-medium text-[var(--qz-fg-1)]">
-            {selectedCount} selected
-          </span>
-          <button
-            type="button"
-            onClick={() => setSelected(new Set())}
-            className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-fg-1)] transition-colors cursor-pointer bg-transparent border-0 p-0 ml-auto"
-          >
-            <X size={13} /> Clear
-          </button>
-        </div>
-      )}
-
-      {/* Table */}
-      <div
-        className="rounded-md overflow-x-auto"
-        style={{
-          border: "1px solid var(--qz-border)",
-          userSelect: isDragging ? "none" : "auto",
-        }}
-      >
-        <table
-          ref={tableRef}
-          className="qz-table"
-          style={{ tableLayout: seeded ? "fixed" : "auto", width: "100%" }}
-        >
-          <colgroup>
-            <col style={{ width: 40 }} />
-            {visibleCols.map((c) => (
-              <col key={c.key} style={{ width: colWidth(c) }} />
-            ))}
-            {actions && <col style={{ width: 90 }} />}
-          </colgroup>
-          <thead>
-            <tr>
-              <th style={{ width: 40 }}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = someSelected && !allSelected;
-                  }}
-                  onChange={toggleAll}
-                  className="qz-check"
-                  aria-label="Select all"
-                />
-              </th>
-              {visibleCols.map((c, index) => (
-                <th
-                  key={c.key}
-                  data-col-key={c.key}
-                  draggable
-                  onDragStart={(e) => {
-                    if (resizeRef.current) {
-                      e.preventDefault();
-                      return;
-                    }
-                    dragColRef.current = c.key;
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  onDragOver={(e) => {
-                    if (!dragColRef.current || dragColRef.current === c.key) return;
-                    e.preventDefault();
-                    if (dragOverKey !== c.key) setDragOverKey(c.key);
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (dragColRef.current) reorderColumn(dragColRef.current, c.key);
-                    dragColRef.current = null;
-                    setDragOverKey(null);
-                  }}
-                  onDragEnd={() => {
-                    dragColRef.current = null;
-                    setDragOverKey(null);
-                  }}
-                  style={{
-                    cursor: c.sortable ? "pointer" : "grab",
-                    position: "relative",
-                    boxShadow:
-                      dragOverKey === c.key ? "inset 2px 0 0 0 var(--qz-accent)" : undefined,
-                  }}
-                  onClick={() => {
-                    if (!c.sortable) return;
-                    if (sortKey === c.key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-                    else {
-                      setSortKey(c.key);
-                      setSortDir("asc");
-                    }
-                  }}
-                >
-                  <span className="inline-flex items-center gap-1">
-                    {c.header}
-                    {sortKey === c.key &&
-                      (sortDir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
-                  </span>
-                  {index < visibleCols.length - 1 && (
-                    <span
-                      className={
-                        "qz-col-resize" +
-                        (resizing && resizeRef.current?.leftKey === c.key ? " active" : "")
-                      }
-                      onMouseDown={(e) => onResizeDown(e, index)}
-                      onClick={(e) => e.stopPropagation()}
-                      onDragStart={(e) => e.preventDefault()}
-                      aria-hidden
-                    />
-                  )}
-                </th>
-              ))}
-              {actions && <th style={{ width: 90 }} className="text-right">Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {displayed.length === 0 ? (
-              <tr>
-                <td colSpan={colSpan} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
-                  {emptyMessage}
-                </td>
-              </tr>
-            ) : (
-              displayed.map((row, index) => {
-                const id = displayedIds[index];
-                const isSel = selected.has(id);
-                return (
-                  <tr
-                    key={id}
-                    className={isSel ? "selected" : ""}
-                    onMouseDown={(e) => onRowMouseDown(e, index)}
-                    onMouseEnter={() => onRowMouseEnter(index)}
-                  >
-                    <td onMouseDown={(e) => e.stopPropagation()} style={{ cursor: "default" }}>
-                      <input
-                        type="checkbox"
-                        checked={isSel}
-                        onChange={() => toggleOne(index)}
-                        className="qz-check"
-                        aria-label="Select row"
-                      />
-                    </td>
-                    {visibleCols.map((c) => (
-                      <td
-                        key={c.key}
-                        className={c.mono ? "mono" : undefined}
-                        style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                      >
-                        {c.render ? c.render(row) : (c.value(row) ?? "—")}
-                      </td>
-                    ))}
-                    {actions && (
-                      <td
-                        onMouseDown={(e) => e.stopPropagation()}
-                        style={{ cursor: "default" }}
-                        className="text-right"
-                      >
-                        {actions(row)}
-                      </td>
-                    )}
-                  </tr>
-                );
-              })
+      {/* Datagrid */}
+      <div className="datagrid" style={{ userSelect: isDragging ? "none" : "auto" }}>
+        {/* Selection action bar */}
+        {selectedCount > 0 && (
+          <div className="datagrid-action-bar" style={{ alignItems: "center" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}>
+              {selectedCount} selected
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm btn-link-neutral"
+              onClick={() => setSelected(new Set())}
+            >
+              <Icon shape="times" size={12} />
+              Clear
+            </button>
+            {onDeleteSelected && (
+              <button
+                type="button"
+                className="btn btn-sm btn-danger-outline"
+                style={{ marginLeft: "auto" }}
+                disabled={deleting}
+                onClick={() => void deleteSelected()}
+              >
+                <Icon shape="trash" size={12} />
+                {deleting ? "Deleting…" : "Delete selected"}
+              </button>
             )}
-          </tbody>
-        </table>
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
+          <table
+            ref={tableRef}
+            className="qz-table datagrid-table"
+            style={{ tableLayout: seeded ? "fixed" : "auto", width: "100%" }}
+          >
+            <colgroup>
+              <col style={{ width: 40 }} />
+              {visibleCols.map((c) => (
+                <col key={c.key} style={{ width: colWidth(c) }} />
+              ))}
+              {actions && <col style={{ width: 90 }} />}
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => {
+                      if (el) el.indeterminate = someSelected && !allSelected;
+                    }}
+                    onChange={toggleAll}
+                    className="qz-check"
+                    aria-label="Select all"
+                  />
+                </th>
+                {visibleCols.map((c, index) => (
+                  <th
+                    key={c.key}
+                    data-col-key={c.key}
+                    draggable
+                    onDragStart={(e) => {
+                      if (resizeRef.current) {
+                        e.preventDefault();
+                        return;
+                      }
+                      dragColRef.current = c.key;
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragOver={(e) => {
+                      if (!dragColRef.current || dragColRef.current === c.key) return;
+                      e.preventDefault();
+                      if (dragOverKey !== c.key) setDragOverKey(c.key);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (dragColRef.current) reorderColumn(dragColRef.current, c.key);
+                      dragColRef.current = null;
+                      setDragOverKey(null);
+                    }}
+                    onDragEnd={() => {
+                      dragColRef.current = null;
+                      setDragOverKey(null);
+                    }}
+                    style={{
+                      cursor: c.sortable ? "pointer" : "grab",
+                      position: "relative",
+                      boxShadow:
+                        dragOverKey === c.key
+                          ? "inset 2px 0 0 0 var(--cds-alias-interaction-action)"
+                          : undefined,
+                    }}
+                    onClick={() => {
+                      if (!c.sortable) return;
+                      if (sortKey === c.key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+                      else {
+                        setSortKey(c.key);
+                        setSortDir("asc");
+                      }
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {c.header}
+                      {sortKey === c.key && (
+                        <Icon
+                          shape="arrow"
+                          dir={sortDir === "asc" ? "up" : "down"}
+                          size={12}
+                          style={{ color: "var(--cds-alias-interaction-action)" }}
+                        />
+                      )}
+                    </span>
+                    {index < visibleCols.length - 1 && (
+                      <span
+                        className={
+                          "qz-col-resize" +
+                          (resizing && resizeRef.current?.leftKey === c.key ? " active" : "")
+                        }
+                        onMouseDown={(e) => onResizeDown(e, index)}
+                        onClick={(e) => e.stopPropagation()}
+                        onDragStart={(e) => e.preventDefault()}
+                        aria-hidden
+                      />
+                    )}
+                  </th>
+                ))}
+                {actions && (
+                  <th style={{ width: 90 }} className="text-right">
+                    Actions
+                  </th>
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {displayed.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={colSpan}
+                    className="text-center"
+                    style={{ cursor: "default", color: "var(--cds-alias-typography-color-200)", padding: "32px 12px" }}
+                  >
+                    {emptyMessage}
+                  </td>
+                </tr>
+              ) : (
+                displayed.map((row, index) => {
+                  const id = displayedIds[index];
+                  const isSel = selected.has(id);
+                  return (
+                    <tr
+                      key={id}
+                      className={isSel ? "selected" : ""}
+                      onMouseDown={(e) => onRowMouseDown(e, index)}
+                      onMouseEnter={() => onRowMouseEnter(index)}
+                      onDoubleClick={onRowOpen ? () => onRowOpen(row) : undefined}
+                    >
+                      <td onMouseDown={(e) => e.stopPropagation()} style={{ cursor: "default" }}>
+                        <input
+                          type="checkbox"
+                          checked={isSel}
+                          onChange={() => toggleOne(index)}
+                          className="qz-check"
+                          aria-label="Select row"
+                        />
+                      </td>
+                      {visibleCols.map((c) => (
+                        <td
+                          key={c.key}
+                          className={c.mono ? "mono" : undefined}
+                          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        >
+                          {c.render ? c.render(row) : (c.value(row) ?? "—")}
+                        </td>
+                      ))}
+                      {actions && (
+                        <td
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onDoubleClick={(e) => e.stopPropagation()}
+                          style={{ cursor: "default" }}
+                          className="text-right"
+                        >
+                          {actions(row)}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer: interaction hint + row count */}
+        <div className="datagrid-footer">
+          <span className="datagrid-footer-description">
+            {footerHint ??
+              (onRowOpen
+                ? "Double-click a row to edit it. Drag headers to reorder columns."
+                : "Drag headers to reorder columns; drag a header edge to resize.")}
+          </span>
+          <span>
+            {displayed.length} {displayed.length === 1 ? "item" : "items"}
+          </span>
+        </div>
       </div>
     </div>
   );

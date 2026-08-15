@@ -11,18 +11,7 @@
 // through "(not logged)" nodes — the byte totals stay honest either way.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Bookmark,
-  ChevronLeft,
-  ChevronRight,
-  GripVertical,
-  Pause,
-  Play,
-  Plus,
-  RotateCw,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Segmented } from "@/components/ui/Segmented";
 import { ChartTooltip } from "@/components/ui/ChartTooltip";
@@ -43,9 +32,11 @@ const OTHER = "\x00other";
 
 type Verdict = "allow" | "block" | "none";
 
+// Ribbon colors per the Clarity chart contract: allowed green #00d992 at .28,
+// blocked red #ff5d6c at .38 (the tokens resolve to those hexes).
 const VERDICT_META: Record<Verdict, { label: string; color: string; opacity: number; hover: number }> = {
-  allow: { label: "Allowed", color: "var(--qz-success)", opacity: 0.32, hover: 0.6 },
-  block: { label: "Blocked", color: "var(--qz-danger)", opacity: 0.4, hover: 0.68 },
+  allow: { label: "Allowed", color: "var(--qz-success)", opacity: 0.28, hover: 0.6 },
+  block: { label: "Blocked", color: "var(--qz-danger)", opacity: 0.38, hover: 0.68 },
   none: { label: "Not logged", color: "var(--qz-fg-4)", opacity: 0.2, hover: 0.42 },
 };
 const VERDICT_ORDER: Verdict[] = ["allow", "block", "none"];
@@ -635,17 +626,15 @@ export default function TrafficFlowPage() {
   const topFlows = useMemo(() => filtered.slice(0, 10), [filtered]);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Traffic Flow
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2>Traffic Flow</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Where traffic enters, which firewall rule carries it, and where it goes — ribbon width is {metric === "bytes" ? "bytes" : "connections (hits)"} over the window; color is the verdict
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
+      <div>
         <div className="flex flex-col gap-3">
           {/* Controls */}
           <div className="flex items-center gap-3 flex-wrap">
@@ -677,24 +666,15 @@ export default function TrafficFlowPage() {
             />
             <div className="ml-auto flex items-center gap-3">
               {/* Named views: save the current columns/metric/window/verdict, recall by name */}
-              <div className="relative" ref={viewsRef}>
-                <Button kind="secondary" size="sm" icon={Bookmark} onClick={() => setViewsOpen((o) => !o)}>
+              <div className="clr-dropdown" ref={viewsRef}>
+                <Button kind="secondary" size="sm" icon="bookmark" onClick={() => setViewsOpen((o) => !o)}>
                   Views
                 </Button>
                 {viewsOpen && (
-                  <div
-                    className="absolute right-0 mt-1 z-20 rounded-md py-1 min-w-[240px]"
-                    style={{
-                      background: "var(--qz-surface)",
-                      border: "1px solid var(--qz-border)",
-                      boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-                    }}
-                  >
-                    <div className="px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--qz-fg-4)]">
-                      Saved views
-                    </div>
+                  <div className="dropdown-menu right" style={{ minWidth: 240 }}>
+                    <div className="dropdown-header">Saved views</div>
                     {Object.keys(views).length === 0 && (
-                      <div className="px-3 py-[6px] text-[12.5px] text-[var(--qz-fg-4)]">
+                      <div className="px-3 py-[6px]" style={{ fontSize: 12.5, color: "var(--cds-alias-typography-color-200)" }}>
                         No saved views yet.
                       </div>
                     )}
@@ -706,11 +686,11 @@ export default function TrafficFlowPage() {
                             applyView(v);
                             setViewsOpen(false);
                           }}
-                          className="flex-1 min-w-0 px-3 py-[6px] text-[13px] text-left bg-transparent border-0 text-[var(--qz-fg-2)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer truncate"
+                          className="dropdown-item flex-1 min-w-0 truncate"
                           title={`${v.order.map((id) => FACET_BY_ID.get(id)?.label ?? id).join(" → ")}`}
                         >
                           {name}
-                          <span className="ml-2 text-[11px] text-[var(--qz-fg-4)]">
+                          <span className="ml-2" style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}>
                             {v.window} · {v.metric === "bytes" ? "Bytes" : "Hits"}
                           </span>
                         </button>
@@ -723,14 +703,14 @@ export default function TrafficFlowPage() {
                               return next;
                             })
                           }
-                          className="p-1 mr-2 rounded bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer flex-shrink-0"
+                          className="btn btn-sm btn-link-neutral btn-icon flex-shrink-0 mr-1"
                           title="Delete view"
                         >
-                          <Trash2 size={13} />
+                          <Icon shape="trash" size={13} />
                         </button>
                       </div>
                     ))}
-                    <div className="my-1 mx-3 border-t" style={{ borderColor: "var(--qz-divider)" }} />
+                    <hr className="dropdown-divider" />
                     <div className="flex items-center gap-2 px-3 py-[6px]">
                       <input
                         value={viewName}
@@ -739,8 +719,8 @@ export default function TrafficFlowPage() {
                           if (e.key === "Enter") saveView();
                         }}
                         placeholder="Save current as…"
-                        className="flex-1 min-w-0 rounded-md px-2 py-[5px] text-[12.5px] text-[var(--qz-fg-1)] outline-none"
-                        style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+                        className="clr-input flex-1 min-w-0"
+                        style={{ maxWidth: "none" }}
                       />
                       <Button kind="primary" size="sm" onClick={saveView} disabled={!viewName.trim()}>
                         Save
@@ -749,13 +729,13 @@ export default function TrafficFlowPage() {
                   </div>
                 )}
               </div>
-              <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load(window_, metric)}>
+              <Button kind="secondary" size="sm" icon="refresh" onClick={() => load(window_, metric)}>
                 Refresh
               </Button>
               <Button
                 kind="secondary"
                 size="sm"
-                icon={paused ? Play : Pause}
+                icon={paused ? "play" : "pause"}
                 onClick={() =>
                   setPaused((p) => {
                     pausedRef.current = !p;
@@ -799,7 +779,7 @@ export default function TrafficFlowPage() {
                   color: "var(--qz-fg-1)",
                 }}
               >
-                <GripVertical size={12} className="text-[var(--qz-fg-4)]" />
+                <Icon shape="two-way-arrows" size={12} className="text-[var(--qz-fg-4)]" />
                 {FACET_BY_ID.get(id)!.label}
                 <button
                   type="button"
@@ -808,7 +788,7 @@ export default function TrafficFlowPage() {
                   className="p-[1px] rounded disabled:opacity-25 cursor-pointer text-[var(--qz-fg-3)]"
                   title="Move left"
                 >
-                  <ChevronLeft size={12} />
+                  <Icon shape="angle" dir="left" size={12} />
                 </button>
                 <button
                   type="button"
@@ -817,7 +797,7 @@ export default function TrafficFlowPage() {
                   className="p-[1px] rounded disabled:opacity-25 cursor-pointer text-[var(--qz-fg-3)]"
                   title="Move right"
                 >
-                  <ChevronRight size={12} />
+                  <Icon shape="angle" dir="right" size={12} />
                 </button>
                 <button
                   type="button"
@@ -826,7 +806,7 @@ export default function TrafficFlowPage() {
                   className="p-[1px] rounded disabled:opacity-25 cursor-pointer text-[var(--qz-fg-3)]"
                   title={order.length <= 2 ? "At least two columns" : "Remove column"}
                 >
-                  <X size={12} />
+                  <Icon shape="times" size={12} />
                 </button>
               </span>
             ))}
@@ -839,7 +819,7 @@ export default function TrafficFlowPage() {
                 style={{ borderStyle: "dashed", borderColor: "var(--qz-border)", color: "var(--qz-fg-4)", background: "transparent" }}
                 title="Add column"
               >
-                <Plus size={12} />
+                <Icon shape="plus" size={12} />
                 {f.label}
               </button>
             ))}
@@ -863,7 +843,7 @@ export default function TrafficFlowPage() {
                   title="Remove this filter"
                 >
                   {FACET_BY_ID.get(c.facet)!.label}: {c.label}
-                  <X size={11} />
+                  <Icon shape="times" size={11} />
                 </button>
               ))}
               {activeFilterChips.length > 0 && (
@@ -879,10 +859,7 @@ export default function TrafficFlowPage() {
           )}
 
           {/* The diagram */}
-          <div
-            className="rounded-md relative"
-            style={{ border: "1px solid var(--qz-border)", background: "var(--qz-surface)" }}
-          >
+          <div className="card relative">
             {resp && !resp.available ? (
               <div className="p-8 text-center text-[13px] text-[var(--qz-fg-4)]">
                 Flow recording isn&apos;t available yet. It needs a qfdevd build with per-flow
@@ -1011,7 +988,7 @@ export default function TrafficFlowPage() {
 
           {/* Top flows (table view of the same data) */}
           {topFlows.length > 0 && (
-            <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+            <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
               <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
                 <colgroup>
                   {TOP_FLOW_COLS.map((c) => (

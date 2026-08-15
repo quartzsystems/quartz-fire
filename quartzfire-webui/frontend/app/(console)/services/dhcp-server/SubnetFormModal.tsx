@@ -1,26 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { applyDhcpSubnet, DhcpServer, DhcpSubnet } from "@/lib/services";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const mono = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -128,10 +119,8 @@ export function SubnetFormModal({
               onChange={(e) => setSubnet(e.target.value)}
               placeholder="192.168.1.0/24"
               disabled={isEdit}
-              className={inputCls}
-              style={{ ...monoSt, opacity: isEdit ? 0.5 : 1 }}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={mono}
             />
           </Field>
           <Field label="Gateway" hint="Handed to clients as their default router.">
@@ -139,10 +128,8 @@ export function SubnetFormModal({
               value={gateway}
               onChange={(e) => setGateway(e.target.value)}
               placeholder="192.168.1.1"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={mono}
             />
           </Field>
         </div>
@@ -153,10 +140,8 @@ export function SubnetFormModal({
             onChange={(e) => setNameServersText(e.target.value)}
             placeholder={"192.168.1.1\n1.1.1.1"}
             rows={3}
-            className={`${inputCls} resize-y`}
-            style={monoSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-textarea"
+            style={mono}
           />
         </Field>
 
@@ -166,10 +151,8 @@ export function SubnetFormModal({
               value={domainName}
               onChange={(e) => setDomainName(e.target.value)}
               placeholder="lan.example.com"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={mono}
             />
           </Field>
           <Field label="Lease (seconds)" hint="Defaults to 86400 (24h) when unset.">
@@ -179,38 +162,26 @@ export function SubnetFormModal({
               value={lease}
               onChange={(e) => setLease(e.target.value)}
               placeholder="86400"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={mono}
             />
           </Field>
         </div>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create subnet"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Subnet"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

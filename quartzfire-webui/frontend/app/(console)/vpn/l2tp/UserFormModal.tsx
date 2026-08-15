@@ -1,29 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { L2tpUser, applyL2tpUser, emptyL2tpUser } from "@/lib/l2tp";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const inputSt = { maxWidth: "none" } as const;
+const monoSt = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">
-        {label} {required && <span style={{ color: "var(--qz-danger)" }}>*</span>}
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">
+        {label} {required && <span className="clr-required">*</span>}
       </label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -74,27 +66,27 @@ export function UserFormModal({ initial, existingNames, onClose, onSaved }: {
       <ModalHeader title={`${isEdit ? "Edit" : "Add"} L2TP User`} subtitle={isEdit ? initial!.username : "Local remote-access account"} onClose={onClose} />
       <form onSubmit={submit} className="flex flex-col gap-4">
         <Field label="Username" required>
-          <input value={username} disabled={isEdit} onChange={(e) => setUsername(e.target.value)} placeholder="alice" className={`${inputCls} disabled:opacity-70`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={username} disabled={isEdit} onChange={(e) => setUsername(e.target.value)} placeholder="alice" className="clr-input" style={monoSt} />
         </Field>
         <Field label="Password" required={!isEdit} hint={isEdit ? "Leave blank to keep the current password." : undefined}>
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••" className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" placeholder="••••••" className="clr-input" style={inputSt} />
         </Field>
         <Field label="Static IP" hint="Fixed address for this user (optional).">
-          <input value={staticIp} onChange={(e) => setStaticIp(e.target.value)} placeholder="10.10.0.50" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={staticIp} onChange={(e) => setStaticIp(e.target.value)} placeholder="10.10.0.50" className="clr-input" style={monoSt} />
         </Field>
-        <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+        <label className="flex items-center gap-2 cursor-pointer select-none text-[13px]" style={{ color: "var(--cds-alias-typography-color-400)" }}>
           <Switch on={disabled} onChange={setDisabled} />
           Account disabled
         </label>
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
+        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button type="button" onClick={onClose} className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer" style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}>Cancel</button>
-          <button type="submit" disabled={saving} className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0" style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Add user"}
+        <ModalFooter>
+          <button type="button" onClick={onClose} className="btn btn-neutral">Cancel</button>
+          <button type="submit" disabled={saving} className="btn btn-primary">
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Add User"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

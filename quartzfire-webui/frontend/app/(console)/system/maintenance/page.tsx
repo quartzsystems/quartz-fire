@@ -1,20 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  AlertTriangle,
-  CalendarClock,
-  Eraser,
-  FileDown,
-  FileUp,
-  HardDriveDownload,
-  Power,
-  RotateCw,
-  Trash2,
-  X,
-} from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import {
   addImage,
   cancelScheduledReboot,
@@ -36,21 +25,25 @@ import {
   uploadImageFile,
 } from "@/lib/system";
 import { useDashboard } from "@/lib/DashboardContext";
-import { useColumnResize } from "@/components/dashboard/ColumnResize";
 
-/** Resizable columns of the system-images table (trailing Actions cell fixed). */
-const IMAGE_COLS = [
-  { key: "image", header: "Image" },
-  { key: "default", header: "Default Boot", width: 130 },
-  { key: "running", header: "Running", width: 110 },
-];
+const monoSt = { fontFamily: "var(--qz-font-mono)", maxWidth: "none" } as const;
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const monoSt = {
-  background: "var(--qz-input-bg)",
-  border: "1px solid var(--qz-border)",
-  fontFamily: "var(--qz-font-mono)",
-} as const;
+/// Clarity status pill — mono uppercase label.
+function Pill({ tone, children }: { tone?: "success" | "info"; children: React.ReactNode }) {
+  return (
+    <span
+      className={`label${tone ? ` label-${tone}` : ""}`}
+      style={{
+        fontFamily: "var(--qz-font-mono)",
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        width: "fit-content",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
 
 type PowerAction = "reboot" | "shutdown";
 
@@ -100,35 +93,24 @@ function PowerConfirmModal({
         onClose={onClose}
       />
       <div className="flex flex-col gap-4">
-        <p className="text-[13px] text-[var(--qz-fg-2)] m-0">
+        <p className="m-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
           {isReboot
             ? "All traffic through the firewall stops until it has booted again (typically a minute or two). Unsaved config changes are already persisted automatically after each apply."
             : "All traffic through the firewall stops, and it will stay off until powered on at the console or via out-of-band management. Are you sure?"}
         </p>
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="button"
-            disabled={working}
-            onClick={run}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-danger)", color: "white", opacity: working ? 0.7 : 1 }}
-          >
-            {working ? "Sending…" : isReboot ? "Reboot now" : "Shut down now"}
+          <button type="button" className="btn btn-danger" disabled={working} onClick={run}>
+            {working ? "Sending…" : isReboot ? "Reboot Now" : "Shut Down Now"}
           </button>
-        </div>
+        </ModalFooter>
       </div>
     </ModalShell>
   );
@@ -188,41 +170,35 @@ function ScheduleRebootModal({
         onClose={onClose}
       />
       <div className="flex flex-col gap-4">
-        <label className="flex flex-col gap-2 text-[12.5px] text-[var(--qz-fg-3)]">
-          Reboot at
+        <div className="clr-form-control">
+          <label className="clr-control-label">Reboot at</label>
           <input
             type="datetime-local"
             value={when}
             min={toLocalInputValue(new Date())}
             onChange={(e) => setWhen(e.target.value)}
-            className={inputCls}
+            className="clr-input"
             style={monoSt}
           />
-        </label>
-        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+        </div>
+        <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
           The time is interpreted in the firewall&apos;s timezone (System → General). The schedule
           survives WebUI sessions and can be cancelled here any time before it fires; users logged in
           at the console are warned by the system shortly before the reboot.
         </p>
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={working}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer disabled:opacity-50"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose} disabled={working}>
             Cancel
           </button>
-          <Button kind="primary" icon={CalendarClock} onClick={run} disabled={working}>
-            {working ? "Scheduling…" : "Schedule reboot"}
+          <Button kind="primary" icon="history" onClick={run} disabled={working}>
+            {working ? "Scheduling…" : "Schedule Reboot"}
           </Button>
-        </div>
+        </ModalFooter>
       </div>
     </ModalShell>
   );
@@ -349,17 +325,15 @@ function AddImageModal({
         onClose={close}
       />
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <div>
-          <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">Image URL</label>
+        <div className="clr-form-control">
+          <label className="clr-control-label">Image URL</label>
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://example.com/quartzfire-1.5-rolling.iso"
             disabled={working || file !== null}
-            className={`${inputCls} disabled:opacity-60`}
+            className="clr-input"
             style={monoSt}
-            onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
-            onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
           />
         </div>
 
@@ -380,15 +354,20 @@ function AddImageModal({
           aria-label="Upload an ISO file"
           className="rounded-md px-4 py-4 text-center cursor-pointer select-none"
           style={{
-            border: `1px dashed ${dragOver ? "var(--qz-accent)" : "var(--qz-border-strong)"}`,
-            background: dragOver ? "var(--qz-accent-soft)" : "var(--qz-input-bg)",
+            border: `1px dashed ${dragOver ? "var(--cds-alias-interaction-action)" : "var(--cds-alias-object-border-color)"}`,
+            background: dragOver
+              ? "var(--qz-accent-soft)"
+              : "var(--cds-alias-object-container-background-shade)",
             opacity: working ? 0.6 : 1,
           }}
         >
           {file ? (
-            <div className="flex items-center justify-center gap-2 text-[13px] text-[var(--qz-fg-1)]">
+            <div
+              className="flex items-center justify-center gap-2"
+              style={{ fontSize: 13, color: "var(--cds-alias-typography-color-450)" }}
+            >
               <span style={{ fontFamily: "var(--qz-font-mono)" }}>{file.name}</span>
-              <span className="text-[12px] text-[var(--qz-fg-4)]">
+              <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
                 {(file.size / (1024 * 1024)).toFixed(0)} MB
               </span>
               {!working && (
@@ -399,14 +378,15 @@ function AddImageModal({
                     e.stopPropagation();
                     pickFile(null);
                   }}
-                  className="grid place-items-center w-6 h-6 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer"
+                  className="btn btn-sm btn-link-neutral btn-icon"
+                  style={{ margin: 0 }}
                 >
-                  <Trash2 size={13} />
+                  <Icon shape="trash" size={13} />
                 </button>
               )}
             </div>
           ) : (
-            <p className="text-[13px] text-[var(--qz-fg-3)] m-0">
+            <p className="m-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-300)" }}>
               …or drop a QuartzFire <span style={{ fontFamily: "var(--qz-font-mono)" }}>.iso</span> here
               (or click to browse)
             </p>
@@ -424,20 +404,17 @@ function AddImageModal({
           />
         </div>
 
-        <p className="text-[11px] text-[var(--qz-fg-4)] m-0">
+        <p className="clr-subtext" style={{ margin: 0 }}>
           The image installs next to the current one, so the running system is untouched until you reboot —
           and the previous image stays available as a rollback boot entry.
         </p>
 
         {phase === "uploading" && (
           <div className="flex flex-col gap-1">
-            <div className="h-[6px] rounded-full overflow-hidden" style={{ background: "var(--qz-border)" }}>
-              <div
-                className="h-full rounded-full transition-[width]"
-                style={{ width: `${Math.round(progress * 100)}%`, background: "var(--qz-accent)" }}
-              />
+            <div className="progress">
+              <div className="progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
             </div>
-            <p className="text-[12px] m-0 text-[var(--qz-fg-3)]">
+            <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>
               Uploading… {Math.round(progress * 100)}%. Keep this page open.
             </p>
           </div>
@@ -445,14 +422,11 @@ function AddImageModal({
         {phase === "installing" && (
           <div className="flex flex-col gap-1">
             {jobPhase === "downloading" && dlFraction !== null && (
-              <div className="h-[6px] rounded-full overflow-hidden" style={{ background: "var(--qz-border)" }}>
-                <div
-                  className="h-full rounded-full transition-[width]"
-                  style={{ width: `${Math.round(dlFraction * 100)}%`, background: "var(--qz-accent)" }}
-                />
+              <div className="progress">
+                <div className="progress-fill" style={{ width: `${Math.round(dlFraction * 100)}%` }} />
               </div>
             )}
-            <p className="text-[12px] m-0 text-[var(--qz-fg-3)]">
+            <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>
               {jobPhase === "downloading"
                 ? `Downloading the image${dlFraction !== null ? ` — ${Math.round(dlFraction * 100)}%` : "…"}`
                 : jobPhase === "verifying"
@@ -467,30 +441,23 @@ function AddImageModal({
           </div>
         )}
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={close}
-            disabled={working}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer disabled:opacity-50"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={close} disabled={working}>
             Cancel
           </button>
           <button
             type="submit"
+            className="btn btn-primary"
             disabled={working || (!file && url.trim() === "")}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0 disabled:opacity-50"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: working ? 0.7 : 1 }}
           >
-            {phase === "uploading" ? "Uploading…" : phase === "installing" ? "Installing…" : file ? "Upload & install" : "Install image"}
+            {phase === "uploading" ? "Uploading…" : phase === "installing" ? "Installing…" : file ? "Upload & Install" : "Install Image"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );
@@ -517,16 +484,16 @@ function DeleteImageAction({ name, onDelete }: { name: string; onDelete: () => P
               setConfirming(false);
             }
           }}
-          className="text-[12px] font-semibold px-[10px] py-[5px] rounded cursor-pointer border-0 disabled:opacity-60"
-          style={{ background: "var(--qz-danger)", color: "white" }}
+          className="btn btn-sm btn-danger"
+          style={{ margin: 0 }}
         >
           {working ? "…" : "Confirm"}
         </button>
         <button
           type="button"
           onClick={() => setConfirming(false)}
-          className="text-[12px] px-[10px] py-[5px] rounded cursor-pointer"
-          style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-3)" }}
+          className="btn btn-sm btn-neutral"
+          style={{ margin: 0 }}
         >
           Cancel
         </button>
@@ -539,9 +506,10 @@ function DeleteImageAction({ name, onDelete }: { name: string; onDelete: () => P
       title={`Delete image ${name}`}
       aria-label="Delete"
       onClick={() => setConfirming(true)}
-      className="grid place-items-center w-7 h-7 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer"
+      className="btn btn-sm btn-link-neutral btn-icon"
+      style={{ margin: 0 }}
     >
-      <Trash2 size={14} />
+      <Icon shape="trash" size={14} />
     </button>
   );
 }
@@ -581,11 +549,11 @@ function RestoreConfigModal({
         onClose={onClose}
       />
       <div className="flex flex-col gap-4">
-        <p className="text-[13px] text-[var(--qz-fg-2)] m-0">
+        <p className="m-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
           Every current setting — interfaces, firewall, NAT, users, services — is replaced by the
           uploaded file, which must be a config.boot-style backup (the format the download produces).
         </p>
-        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+        <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
           The restore applies under commit-confirm: unless you confirm it in the banner within 2 minutes,
           the current configuration is restored automatically. Plain VyOS config.boot files (migrating
           from a stock VyOS box) work too — this WebUI&apos;s own access settings
@@ -593,30 +561,18 @@ function RestoreConfigModal({
           so a restore can never lock the UI out.
         </p>
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={working}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer disabled:opacity-50"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose} disabled={working}>
             Cancel
           </button>
-          <button
-            type="button"
-            disabled={working}
-            onClick={run}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-danger)", color: "white", opacity: working ? 0.7 : 1 }}
-          >
-            {working ? "Restoring…" : "Restore configuration"}
+          <button type="button" className="btn btn-danger" disabled={working} onClick={run}>
+            {working ? "Restoring…" : "Restore Configuration"}
           </button>
-        </div>
+        </ModalFooter>
       </div>
     </ModalShell>
   );
@@ -670,54 +626,40 @@ function FactoryResetModal({
         onClose={onClose}
       />
       <div className="flex flex-col gap-4">
-        <p className="text-[13px] text-[var(--qz-fg-2)] m-0">
+        <p className="m-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
           This replaces the boot configuration with the factory default and reboots. Every setting —
           interfaces, firewall, NAT, users, services, this WebUI&apos;s own API access — is erased.
           The firewall comes back with the default <span className="mono">vyos</span>/<span className="mono">vyos</span>{" "}
           login, reachable only at the console until it&apos;s reconfigured. There is no undo and no
           auto-revert.
         </p>
-        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+        <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
           Download a configuration backup first if you might want any of it back. Type
           {" "}
-          <span className="mono" style={{ color: "var(--qz-fg-2)" }}>{RESET_PHRASE}</span>{" "}
+          <span className="mono" style={{ color: "var(--cds-alias-typography-color-400)" }}>{RESET_PHRASE}</span>{" "}
           below to confirm.
         </p>
         <input
           value={phrase}
           onChange={(e) => setPhrase(e.target.value)}
           placeholder={RESET_PHRASE}
-          className={inputCls}
+          className="clr-input"
           style={monoSt}
           autoFocus
-          onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
-          onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
         />
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={working}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer disabled:opacity-50"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose} disabled={working}>
             Cancel
           </button>
-          <button
-            type="button"
-            disabled={working || !armed}
-            onClick={run}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0 disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{ background: "var(--qz-danger)", color: "white", opacity: working ? 0.7 : 1 }}
-          >
-            {working ? "Resetting…" : "Erase & reset to defaults"}
+          <button type="button" className="btn btn-danger" disabled={working || !armed} onClick={run}>
+            {working ? "Resetting…" : "Erase & Reset to Defaults"}
           </button>
-        </div>
+        </ModalFooter>
       </div>
     </ModalShell>
   );
@@ -725,7 +667,6 @@ function FactoryResetModal({
 
 export default function MaintenancePage() {
   const { setToast } = useDashboard();
-  const resize = useColumnResize("system-images", IMAGE_COLS);
   const [images, setImages] = useState<SystemImage[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -772,25 +713,20 @@ export default function MaintenancePage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Maintenance
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Maintenance</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Configuration backup and restore, power control, and system image upgrades
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        <div className="flex flex-col gap-7">
-          {/* Configuration backup / restore */}
-          <section
-            className="rounded-lg px-5 py-4"
-            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-          >
-            <h2 className="text-[15px] font-semibold text-[var(--qz-fg-1)] m-0">Configuration</h2>
-            <p className="text-[13px] text-[var(--qz-fg-4)] mt-1 mb-4">
+      <div className="flex flex-col gap-4">
+        {/* Configuration backup / restore */}
+        <div className="card">
+          <div className="card-header">Configuration</div>
+          <div className="card-block">
+            <p className="clr-secondary" style={{ marginTop: 0, marginBottom: 16 }}>
               Download the running configuration as a config.boot file, or restore one. A restore replaces
               the entire configuration and must be confirmed within 2 minutes or it reverts automatically —
               per-commit rollback lives on the Audit Log page.
@@ -798,7 +734,7 @@ export default function MaintenancePage() {
             <div className="flex gap-2">
               <Button
                 kind="secondary"
-                icon={FileDown}
+                icon="download"
                 disabled={downloading}
                 onClick={async () => {
                   setDownloading(true);
@@ -811,10 +747,10 @@ export default function MaintenancePage() {
                   }
                 }}
               >
-                {downloading ? "Preparing…" : "Download backup"}
+                {downloading ? "Preparing…" : "Download Backup"}
               </Button>
-              <Button kind="secondary" icon={FileUp} onClick={() => fileInput.current?.click()}>
-                Restore from backup…
+              <Button kind="secondary" icon="upload" onClick={() => fileInput.current?.click()}>
+                Restore from Backup…
               </Button>
               <input
                 ref={fileInput}
@@ -829,116 +765,103 @@ export default function MaintenancePage() {
                 }}
               />
             </div>
-          </section>
+          </div>
+        </div>
 
-          {/* Power */}
-          <section
-            className="rounded-lg px-5 py-4"
-            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-          >
-            <h2 className="text-[15px] font-semibold text-[var(--qz-fg-1)] m-0">Power</h2>
-            <p className="text-[13px] text-[var(--qz-fg-4)] mt-1 mb-4">
+        {/* Power */}
+        <div className="card">
+          <div className="card-header">Power</div>
+          <div className="card-block">
+            <p className="clr-secondary" style={{ marginTop: 0, marginBottom: 16 }}>
               Both actions interrupt all traffic through the firewall. Configuration is already saved to the
               boot config after every apply, so nothing is lost by rebooting.
             </p>
             {schedule?.scheduled && (
-              <div
-                className="flex items-center gap-3 px-3 py-2 mb-4 rounded-md text-[12.5px] text-[var(--qz-warn)]"
-                style={{
-                  background: "var(--qz-warn-soft)",
-                  border: "1px solid color-mix(in oklab, var(--qz-warn) 30%, transparent)",
-                }}
-              >
-                <CalendarClock size={14} className="flex-shrink-0" />
-                <span>
+              <div className="alert alert-warning alert-sm" style={{ marginBottom: 16 }}>
+                <Icon shape="history" size={14} className="alert-icon" />
+                <div className="alert-text">
                   {schedule.mode === "poweroff" ? "Shutdown" : "Reboot"} scheduled for{" "}
                   {schedule.at_ms ? new Date(schedule.at_ms).toLocaleString() : "an unknown time"}.
-                </span>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await cancelScheduledReboot();
-                      setToast("Scheduled reboot cancelled.");
-                    } catch (e) {
-                      setToast(e instanceof Error ? e.message : "Cancel failed.");
-                    }
-                    refreshSchedule();
-                  }}
-                  className="inline-flex items-center gap-1 ml-auto bg-transparent border-0 p-0 cursor-pointer text-[12.5px] font-medium text-[var(--qz-fg-2)] hover:text-[var(--qz-fg-1)]"
-                >
-                  <X size={13} /> Cancel schedule
-                </button>
+                </div>
+                <div className="alert-actions">
+                  <button
+                    type="button"
+                    className="alert-action"
+                    onClick={async () => {
+                      try {
+                        await cancelScheduledReboot();
+                        setToast("Scheduled reboot cancelled.");
+                      } catch (e) {
+                        setToast(e instanceof Error ? e.message : "Cancel failed.");
+                      }
+                      refreshSchedule();
+                    }}
+                  >
+                    Cancel schedule
+                  </button>
+                </div>
               </div>
             )}
             <div className="flex gap-2">
-              <Button kind="secondary" icon={RotateCw} onClick={() => setPowerModal("reboot")}>
+              <button type="button" className="btn btn-warning-outline" onClick={() => setPowerModal("reboot")}>
+                <Icon shape="refresh" size={16} />
                 Reboot
+              </button>
+              <Button kind="secondary" icon="history" onClick={() => setScheduleModal(true)}>
+                Schedule Reboot…
               </Button>
-              <Button kind="secondary" icon={CalendarClock} onClick={() => setScheduleModal(true)}>
-                Schedule reboot…
-              </Button>
-              <Button kind="danger" icon={Power} onClick={() => setPowerModal("shutdown")}>
-                Shut down
-              </Button>
+              <button type="button" className="btn btn-danger-outline" onClick={() => setPowerModal("shutdown")}>
+                Shut Down
+              </button>
             </div>
-          </section>
+          </div>
+        </div>
 
-          {/* Factory reset */}
-          <section
-            className="rounded-lg px-5 py-4"
-            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-danger-soft, var(--qz-input-bg))", boxShadow: "inset 0 0 0 1px var(--qz-danger)" }}
-          >
-            <h2 className="text-[15px] font-semibold text-[var(--qz-fg-1)] m-0">Factory Reset</h2>
-            <p className="text-[13px] text-[var(--qz-fg-4)] mt-1 mb-4">
+        {/* Factory reset */}
+        <div className="card">
+          <div className="card-header">Factory Reset</div>
+          <div className="card-block">
+            <p className="clr-secondary" style={{ marginTop: 0, marginBottom: 16 }}>
               Erase the entire configuration and reboot to factory defaults. The firewall comes back at the
               default <span className="mono">vyos</span>/<span className="mono">vyos</span> login, reachable
               only at the console until reconfigured — there is no undo. Download a configuration backup
               first if you might want any of it back.
             </p>
             <div className="flex gap-2">
-              <Button kind="danger" icon={Eraser} onClick={() => setResetModal(true)}>
-                Reset to factory defaults…
-              </Button>
+              <button type="button" className="btn btn-danger-outline" onClick={() => setResetModal(true)}>
+                Reset to Factory Defaults…
+              </button>
             </div>
-          </section>
+          </div>
+        </div>
 
-          {/* System images */}
-          <section
-            className="rounded-lg px-5 py-4"
-            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-[15px] font-semibold text-[var(--qz-fg-1)] m-0">System Images</h2>
-              <Button kind="primary" size="sm" icon={HardDriveDownload} onClick={() => setAddModal(true)}>
-                Add image
+        {/* System images */}
+        <div className="card">
+          <div className="card-header">
+            System Images
+            <span style={{ marginLeft: "auto" }}>
+              <Button kind="primary" size="sm" icon="plus" onClick={() => setAddModal(true)}>
+                Add Image
               </Button>
-            </div>
-            <p className="text-[13px] text-[var(--qz-fg-4)] mt-1 mb-4">
+            </span>
+          </div>
+          <div className="card-block">
+            <p className="clr-secondary" style={{ marginTop: 0, marginBottom: 16 }}>
               QuartzFire is image-based: upgrades install a whole new image next to the running one, and a
               reboot switches over. The previous image stays installed as a rollback boot entry.
             </p>
 
             {loading ? (
-              <div className="text-[13px] text-[var(--qz-fg-4)]">Loading images…</div>
+              <div className="clr-secondary">Loading images…</div>
             ) : images && images.length > 0 ? (
-              <div className="rounded-md overflow-x-auto" style={{ border: "1px solid var(--qz-border)" }}>
-                <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
-                  <colgroup>
-                    {IMAGE_COLS.map((c) => (
-                      <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
-                    ))}
-                    <col style={{ width: 150 }} />
-                  </colgroup>
+              <div className="overflow-x-auto">
+                <table className="table table-noborder table-compact">
                   <thead>
                     <tr>
-                      {IMAGE_COLS.map((c, i) => (
-                        <th key={c.key} {...resize.thProps(i)}>
-                          {c.header}
-                          {resize.handle(i)}
-                        </th>
-                      ))}
-                      <th className="text-right">Actions</th>
+                      <th>Image</th>
+                      <th style={{ width: 130 }}>Default Boot</th>
+                      <th style={{ width: 110 }}>Running</th>
+                      <th className="right" style={{ width: 150 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -947,21 +870,24 @@ export default function MaintenancePage() {
                         <td className="mono">{img.name}</td>
                         <td>
                           {img.default_boot ? (
-                            <span className="badge badge-ok">Default</span>
+                            <Pill tone="success">Default</Pill>
                           ) : (
-                            <span className="text-[var(--qz-fg-4)]">—</span>
+                            <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
                           )}
                         </td>
                         <td>
                           {img.running ? (
-                            <span className="badge badge-info">Running</span>
+                            <Pill tone="info">Running</Pill>
                           ) : (
-                            <span className="text-[var(--qz-fg-4)]">—</span>
+                            <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
                           )}
                         </td>
-                        <td className="text-right">
+                        <td className="right">
                           {img.running ? (
-                            <span className="text-[11px] text-[var(--qz-fg-4)]" title="The running image can't delete itself.">
+                            <span
+                              style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}
+                              title="The running image can't delete itself."
+                            >
                               in use
                             </span>
                           ) : (
@@ -974,13 +900,13 @@ export default function MaintenancePage() {
                 </table>
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-[13px] text-[var(--qz-fg-4)]">
-                <AlertTriangle size={14} />
+              <div className="flex items-center gap-2 clr-secondary">
+                <Icon shape="exclamation-triangle" size={14} />
                 Could not read the installed images (older or non-image installs don&apos;t report them). Adding an
                 image and power actions still work.
               </div>
             )}
-          </section>
+          </div>
         </div>
       </div>
 

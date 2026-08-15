@@ -1,0 +1,145 @@
+/* =========================================================================
+   Quartz Clarity — Color tokens. DARK ONLY: dark-theme values are baked
+   into :root (no [cds-theme] switch). Clarity token names, Quartz values.
+   ========================================================================= */
+:root{
+  /* ---------- Quartz base palette ---------- */
+  --qz-green-50:#e6fff4; --qz-green-100:#b3ffde; --qz-green-200:#80ffc8; --qz-green-300:#4dffb2; --qz-green-400:#1aff9c; --qz-green-500:#00d992; --qz-green-600:#00b07a; --qz-green-700:#008760; --qz-green-800:#005e44; --qz-green-900:#003528; --qz-green-1000:#00281e;
+  --qz-ink-0:#0b0d12; --qz-ink-1:#0f1117; --qz-ink-2:#161920; --qz-ink-3:#1a1d26; --qz-ink-4:#1d2029; --qz-ink-5:#252830; --qz-ink-6:#2f323c; --qz-ink-7:#41454f; --qz-ink-8:#6b6f7a; --qz-ink-9:#a2a6b0; --qz-ink-10:#d7d9de; --qz-ink-11:#f2f3f5;
+  --qz-blue-50:#eaf6ff; --qz-blue-100:#cfeaff; --qz-blue-200:#a8d9ff; --qz-blue-300:#7cc6ff; --qz-blue-400:#4fb3ff; --qz-blue-500:#2f9df0; --qz-blue-600:#1f86d6; --qz-blue-700:#1670b8; --qz-blue-800:#0f5a96; --qz-blue-900:#0d3a5e; --qz-blue-1000:#0a2740;
+  --qz-red-50:#ffecee; --qz-red-100:#ffd4d8; --qz-red-200:#ffb3ba; --qz-red-300:#ff8894; --qz-red-400:#ff7f8b; --qz-red-500:#ff5d6c; --qz-red-600:#e04654; --qz-red-700:#b83744; --qz-red-800:#8f2a35; --qz-red-900:#4d1a20; --qz-red-1000:#331014;
+  --qz-ochre-50:#fff6e6; --qz-ochre-100:#ffe8c2; --qz-ochre-200:#fbd691; --qz-ochre-300:#f8c46b; --qz-ochre-400:#f5b243; --qz-ochre-500:#e09a2b; --qz-ochre-600:#b87d1f; --qz-ochre-700:#8f6016; --qz-ochre-800:#66440e; --qz-ochre-900:#40300e; --qz-ochre-1000:#2b1f08;
+
+  /* ---------- cds global scales (construction = Quartz ink) ---------- */
+  --cds-global-color-white:#ffffff; --cds-global-color-black:#000000;
+  --cds-global-color-construction-50:var(--qz-ink-11); --cds-global-color-construction-100:var(--qz-ink-10); --cds-global-color-construction-200:var(--qz-ink-9); --cds-global-color-construction-300:var(--qz-ink-8); --cds-global-color-construction-400:var(--qz-ink-7); --cds-global-color-construction-500:var(--qz-ink-6); --cds-global-color-construction-600:var(--qz-ink-5); --cds-global-color-construction-700:#1f222b; --cds-global-color-construction-800:var(--qz-ink-4); --cds-global-color-construction-900:var(--qz-ink-2); --cds-global-color-construction-1000:var(--qz-ink-1); --cds-global-color-construction-1100:var(--qz-ink-0);
+  --cds-global-color-green-50:var(--qz-green-50); --cds-global-color-green-100:var(--qz-green-100); --cds-global-color-green-200:var(--qz-green-200); --cds-global-color-green-300:var(--qz-green-300); --cds-global-color-green-400:var(--qz-green-400); --cds-global-color-green-500:var(--qz-green-500); --cds-global-color-green-600:var(--qz-green-600); --cds-global-color-green-700:var(--qz-green-700); --cds-global-color-green-800:var(--qz-green-800); --cds-global-color-green-900:var(--qz-green-900); --cds-global-color-green-1000:var(--qz-green-1000);
+  --cds-global-color-blue-50:var(--qz-blue-50); --cds-global-color-blue-100:var(--qz-blue-100); --cds-global-color-blue-200:var(--qz-blue-200); --cds-global-color-blue-300:var(--qz-blue-300); --cds-global-color-blue-400:var(--qz-blue-400); --cds-global-color-blue-500:var(--qz-blue-500); --cds-global-color-blue-600:var(--qz-blue-600); --cds-global-color-blue-700:var(--qz-blue-700); --cds-global-color-blue-800:var(--qz-blue-800); --cds-global-color-blue-900:var(--qz-blue-900); --cds-global-color-blue-1000:var(--qz-blue-1000);
+  --cds-global-color-red-50:var(--qz-red-50); --cds-global-color-red-100:var(--qz-red-100); --cds-global-color-red-200:var(--qz-red-200); --cds-global-color-red-300:var(--qz-red-300); --cds-global-color-red-400:var(--qz-red-400); --cds-global-color-red-500:var(--qz-red-500); --cds-global-color-red-600:var(--qz-red-600); --cds-global-color-red-700:var(--qz-red-700); --cds-global-color-red-800:var(--qz-red-800); --cds-global-color-red-900:var(--qz-red-900); --cds-global-color-red-1000:var(--qz-red-1000);
+  --cds-global-color-ochre-50:var(--qz-ochre-50); --cds-global-color-ochre-100:var(--qz-ochre-100); --cds-global-color-ochre-200:var(--qz-ochre-200); --cds-global-color-ochre-300:var(--qz-ochre-300); --cds-global-color-ochre-400:var(--qz-ochre-400); --cds-global-color-ochre-500:var(--qz-ochre-500); --cds-global-color-ochre-600:var(--qz-ochre-600); --cds-global-color-ochre-700:var(--qz-ochre-700); --cds-global-color-ochre-800:var(--qz-ochre-800); --cds-global-color-ochre-900:var(--qz-ochre-900); --cds-global-color-ochre-1000:var(--qz-ochre-1000);
+  /* Clarity's dark theme reaches for yellow-* on warning hovers; alias to ochre */
+  --cds-global-color-yellow-300:var(--qz-ochre-300); --cds-global-color-yellow-500:var(--qz-ochre-500); --cds-global-color-yellow-600:var(--qz-ochre-600); --cds-global-color-yellow-1000:var(--qz-ochre-1000);
+
+  /* ---------- cds aliases — typography (dark values) ---------- */
+  --cds-alias-typography-color-100:var(--qz-ink-0);
+  --cds-alias-typography-color-200:var(--qz-ink-8);
+  --cds-alias-typography-color-300:var(--qz-ink-9);
+  --cds-alias-typography-color-400:var(--qz-ink-10);
+  --cds-alias-typography-color-450:var(--qz-ink-11);
+  --cds-alias-typography-color-500:var(--cds-global-color-white);
+  --cds-alias-typography-disabled:var(--qz-ink-7);
+  --cds-alias-typography-disabled-button:var(--qz-ink-8);
+  --cds-alias-typography-link-color:var(--qz-green-500);
+  --cds-alias-typography-link-color-hover:var(--qz-green-400);
+  --cds-alias-typography-link-color-active:var(--qz-green-600);
+  --cds-alias-typography-link-color-visited:var(--qz-green-300);
+  --cds-alias-typography-link-color-visited-hover:var(--qz-green-200);
+  --cds-alias-typography-link-on-colorbg:#062014;
+  --cds-alias-typography-info-hover:var(--qz-blue-200);
+  --cds-alias-typography-success-hover:var(--qz-green-400);
+  --cds-alias-typography-warning-hover:var(--qz-ochre-300);
+  --cds-alias-typography-danger-hover:var(--qz-red-400);
+  --cds-alias-typography-neutral-hover:var(--qz-ink-9);
+
+  /* ---------- cds aliases — object (dark values) ---------- */
+  --cds-alias-object-app-background:var(--qz-ink-1);
+  --cds-alias-object-container-background:var(--qz-ink-2);
+  --cds-alias-object-container-background-tint:var(--qz-ink-1);
+  --cds-alias-object-container-background-shade:var(--qz-ink-4);
+  --cds-alias-object-container-background-dark:var(--qz-ink-0);
+  --cds-alias-object-container-background-inverse:var(--qz-ink-9);
+  --cds-alias-object-container-border-color:var(--qz-ink-5);
+  --cds-alias-object-overlay-background:var(--qz-ink-4);
+  --cds-alias-object-overlay-backdrop-background:rgba(4,5,8,0.66);
+  --cds-alias-object-border-color:var(--qz-ink-6);
+  --cds-alias-object-border-color-tint:var(--qz-ink-7);
+  --cds-alias-object-border-color-shade:var(--qz-ink-5);
+  --cds-alias-object-border-subtle:#1f222b;
+  --cds-alias-object-shadow-100:0 1px 2px 0 rgba(0,0,0,0.6);
+  --cds-alias-object-shadow-200:0 4px 12px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.5);
+  --cds-alias-object-shadow-300:0 12px 28px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.55);
+
+  /* ---------- cds aliases — interaction (dark values, green primary) ---------- */
+  --cds-alias-object-interaction-background:var(--qz-ink-1);
+  --cds-alias-object-interaction-background-hover:var(--qz-ink-4);
+  --cds-alias-object-interaction-background-active:var(--qz-ink-5);
+  --cds-alias-object-interaction-background-selected:#0d2b21;
+  --cds-alias-object-interaction-background-selected-hover:#123528;
+  --cds-alias-object-interaction-background-selected-active:var(--qz-ink-5);
+  --cds-alias-object-interaction-background-disabled:#1f222b;
+  --cds-alias-object-interaction-background-highlight:var(--qz-green-500);
+  --cds-alias-object-interaction-border-color:var(--qz-ink-8);
+  --cds-alias-object-interaction-color:var(--qz-ink-9);
+  --cds-alias-object-interaction-color-hover:var(--qz-ink-11);
+  --cds-alias-object-interaction-color-active:var(--qz-ink-10);
+  --cds-alias-object-interaction-color-disabled:var(--qz-ink-7);
+  --cds-alias-object-interaction-touch-target:36px;
+  --cds-alias-object-interaction-outline:2px solid var(--qz-green-500);
+  --cds-alias-object-interaction-outline-offset:1px;
+  /* action = Quartz signal green (Clarity's blue slot) */
+  --cds-alias-interaction-action:var(--qz-green-500);
+  --cds-alias-interaction-action-hover:var(--qz-green-400);
+  --cds-alias-interaction-action-active:var(--qz-green-600);
+  --cds-alias-interaction-action-secondary-hover:rgba(0,217,146,0.10);
+  --cds-alias-interaction-on-action:#062014;
+  --cds-alias-object-interaction-success-hover:var(--qz-green-400);
+  --cds-alias-object-interaction-success-active:var(--qz-green-600);
+  --cds-alias-object-interaction-success-secondary-hover:rgba(0,217,146,0.10);
+  --cds-alias-object-interaction-warning-hover:var(--qz-ochre-300);
+  --cds-alias-object-interaction-warning-active:var(--qz-ochre-500);
+  --cds-alias-object-interaction-warning-secondary-hover:rgba(245,178,67,0.10);
+  --cds-alias-object-interaction-danger-hover:var(--qz-red-400);
+  --cds-alias-object-interaction-danger-active:var(--qz-red-600);
+  --cds-alias-object-interaction-danger-secondary-hover:rgba(255,93,108,0.10);
+  --cds-alias-object-interaction-neutral-hover:var(--qz-ink-9);
+  --cds-alias-object-interaction-neutral-active:var(--qz-ink-7);
+  --cds-alias-object-interaction-neutral-secondary-hover:rgba(162,166,176,0.10);
+
+  /* ---------- cds aliases — status (dark values) ---------- */
+  --cds-alias-status-info:var(--qz-blue-400);
+  --cds-alias-status-info-tint:#122b40;
+  --cds-alias-status-info-shade:var(--qz-blue-500);
+  --cds-alias-status-success:var(--qz-green-500);
+  --cds-alias-status-success-tint:#0d2b21;
+  --cds-alias-status-success-shade:var(--qz-green-600);
+  --cds-alias-status-warning:var(--qz-ochre-400);
+  --cds-alias-status-warning-tint:#33290f;
+  --cds-alias-status-warning-shade:var(--qz-ochre-500);
+  --cds-alias-status-warning-dark:var(--qz-ochre-600);
+  --cds-alias-status-danger:var(--qz-red-500);
+  --cds-alias-status-danger-tint:#3a161b;
+  --cds-alias-status-danger-shade:var(--qz-red-600);
+  --cds-alias-status-danger-dark:var(--qz-red-900);
+  --cds-alias-status-neutral:var(--qz-ink-8);
+  --cds-alias-status-neutral-tint:#1f222b;
+  --cds-alias-status-neutral-shade:var(--qz-ink-7);
+  --cds-alias-status-disabled:var(--qz-ink-5);
+  --cds-alias-status-disabled-tint:#1f222b;
+  --cds-alias-status-disabled-shade:var(--qz-ink-6);
+
+  /* ---------- viz (monitoring charts) — severity from status, series harmonized ---------- */
+  --cds-alias-viz-severity-neutral:var(--qz-ink-8);
+  --cds-alias-viz-severity-success:var(--qz-green-500);
+  --cds-alias-viz-severity-warning:var(--qz-ochre-400);
+  --cds-alias-viz-severity-immediate:#ff9d43;
+  --cds-alias-viz-severity-critical:var(--qz-red-500);
+  --cds-alias-viz-severity-free-space-fill:var(--qz-ink-4);
+  --cds-alias-viz-general-1:var(--qz-green-500);
+  --cds-alias-viz-general-2:var(--qz-blue-400);
+  --cds-alias-viz-general-3:#8f7dff;
+  --cds-alias-viz-general-4:#4de3e3;
+  --cds-alias-viz-general-5:#f5b243;
+  --cds-alias-viz-general-6:#ff8ab0;
+  --cds-alias-viz-general-7:#b7e05c;
+  --cds-alias-viz-general-8:var(--qz-ink-9);
+
+  /* ---------- Quartz semantic conveniences (compat with quartz DS) ---------- */
+  --qz-bg:var(--qz-ink-1); --qz-surface:var(--qz-ink-2); --qz-surface-raised:var(--qz-ink-4); --qz-input-bg:var(--qz-ink-3);
+  --qz-border:var(--qz-ink-5); --qz-border-strong:var(--qz-ink-6); --qz-border-subtle:#1f222b; --qz-divider:#1c1f28;
+  --qz-fg-1:var(--qz-ink-11); --qz-fg-2:var(--qz-ink-10); --qz-fg-3:var(--qz-ink-9); --qz-fg-4:var(--qz-ink-8);
+  --qz-fg-on-accent:#062014;
+  --qz-accent:var(--qz-green-500); --qz-accent-hover:var(--qz-green-400); --qz-accent-press:var(--qz-green-600);
+  --qz-accent-soft:rgba(0,217,146,0.14); --qz-accent-border:rgba(0,217,146,0.38);
+  --qz-focus-ring:0 0 0 2px var(--qz-ink-1), 0 0 0 4px var(--qz-green-500);
+  --qz-success:var(--qz-green-500); --qz-warn:var(--qz-ochre-400); --qz-danger:var(--qz-red-500); --qz-info:var(--qz-blue-400);
+}

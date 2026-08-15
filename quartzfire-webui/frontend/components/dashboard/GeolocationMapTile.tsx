@@ -8,7 +8,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import createGlobe, { Globe, Marker } from "cobe";
-import { Globe2 } from "lucide-react";
 import { countryCentroid } from "@/lib/countryCentroids";
 import { countryName, fetchGeoCountries, fetchGeoTraffic, GeoCountry, GeoTrafficEntry } from "@/lib/geolocation";
 import { LiveButton } from "./LiveButton";
@@ -159,29 +158,35 @@ export function GeolocationMapTile() {
   );
 
   return (
-    <div className="p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between gap-2 mb-3 flex-shrink-0">
-        <div className="flex items-center gap-[9px] min-w-0">
-          <Globe2 size={18} className="text-[var(--qz-accent)]" />
-          <h2 className="text-[16px] font-bold text-[var(--qz-fg-1)] m-0 truncate" style={{ letterSpacing: "-0.01em" }}>
-            Geolocation Map
-          </h2>
-          <span className="text-[11px] text-[var(--qz-fg-4)] flex-shrink-0">traffic by country</span>
-        </div>
+    <>
+      <div className="card-header flex-shrink-0">
+        Geolocation Map
+        <span
+          className="ml-auto text-[12px] flex-shrink-0"
+          style={{ fontWeight: 400, color: "var(--cds-alias-typography-color-200)" }}
+        >
+          traffic by country
+        </span>
         <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
       </div>
 
-      {error && entries.length === 0 && <div className="text-[13px] text-[var(--qz-danger)] mb-2">{error}</div>}
+      <div className="card-block flex-1 min-h-0 flex flex-col">
+        {error && entries.length === 0 && (
+          <div className="text-[13px] mb-2" style={{ color: "var(--cds-alias-status-danger)" }}>
+            {error}
+          </div>
+        )}
 
-      <div ref={wrapRef} className="flex-1 min-h-[160px] grid place-items-center overflow-hidden">
-        <canvas ref={canvasRef} style={{ cursor: "grab", contain: "layout paint size", maxWidth: "100%", maxHeight: "100%" }} />
-      </div>
+        <div ref={wrapRef} className="flex-1 min-h-[160px] grid place-items-center overflow-hidden">
+          <canvas ref={canvasRef} style={{ cursor: "grab", contain: "layout paint size", maxWidth: "100%", maxHeight: "100%" }} />
+        </div>
 
-      <div className="mt-2 flex-shrink-0 text-center text-[12px] text-[var(--qz-fg-4)]">
-        {markers.length === 0
-          ? "No traffic sampled yet."
-          : `${markers.length} ${markers.length === 1 ? "country" : "countries"} · ${total.toLocaleString()} active connections${top ? ` · ${top}` : ""}`}
+        <div className="mt-2 flex-shrink-0 text-center text-[12px] text-[var(--cds-alias-typography-color-200)]">
+          {markers.length === 0
+            ? "No traffic sampled yet."
+            : `${markers.length} ${markers.length === 1 ? "country" : "countries"} · ${total.toLocaleString()} active connections${top ? ` · ${top}` : ""}`}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

@@ -1,29 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
 import { applyOspfArea, emptyOspfArea, OspfArea, OspfAreaType } from "@/lib/ospf";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const inputStyle = { maxWidth: "none", width: "100%" } as const;
+const monoStyle = { ...inputStyle, fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -42,22 +34,38 @@ function ListEditor({ label, addLabel, placeholder, emptyText, rows, setRows }: 
   setRows: (u: (p: ListRow[]) => ListRow[]) => void;
 }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-[6px]">
-        <label className="block text-[12px] text-[var(--qz-fg-3)]">{label}</label>
-        <button type="button" onClick={() => setRows((p) => [...p, { key: nextKey(), value: "" }])} className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0">
-          <Plus size={13} /> {addLabel}
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <div className="flex items-center justify-between">
+        <label className="clr-control-label" style={{ marginBottom: 0 }}>{label}</label>
+        <button
+          type="button"
+          onClick={() => setRows((p) => [...p, { key: nextKey(), value: "" }])}
+          className="btn btn-sm btn-link-neutral"
+        >
+          <Icon shape="plus" size={12} /> {addLabel}
         </button>
       </div>
       {rows.length === 0 ? (
-        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">{emptyText}</p>
+        <p className="clr-subtext" style={{ margin: 0 }}>{emptyText}</p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
           {rows.map((r) => (
             <div key={r.key} className="flex items-center gap-2">
-              <input value={r.value} onChange={(e) => setRows((p) => p.map((x) => (x.key === r.key ? { ...x, value: e.target.value } : x)))} placeholder={placeholder} className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
-              <button type="button" onClick={() => setRows((p) => p.filter((x) => x.key !== r.key))} title="Remove" className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent" style={{ border: "1px solid var(--qz-border)" }}>
-                <Trash2 size={14} />
+              <input
+                value={r.value}
+                onChange={(e) => setRows((p) => p.map((x) => (x.key === r.key ? { ...x, value: e.target.value } : x)))}
+                placeholder={placeholder}
+                className="clr-input"
+                style={monoStyle}
+              />
+              <button
+                type="button"
+                onClick={() => setRows((p) => p.filter((x) => x.key !== r.key))}
+                title="Remove"
+                aria-label="Remove"
+                className="btn btn-sm btn-link-neutral btn-icon"
+              >
+                <Icon shape="trash" size={14} />
               </button>
             </div>
           ))}
@@ -121,7 +129,7 @@ export function AreaFormModal({ initial, existingAreas, onClose, onSaved }: {
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Area ID" hint="A number (0) or dotted-quad (0.0.0.0).">
-            <input value={area} disabled={isEdit} onChange={(e) => setArea(e.target.value)} placeholder="0" className={`${inputCls} disabled:opacity-70`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={area} disabled={isEdit} onChange={(e) => setArea(e.target.value)} placeholder="0" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Area type">
             <Segmented
@@ -137,7 +145,7 @@ export function AreaFormModal({ initial, existingAreas, onClose, onSaved }: {
         </div>
 
         {areaType !== "normal" && (
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className="flex items-center gap-2 cursor-pointer select-none" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
             <Switch on={noSummary} onChange={setNoSummary} />
             No summary (totally stubby — block inter-area summaries)
           </label>
@@ -145,7 +153,7 @@ export function AreaFormModal({ initial, existingAreas, onClose, onSaved }: {
 
         <ListEditor
           label="Networks"
-          addLabel="Add network"
+          addLabel="Add Network"
           placeholder="10.0.0.0/24"
           emptyText="No networks — interfaces join this area explicitly instead."
           rows={networks}
@@ -154,23 +162,28 @@ export function AreaFormModal({ initial, existingAreas, onClose, onSaved }: {
 
         <ListEditor
           label="Ranges"
-          addLabel="Add range"
+          addLabel="Add Range"
           placeholder="10.0.0.0/16"
           emptyText="No area ranges (summarisation) configured."
           rows={ranges}
           setRows={setRanges}
         />
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
+        )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button type="button" onClick={onClose} className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer" style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}>
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" disabled={saving} className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0" style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Add area"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Add Area"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

@@ -21,9 +21,9 @@ interface Result {
 const isUp = (s: string) => s.toLowerCase().startsWith("up") || s.toLowerCase().startsWith("est");
 
 function stateBadge(value: string) {
-  if (isUp(value)) return <span className="badge badge-ok">{value}</span>;
-  if (value.toLowerCase().startsWith("down")) return <span className="badge badge-crit">{value}</span>;
-  return <span className="badge badge-muted">{value || "—"}</span>;
+  if (isUp(value)) return <span className="label label-success">{value}</span>;
+  if (value.toLowerCase().startsWith("down")) return <span className="label label-danger">{value}</span>;
+  return <span className="label">{value || "—"}</span>;
 }
 
 /// Live IPsec security associations (`show vpn ipsec sa`).

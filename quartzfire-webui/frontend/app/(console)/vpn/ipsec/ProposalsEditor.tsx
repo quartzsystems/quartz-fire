@@ -1,17 +1,9 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Button, IconButton } from "@/components/ui/Button";
 import { IpsecProposal } from "@/lib/ipsec";
 
-const inputCls = "w-full rounded-md px-2 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const monoSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)", fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const monoSt = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
 
 let keyCounter = 0;
 const nextKey = () => `prop-${keyCounter++}`;
@@ -74,28 +66,24 @@ export function ProposalsEditor({ rows, onChange, withDh }: {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-[12px] font-semibold text-[var(--qz-fg-2)] uppercase tracking-wide">Proposals</span>
-        <button type="button" onClick={add} className="inline-flex items-center gap-1 text-[12px] text-[var(--qz-accent)] cursor-pointer bg-transparent border-0 p-0">
-          <Plus size={13} /> Add proposal
-        </button>
+        <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--cds-alias-typography-color-400)" }}>Proposals</span>
+        <Button kind="ghost" size="sm" icon="plus" onClick={add}>Add Proposal</Button>
       </div>
 
-      {rows.length === 0 && <p className="text-[12px] text-[var(--qz-fg-4)] m-0">No proposals — at least one is required for the group to negotiate.</p>}
+      {rows.length === 0 && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-typography-color-300)" }}>No proposals — at least one is required for the group to negotiate.</p>}
 
       {rows.map((r) => (
         <div key={r.key} className="flex items-center gap-2">
-          <input value={r.seq} onChange={(e) => update(r.key, { seq: e.target.value })} placeholder="#" className={`${inputCls} w-[52px] text-center`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
-          <input value={r.encryption} onChange={(e) => update(r.key, { encryption: e.target.value })} placeholder="aes256" className={`${inputCls} flex-1`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
-          <input value={r.hash} onChange={(e) => update(r.key, { hash: e.target.value })} placeholder="sha256" className={`${inputCls} flex-1`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={r.seq} onChange={(e) => update(r.key, { seq: e.target.value })} placeholder="#" className="clr-input text-center" style={{ ...monoSt, width: 52, flex: "none" }} />
+          <input value={r.encryption} onChange={(e) => update(r.key, { encryption: e.target.value })} placeholder="aes256" className="clr-input flex-1" style={monoSt} />
+          <input value={r.hash} onChange={(e) => update(r.key, { hash: e.target.value })} placeholder="sha256" className="clr-input flex-1" style={monoSt} />
           {withDh && (
-            <input value={r.dh_group} onChange={(e) => update(r.key, { dh_group: e.target.value })} placeholder="dh 14" className={`${inputCls} w-[72px]`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={r.dh_group} onChange={(e) => update(r.key, { dh_group: e.target.value })} placeholder="dh 14" className="clr-input" style={{ ...monoSt, width: 72, flex: "none" }} />
           )}
-          <button type="button" onClick={() => remove(r.key)} className="text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] cursor-pointer bg-transparent border-0 p-1" title="Remove proposal">
-            <Trash2 size={15} />
-          </button>
+          <IconButton icon="trash" onClick={() => remove(r.key)} label="Remove proposal" />
         </div>
       ))}
-      <p className="text-[11px] text-[var(--qz-fg-4)] m-0">Columns: sequence · encryption · hash{withDh ? " · DH group" : ""}.</p>
+      <p className="clr-subtext m-0">Columns: sequence · encryption · hash{withDh ? " · DH group" : ""}.</p>
     </div>
   );
 }

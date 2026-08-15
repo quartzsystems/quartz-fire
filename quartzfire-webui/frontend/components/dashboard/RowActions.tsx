@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Pencil, Trash2, X } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 
-/// Per-row edit/delete for the config tables. Delete asks for inline
-/// confirmation before applying.
+/// Per-row edit/delete for the config tables (Clarity pencil + trash icon
+/// buttons). Delete confirms through the shared danger modal.
 export function RowActions({
   label,
   onEdit,
@@ -20,59 +21,53 @@ export function RowActions({
 
   return (
     <div className="inline-flex items-center gap-1 justify-end">
-      {confirming ? (
-        <>
-          <button
-            type="button"
-            title="Confirm delete"
-            aria-label="Confirm delete"
-            disabled={working}
-            onClick={async () => {
-              setWorking(true);
-              try {
-                await onDelete();
-              } finally {
-                setWorking(false);
-                setConfirming(false);
-              }
-            }}
-            className="grid place-items-center w-7 h-7 rounded-md border-0 cursor-pointer disabled:opacity-60"
-            style={{ background: "var(--qz-danger)", color: "white" }}
-          >
-            <Check size={14} />
-          </button>
-          <button
-            type="button"
-            title="Cancel"
-            aria-label="Cancel"
-            onClick={() => setConfirming(false)}
-            className="grid place-items-center w-7 h-7 rounded-md cursor-pointer text-[var(--qz-fg-3)] hover:text-[var(--qz-fg-1)]"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)" }}
-          >
-            <X size={14} />
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            title={`Edit ${label}`}
-            aria-label="Edit"
-            onClick={onEdit}
-            className="grid place-items-center w-7 h-7 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-accent)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer"
-          >
-            <Pencil size={14} />
-          </button>
-          <button
-            type="button"
-            title={`Delete ${label}`}
-            aria-label="Delete"
-            onClick={() => setConfirming(true)}
-            className="grid place-items-center w-7 h-7 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer"
-          >
-            <Trash2 size={14} />
-          </button>
-        </>
+      <button
+        type="button"
+        title={`Edit ${label}`}
+        aria-label="Edit"
+        onClick={onEdit}
+        className="btn btn-sm btn-link-neutral btn-icon"
+      >
+        <Icon shape="pencil" size={14} />
+      </button>
+      <button
+        type="button"
+        title={`Delete ${label}`}
+        aria-label="Delete"
+        onClick={() => setConfirming(true)}
+        className="btn btn-sm btn-link-neutral btn-icon"
+      >
+        <Icon shape="trash" size={14} />
+      </button>
+
+      {confirming && (
+        <ModalShell onClose={() => setConfirming(false)} maxWidth={420}>
+          <ModalHeader title="Confirm Delete" onClose={() => setConfirming(false)} />
+          <p style={{ fontSize: 14, color: "var(--cds-alias-typography-color-400)" }}>
+            Delete {label}? This applies to the running configuration immediately.
+          </p>
+          <ModalFooter>
+            <button type="button" className="btn btn-neutral" onClick={() => setConfirming(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={working}
+              onClick={async () => {
+                setWorking(true);
+                try {
+                  await onDelete();
+                } finally {
+                  setWorking(false);
+                  setConfirming(false);
+                }
+              }}
+            >
+              {working ? "Deleting…" : "Delete"}
+            </button>
+          </ModalFooter>
+        </ModalShell>
       )}
     </div>
   );

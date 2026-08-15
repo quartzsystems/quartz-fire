@@ -1,27 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { applySsh, SshSettings } from "@/lib/system";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const monoSt = { fontFamily: "var(--qz-font-mono)", maxWidth: "none" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control">
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -102,10 +93,10 @@ export function SshFormModal({
       <form onSubmit={submit} className="flex flex-col gap-4">
         <label className="flex items-center gap-[10px] cursor-pointer select-none">
           <Switch on={enabled} onChange={setEnabled} />
-          <span className="text-[13px] text-[var(--qz-fg-2)]">SSH service enabled</span>
+          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>SSH service enabled</span>
         </label>
         {!enabled && live.enabled && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-warn)" }}>
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-warning)" }}>
             Disabling SSH removes remote console access — only the local console and this WebUI remain.
           </p>
         )}
@@ -117,10 +108,8 @@ export function SshFormModal({
                 value={portsText}
                 onChange={(e) => setPortsText(e.target.value)}
                 placeholder="22"
-                className={inputCls}
+                className="clr-input"
                 style={monoSt}
-                onFocus={focusBorder}
-                onBlur={blurBorder}
               />
             </Field>
 
@@ -130,19 +119,19 @@ export function SshFormModal({
                 onChange={(e) => setListenText(e.target.value)}
                 placeholder={"192.168.1.1"}
                 rows={3}
-                className={`${inputCls} resize-y`}
+                className="clr-textarea resize-y"
                 style={monoSt}
-                onFocus={focusBorder}
-                onBlur={blurBorder}
               />
             </Field>
 
             <label className="flex items-center gap-[10px] cursor-pointer select-none">
               <Switch on={keysOnly} onChange={setKeysOnly} />
-              <span className="text-[13px] text-[var(--qz-fg-2)]">Disable password authentication (keys only)</span>
+              <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
+                Disable password authentication (keys only)
+              </span>
             </label>
             {keysOnly && !live.password_auth_disabled && keylessUsers.length > 0 && (
-              <p className="text-[12px] m-0" style={{ color: "var(--qz-warn)" }}>
+              <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-warning)" }}>
                 {keylessUsers.length === 1 ? "Account" : "Accounts"}{" "}
                 <span style={{ fontFamily: "var(--qz-font-mono)" }}>{keylessUsers.join(", ")}</span>{" "}
                 {keylessUsers.length === 1 ? "has" : "have"} no SSH public key and will no longer be able to
@@ -153,29 +142,19 @@ export function SshFormModal({
         )}
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : "Apply changes"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : "Apply Changes"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

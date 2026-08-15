@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { IsisNeighborState, IsisSummary, fetchIsisSummary } from "@/lib/isis-status";
@@ -11,20 +11,28 @@ const REFRESH_MS = 5000;
 const dash = (v: string | number | null | undefined) =>
   v === null || v === undefined || v === "" ? "—" : String(v);
 
-function stateBadge(state: string | null) {
+const pillStyle = {
+  fontFamily: "var(--qz-font-mono)",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+} as const;
+
+function statePill(state: string | null) {
   const s = (state ?? "").toLowerCase();
-  if (s === "up") return "badge badge-ok";
-  if (s === "init") return "badge badge-muted";
-  if (s === "" ) return "badge badge-muted";
-  return "badge badge-crit";
+  if (s === "up") return "label label-success";
+  if (s === "init") return "label";
+  if (s === "" ) return "label";
+  return "label label-danger";
 }
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg p-4 flex flex-col gap-1" style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}>
-      <span className="text-[11px] uppercase tracking-wider text-[var(--qz-fg-4)]">{label}</span>
-      <span className="text-[20px] font-semibold text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>{value}</span>
-      {sub && <span className="text-[11px] text-[var(--qz-fg-4)]">{sub}</span>}
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="card-block flex flex-col gap-1">
+        <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--cds-alias-typography-color-200)" }}>{label}</span>
+        <span style={{ fontSize: 20, fontWeight: 600, fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>{value}</span>
+        {sub && <span className="clr-subtext" style={{ marginTop: 0 }}>{sub}</span>}
+      </div>
     </div>
   );
 }
@@ -38,7 +46,7 @@ function neighborColumns(): Column<IsisNeighborState>[] {
       key: "state",
       header: "State",
       value: (r) => r.state ?? "",
-      render: (r) => <span className={stateBadge(r.state)}>{r.state ?? "—"}</span>,
+      render: (r) => <span className={statePill(r.state)} style={pillStyle}>{r.state ?? "—"}</span>,
       sortable: true,
       width: 110,
     },
@@ -84,16 +92,17 @@ export function IsisStatusPanel() {
   }, [load]);
 
   if (status === "loading") {
-    return <div className="text-[13px] text-[var(--qz-fg-4)]">Loading IS-IS status…</div>;
+    return <div className="clr-secondary">Loading IS-IS status…</div>;
   }
   if (status === "error") {
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-          <AlertTriangle size={15} /> {errorMsg}
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
         </div>
         <div>
-          <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
+          <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
         </div>
       </div>
     );
@@ -113,18 +122,20 @@ export function IsisStatusPanel() {
           <StatTile label="Adjacencies" value={`${upNeighbors}/${totalNeighbors}`} sub="up / total" />
         </div>
         <div className="flex flex-col items-end gap-2">
-          {lastUpdated && <span className="text-[12px] text-[var(--qz-fg-4)]">Updated {lastUpdated.toLocaleTimeString()}</span>}
-          <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load("poll")}>Refresh</Button>
+          {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
+          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
         </div>
       </div>
 
       {!running ? (
-        <div className="rounded-lg p-6 text-center text-[13px] text-[var(--qz-fg-4)]" style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}>
-          IS-IS is not running (isisd reports no area).
+        <div className="card" style={{ marginTop: 0 }}>
+          <div className="card-block clr-secondary" style={{ padding: 24, textAlign: "center" }}>
+            IS-IS is not running (isisd reports no area).
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
-          <h3 className="text-[14px] font-semibold text-[var(--qz-fg-1)] m-0">Adjacencies</h3>
+          <h3 className="clr-section" style={{ margin: 0, color: "var(--cds-alias-typography-color-450)" }}>Adjacencies</h3>
           <DataTable
             rows={summary!.neighbors}
             columns={neighborColumns()}

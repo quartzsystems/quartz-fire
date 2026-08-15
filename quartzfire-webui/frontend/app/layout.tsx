@@ -1,15 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Manrope, JetBrains_Mono } from "next/font/google";
+import Script from "next/script";
+import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const manrope = Manrope({
-  variable: "--font-manrope",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-  display: "swap",
-});
-
+// Metropolis (the Clarity Design System face) is self-hosted via @font-face in
+// styles/tokens/fonts.css; JetBrains Mono is self-hosted here through next/font.
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
   subsets: ["latin"],
@@ -24,18 +20,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html
-      lang="en"
-      className={`${manrope.variable} ${jetbrainsMono.variable} h-full`}
-      style={
-        {
-          "--qz-font-sans": "var(--font-manrope), ui-sans-serif, system-ui, sans-serif",
-          "--qz-font-mono":
-            "var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-        } as React.CSSProperties
-      }
-    >
-      <body className="h-full antialiased">{children}</body>
+    <html lang="en" className={`${jetbrainsMono.variable} h-full`}>
+      <body className="h-full antialiased">
+        {children}
+        {/* Clarity Icons custom-element runtime (vendored — the appliance is offline). */}
+        <Script src="/vendor/clr-icons/clr-icons.min.js" strategy="beforeInteractive" />
+      </body>
     </html>
   );
 }

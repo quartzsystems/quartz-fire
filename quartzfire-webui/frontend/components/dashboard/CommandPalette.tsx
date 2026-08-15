@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, ArrowRight } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
+import { NAV_SECTIONS } from "@/components/clarity/nav-model";
 
 interface PaletteAction {
   id: string;
@@ -11,51 +12,24 @@ interface PaletteAction {
   href?: string;
 }
 
-const ACTIONS: PaletteAction[] = [
-  { id: "nav-dashboard",  section: "Go to", label: "Dashboard",  kbd: "G D", href: "/dashboard" },
-  { id: "nav-interfaces", section: "Go to", label: "Interfaces", kbd: "G I", href: "/interfaces" },
-  { id: "nav-if-ethernet", section: "Go to", label: "Interfaces › Ethernet", kbd: "", href: "/interfaces/ethernet" },
-  { id: "nav-if-vlan",     section: "Go to", label: "Interfaces › VLAN",     kbd: "", href: "/interfaces/vlan" },
-  { id: "nav-if-bonding",  section: "Go to", label: "Interfaces › Bonding",  kbd: "", href: "/interfaces/bonding" },
-  { id: "nav-if-bridge",   section: "Go to", label: "Interfaces › Bridge",   kbd: "", href: "/interfaces/bridge" },
-  { id: "nav-if-vxlan",    section: "Go to", label: "Interfaces › VXLAN",    kbd: "", href: "/interfaces/vxlan" },
-  { id: "nav-if-loopback", section: "Go to", label: "Interfaces › Loopback", kbd: "", href: "/interfaces/loopback" },
-  { id: "nav-nat",        section: "Go to", label: "NAT",        kbd: "G N", href: "/nat" },
-  { id: "nav-nat-nat44",  section: "Go to", label: "NAT › NAT44", kbd: "", href: "/nat/nat44" },
-  { id: "nav-firewall",   section: "Go to", label: "Firewall",   kbd: "G F", href: "/firewall" },
-  { id: "nav-fw-rules",    section: "Go to", label: "Firewall › Rules",    kbd: "", href: "/firewall/rules" },
-  { id: "nav-fw-zones",    section: "Go to", label: "Firewall › Zones",    kbd: "", href: "/firewall/zones" },
-  { id: "nav-fw-policies", section: "Go to", label: "Firewall › Policies", kbd: "", href: "/firewall/policies" },
-  { id: "nav-fw-aliases",  section: "Go to", label: "Firewall › Aliases",  kbd: "", href: "/firewall/aliases" },
-  { id: "nav-fw-monitor",  section: "Go to", label: "Firewall › Traffic Monitor", kbd: "", href: "/firewall/monitor" },
-  { id: "nav-routing",    section: "Go to", label: "Routing",    kbd: "G R", href: "/routing" },
-  { id: "nav-rt-static",   section: "Go to", label: "Routing › Static", kbd: "", href: "/routing/static" },
-  { id: "nav-rt-ospf",     section: "Go to", label: "Routing › OSPF",   kbd: "", href: "/routing/ospf" },
-  { id: "nav-rt-isis",     section: "Go to", label: "Routing › IS-IS",  kbd: "", href: "/routing/isis" },
-  { id: "nav-rt-bgp",      section: "Go to", label: "Routing › BGP",    kbd: "", href: "/routing/bgp" },
-  { id: "nav-rt-mpls",     section: "Go to", label: "Routing › MPLS",   kbd: "", href: "/routing/mpls" },
-  { id: "nav-rt-policy",   section: "Go to", label: "Routing › Policy", kbd: "", href: "/routing/policy" },
-  { id: "nav-vpn",        section: "Go to", label: "VPN", kbd: "", href: "/vpn" },
-  { id: "nav-services",   section: "Go to", label: "Services",   kbd: "G V", href: "/services" },
-  { id: "nav-svc-dhcp-server",    section: "Go to", label: "Services › DHCP Server",    kbd: "", href: "/services/dhcp-server" },
-  { id: "nav-svc-dhcp-relay",     section: "Go to", label: "Services › DHCP Relay",     kbd: "", href: "/services/dhcp-relay" },
-  { id: "nav-svc-dns-forwarding", section: "Go to", label: "Services › DNS Forwarding", kbd: "", href: "/services/dns-forwarding" },
-  { id: "nav-svc-ips", section: "Go to", label: "Services › Intrusion Prevention", kbd: "", href: "/services/intrusion-prevention" },
-  { id: "nav-svc-appcontrol", section: "Go to", label: "Services › Application Control", kbd: "", href: "/services/application-control" },
-  { id: "nav-svc-geolocation", section: "Go to", label: "Services › Geolocation", kbd: "", href: "/services/geolocation" },
-  { id: "nav-svc-ssl-inspection", section: "Go to", label: "Services › SSL Inspection", kbd: "", href: "/services/ssl-inspection" },
-  { id: "nav-svc-content-filtering", section: "Go to", label: "Services › Content Filtering", kbd: "", href: "/services/content-filtering" },
-  { id: "nav-ha",         section: "Go to", label: "High Availability", kbd: "", href: "/high-availability" },
-  { id: "nav-ha-config-sync", section: "Go to", label: "High Availability › Config Sync", kbd: "", href: "/high-availability/config-sync" },
-  { id: "nav-ha-vrrp",        section: "Go to", label: "High Availability › VRRP",        kbd: "", href: "/high-availability/vrrp" },
-  { id: "nav-system",     section: "Go to", label: "System",     kbd: "G S", href: "/system" },
-  { id: "nav-sys-general",     section: "Go to", label: "System › General",     kbd: "", href: "/system/general" },
-  { id: "nav-sys-management",  section: "Go to", label: "System › Management",  kbd: "", href: "/system/management" },
-  { id: "nav-sys-users",       section: "Go to", label: "System › Users",       kbd: "", href: "/system/users" },
-  { id: "nav-sys-ssh",         section: "Go to", label: "System › SSH",         kbd: "", href: "/system/ssh" },
-  { id: "nav-sys-maintenance", section: "Go to", label: "System › Maintenance", kbd: "", href: "/system/maintenance" },
-  { id: "nav-sys-audit",       section: "Go to", label: "System › Audit Log",   kbd: "", href: "/system/audit" },
-];
+// "Go to" actions derived from the shell's navigation model: every top-level
+// section (with its G-key hint) followed by each of its child pages.
+const ACTIONS: PaletteAction[] = NAV_SECTIONS.flatMap((s) => {
+  const entries: PaletteAction[] = [
+    { id: `nav-${s.id}`, section: "Go to", label: s.label, kbd: s.kbd ?? "", href: s.href },
+  ];
+  for (const p of s.children ?? []) {
+    if (p.href === s.href) continue; // section row already points there
+    entries.push({
+      id: `nav-${p.id}`,
+      section: "Go to",
+      label: `${s.label} › ${p.label}`,
+      kbd: "",
+      href: p.href,
+    });
+  }
+  return entries;
+});
 
 export function CommandPalette({
   open,
@@ -84,9 +58,7 @@ export function CommandPalette({
 
   if (!open) return null;
 
-  const filtered = ACTIONS.filter((a) =>
-    a.label.toLowerCase().includes(q.toLowerCase())
-  );
+  const filtered = ACTIONS.filter((a) => a.label.toLowerCase().includes(q.toLowerCase()));
 
   const grouped = filtered.reduce<Record<string, PaletteAction[]>>((acc, a) => {
     (acc[a.section] = acc[a.section] || []).push(a);
@@ -97,21 +69,24 @@ export function CommandPalette({
     <div className="palette-scrim" onClick={onClose}>
       <div className="palette" onClick={(e) => e.stopPropagation()}>
         <div
-          className="flex items-center gap-[10px] p-[14px_18px]"
-          style={{ borderBottom: "1px solid var(--qz-border)" }}
+          className="flex items-center gap-[10px]"
+          style={{ padding: "14px 18px", borderBottom: "1px solid var(--cds-alias-object-border-subtle)" }}
         >
-          <Search size={16} className="text-[var(--qz-fg-3)]" />
+          <Icon shape="search" size={16} style={{ color: "var(--cds-alias-typography-color-300)" }} />
           <input
             ref={inputRef}
             placeholder="Jump to a section…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="flex-1 bg-transparent border-0 outline-none text-[var(--qz-fg-1)] text-[15px]"
-            style={{ fontFamily: "var(--qz-font-sans)" }}
+            className="flex-1 bg-transparent border-0 outline-none"
+            style={{ color: "var(--cds-alias-typography-color-450)", fontSize: 14 }}
           />
           <span
-            className="text-[10px] text-[var(--qz-fg-4)]"
-            style={{ fontFamily: "var(--qz-font-mono)" }}
+            style={{
+              fontFamily: "var(--qz-font-mono)",
+              fontSize: 10,
+              color: "var(--cds-alias-typography-color-200)",
+            }}
           >
             esc
           </span>
@@ -121,36 +96,54 @@ export function CommandPalette({
           {Object.entries(grouped).map(([section, items]) => (
             <div key={section}>
               <div
-                className="px-[10px] py-[6px] pb-[2px] text-[10px] tracking-[0.1em] text-[var(--qz-fg-4)] uppercase"
-                style={{ fontFamily: "var(--qz-font-mono)" }}
+                className="clr-smallcaption"
+                style={{
+                  fontFamily: "var(--qz-font-mono)",
+                  padding: "8px 10px 2px",
+                }}
               >
                 {section}
               </div>
               {items.map((a) => (
-                <div
+                <button
                   key={a.id}
-                  className="flex items-center gap-[10px] px-3 py-2 rounded-md text-[13.5px] text-[var(--qz-fg-2)] cursor-pointer hover:bg-[var(--qz-accent-soft)] hover:text-[var(--qz-fg-1)]"
+                  type="button"
+                  className="dropdown-item"
+                  style={{ height: 34 }}
                   onClick={() => {
                     if (a.href) onNavigate(a.href);
                     onClose();
                   }}
                 >
-                  <ArrowRight size={14} className="text-[var(--qz-fg-4)]" />
-                  <span className="flex-1">{a.label}</span>
+                  <Icon
+                    shape="arrow"
+                    dir="right"
+                    size={14}
+                    style={{ color: "var(--cds-alias-typography-color-200)" }}
+                  />
+                  <span className="flex-1 text-left">{a.label}</span>
                   {a.kbd && (
                     <span
-                      className="text-[10px] text-[var(--qz-fg-4)] border border-[var(--qz-border)] px-[5px] py-[1px] rounded"
-                      style={{ fontFamily: "var(--qz-font-mono)" }}
+                      style={{
+                        fontFamily: "var(--qz-font-mono)",
+                        fontSize: 10,
+                        color: "var(--cds-alias-typography-color-200)",
+                        border: "1px solid var(--cds-alias-object-border-color)",
+                        borderRadius: 3,
+                        padding: "1px 5px",
+                      }}
                     >
                       {a.kbd}
                     </span>
                   )}
-                </div>
+                </button>
               ))}
             </div>
           ))}
           {filtered.length === 0 && (
-            <div className="p-5 text-[13px] text-[var(--qz-fg-3)]">No matches.</div>
+            <div className="p-5" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-300)" }}>
+              No matches.
+            </div>
           )}
         </div>
       </div>

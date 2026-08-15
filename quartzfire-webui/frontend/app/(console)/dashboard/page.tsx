@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { DashboardGrid, TileInstance, findFreeCell, packTiles } from "@/components/dashboard/DashboardGrid";
 import { TILE_REGISTRY, TILE_TYPES } from "@/components/dashboard/tiles";
@@ -116,37 +115,35 @@ export default function DashboardPage() {
   return (
     <div className="p-[28px_36px]">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Dashboard
-        </h1>
+        <h2 className="m-0">Dashboard</h2>
 
         <div className="flex items-center gap-2">
           {editing && (
-            <div className="relative" ref={pickerRef}>
-              <Button kind="secondary" size="sm" icon={Plus} onClick={() => setPickerOpen((o) => !o)}>
-                Add component
+            <div className="clr-dropdown" ref={pickerRef}>
+              <Button kind="secondary" size="sm" icon="plus" onClick={() => setPickerOpen((o) => !o)}>
+                Add Component
               </Button>
               {pickerOpen && (
-                <div
-                  className="absolute right-0 mt-2 w-60 p-1 z-30 rounded-lg"
-                  style={{
-                    background: "var(--qz-surface-raised)",
-                    border: "1px solid var(--qz-border)",
-                    boxShadow: "var(--qz-shadow-2)",
-                  }}
-                >
+                <div className="dropdown-menu right" style={{ minWidth: 240 }}>
                   {TILE_TYPES.map((def) => {
                     const added = tiles.some((t) => t.type === def.type);
                     return (
                       <button
                         key={def.type}
                         type="button"
+                        className="dropdown-item"
                         disabled={added}
                         onClick={() => addTile(def.type)}
-                        className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[13px] text-[var(--qz-fg-2)] hover:bg-[var(--qz-surface)] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                       >
                         {def.title}
-                        {added && <span className="text-[11px] text-[var(--qz-fg-4)]">Added</span>}
+                        {added && (
+                          <span
+                            className="ml-auto text-[11px]"
+                            style={{ color: "var(--cds-alias-typography-color-200)" }}
+                          >
+                            Added
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -158,20 +155,20 @@ export default function DashboardPage() {
           <Button
             kind={editing ? "primary" : "secondary"}
             size="sm"
-            icon={editing ? Check : Pencil}
+            icon={editing ? "check" : "pencil"}
             onClick={() => {
               setEditing((e) => !e);
               setPickerOpen(false);
             }}
           >
-            {editing ? "Done" : "Edit dashboard"}
+            {editing ? "Done" : "Edit Dashboard"}
           </Button>
         </div>
       </div>
 
       {tiles.length === 0 ? (
-        <div className="text-[13px] text-[var(--qz-fg-4)] py-10 text-center">
-          No components. Click <span className="text-[var(--qz-fg-2)]">Edit dashboard</span> to add some.
+        <div className="text-[13px] text-[var(--cds-alias-typography-color-200)] py-10 text-center">
+          No components. Click <span className="text-[var(--cds-alias-typography-color-400)]">Edit Dashboard</span> to add some.
         </div>
       ) : (
         <DashboardGrid tiles={tiles} editing={editing} onChange={update} onRemove={removeTile} />

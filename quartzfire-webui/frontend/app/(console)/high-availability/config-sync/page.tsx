@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, Plus, RotateCw, Trash2, Wifi, XCircle } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
-import { Segmented } from "@/components/ui/Segmented";
 import { useDashboard } from "@/lib/DashboardContext";
 import {
   ConfigSyncConfig,
@@ -16,16 +15,7 @@ import {
   fetchConfigSync,
   testConfigSync,
 } from "@/lib/config-sync";
-import {
-  ErrorText,
-  Field,
-  TextInput,
-  inputCls,
-  inputSt,
-  focusBorder,
-  blurBorder,
-  numOrNull,
-} from "../formkit";
+import { ErrorText, Field, TextInput, monoStyle, numOrNull } from "../formkit";
 
 function SectionsEditor({
   sections,
@@ -40,44 +30,42 @@ function SectionsEditor({
     <div className="flex flex-col gap-2">
       {sections.map((s, i) => (
         <div key={i} className="flex items-center gap-2">
-          <select
-            value={s.section}
-            onChange={(e) => setAt(i, { section: e.target.value })}
-            className={inputCls}
-            style={{ ...inputSt, maxWidth: 200 }}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
-          >
-            <option value="">— section —</option>
-            {SYNC_SECTIONS.map((sec) => (
-              <option key={sec} value={sec}>{sec}</option>
-            ))}
-          </select>
+          <div className="clr-select-wrapper" style={{ maxWidth: 200 }}>
+            <select
+              value={s.section}
+              onChange={(e) => setAt(i, { section: e.target.value })}
+              className="clr-select"
+              style={{ maxWidth: "none" }}
+            >
+              <option value="">— section —</option>
+              {SYNC_SECTIONS.map((sec) => (
+                <option key={sec} value={sec}>{sec}</option>
+              ))}
+            </select>
+          </div>
           <input
             value={s.subpath ?? ""}
             onChange={(e) => setAt(i, { subpath: e.target.value || null })}
             placeholder="sub-element (optional, e.g. ospf)"
-            className={inputCls}
-            style={{ ...inputSt, fontFamily: "var(--qz-font-mono)" }}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={{ maxWidth: "none", ...monoStyle }}
           />
           <button
             type="button"
             onClick={() => onChange(sections.filter((_, j) => j !== i))}
             aria-label="Remove section"
-            className="grid place-items-center w-8 h-8 rounded-md bg-transparent border border-[var(--qz-border)] text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer flex-shrink-0"
+            className="btn btn-sm btn-link-neutral btn-icon flex-shrink-0"
           >
-            <Trash2 size={14} />
+            <Icon shape="trash" size={14} />
           </button>
         </div>
       ))}
       <button
         type="button"
         onClick={() => onChange([...sections, { section: "", subpath: null }])}
-        className="inline-flex items-center gap-[6px] self-start text-[12px] font-medium px-[10px] py-[6px] rounded-md bg-transparent border border-[var(--qz-border)] text-[var(--qz-fg-2)] hover:text-[var(--qz-fg-1)] hover:border-[var(--qz-border-strong)] transition-colors cursor-pointer"
+        className="btn btn-sm btn-neutral self-start"
       >
-        <Plus size={13} /> Add section
+        <Icon shape="plus" size={13} /> Add Section
       </button>
     </div>
   );
@@ -156,44 +144,60 @@ export default function ConfigSyncPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Config Sync
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2>Config Sync</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Replicate selected config sections from this primary to a secondary on every commit
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading config-sync…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
+      {status === "loading" && <div className="clr-secondary">Loading config-sync…</div>}
+      {status === "error" && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
+          <div className="alert-actions">
+            <button type="button" className="alert-action" onClick={load}>
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+      {status === "ready" && live && (
+        <div className="max-w-[680px] flex flex-col gap-5">
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <label className="clr-control-label">Sync mode</label>
+            <div className="flex flex-col gap-[6px]">
+              <div className="clr-radio-wrapper">
+                <input
+                  type="radio"
+                  id="sync-mode-load"
+                  name="sync-mode"
+                  checked={(form.mode ?? "load") === "load"}
+                  onChange={() => setForm((f) => ({ ...f, mode: "load" as SyncMode }))}
+                />
+                <label htmlFor="sync-mode-load">Load (replace)</label>
+              </div>
+              <div className="clr-radio-wrapper">
+                <input
+                  type="radio"
+                  id="sync-mode-set"
+                  name="sync-mode"
+                  checked={form.mode === "set"}
+                  onChange={() => setForm((f) => ({ ...f, mode: "set" as SyncMode }))}
+                />
+                <label htmlFor="sync-mode-set">Set (merge)</label>
+              </div>
             </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
+            <div className="clr-subtext">
+              load = replace the section on the secondary; set = merge (overwrite conflicting values).
             </div>
           </div>
-        )}
-        {status === "ready" && live && (
-          <div className="max-w-[680px] flex flex-col gap-5">
-            <Field label="Sync mode" hint="load = replace the section on the secondary; set = merge (overwrite conflicting values).">
-              <Segmented
-                items={[
-                  { value: "load", label: "Load (replace)" },
-                  { value: "set", label: "Set (merge)" },
-                ]}
-                value={form.mode ?? "load"}
-                onChange={(v) => setForm((f) => ({ ...f, mode: v as SyncMode }))}
-              />
-            </Field>
 
-            <div className="rounded-lg p-4 flex flex-col gap-4" style={inputSt}>
-              <div className="text-[13px] font-semibold text-[var(--qz-fg-1)]">Secondary</div>
+          <div className="card">
+            <div className="card-header">Secondary</div>
+            <div className="card-block flex flex-col gap-4">
               <div className="grid gap-4" style={{ gridTemplateColumns: "2fr 1fr 1fr" }}>
                 <Field label="Address" hint="IPv4/IPv6/FQDN">
                   <TextInput value={form.secondary.address ?? ""} onChange={(v) => setSecondary({ address: v || null })} placeholder="192.0.2.112" mono />
@@ -216,48 +220,50 @@ export default function ConfigSyncPage() {
                 <TextInput value={form.secondary.key ?? ""} onChange={(v) => setSecondary({ key: v || null })} placeholder={form.secondary.has_key ? "•••••••• (unchanged)" : "shared-secret"} mono />
               </Field>
               <div className="flex items-center gap-3">
-                <Button kind="secondary" icon={Wifi} onClick={runTest} disabled={testing}>
-                  {testing ? "Testing…" : "Test connection"}
+                <Button kind="secondary" icon="connect" onClick={runTest} disabled={testing}>
+                  {testing ? "Testing…" : "Test Connection"}
                 </Button>
                 {testResult && (
-                  <span className="inline-flex items-center gap-[6px] text-[12px]">
+                  <span className="inline-flex items-center gap-[6px]" style={{ fontSize: 12 }}>
                     {testResult.authenticated ? (
                       <>
-                        <CheckCircle2 size={15} className="text-[var(--qz-accent)]" />
-                        <span className="text-[var(--qz-fg-2)]">
+                        <Icon shape="check-circle" size={15} style={{ color: "var(--cds-alias-status-success)" }} />
+                        <span style={{ color: "var(--cds-alias-typography-color-400)" }}>
                           Authenticated{testResult.version ? ` — ${testResult.version}` : ""}
                         </span>
                       </>
                     ) : testResult.reachable ? (
                       <>
-                        <XCircle size={15} className="text-[var(--qz-danger)]" />
-                        <span className="text-[var(--qz-fg-2)]">Reachable but key rejected{testResult.error ? ` — ${testResult.error}` : ""}</span>
+                        <Icon shape="exclamation-circle" size={15} style={{ color: "var(--cds-alias-status-danger)" }} />
+                        <span style={{ color: "var(--cds-alias-typography-color-400)" }}>
+                          Reachable but key rejected{testResult.error ? ` — ${testResult.error}` : ""}
+                        </span>
                       </>
                     ) : (
                       <>
-                        <XCircle size={15} className="text-[var(--qz-danger)]" />
-                        <span className="text-[var(--qz-fg-2)]">{testResult.error ?? "Unreachable"}</span>
+                        <Icon shape="exclamation-circle" size={15} style={{ color: "var(--cds-alias-status-danger)" }} />
+                        <span style={{ color: "var(--cds-alias-typography-color-400)" }}>{testResult.error ?? "Unreachable"}</span>
                       </>
                     )}
                   </span>
                 )}
               </div>
             </div>
-
-            <Field label="Sections to sync" hint="Pick a top-level section and, optionally, a single sub-element (e.g. protocols → ospf).">
-              <SectionsEditor sections={form.sections} onChange={(s) => setForm((f) => ({ ...f, sections: s }))} />
-            </Field>
-
-            <ErrorText msg={errorMsg} />
-            <div className="flex items-center gap-2">
-              <Button kind="primary" onClick={save} disabled={saving}>
-                {saving ? "Applying…" : "Apply config-sync"}
-              </Button>
-              <Button kind="ghost" icon={RotateCw} onClick={load}>Reload</Button>
-            </div>
           </div>
-        )}
-      </div>
+
+          <Field label="Sections to sync" hint="Pick a top-level section and, optionally, a single sub-element (e.g. protocols → ospf).">
+            <SectionsEditor sections={form.sections} onChange={(s) => setForm((f) => ({ ...f, sections: s }))} />
+          </Field>
+
+          <ErrorText msg={errorMsg} />
+          <div className="flex items-center gap-2">
+            <Button kind="primary" onClick={save} disabled={saving}>
+              {saving ? "Applying…" : "Apply Config-Sync"}
+            </Button>
+            <Button kind="ghost" icon="refresh" onClick={load}>Reload</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

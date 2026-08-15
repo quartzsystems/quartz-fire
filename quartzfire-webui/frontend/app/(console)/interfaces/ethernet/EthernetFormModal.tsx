@@ -1,24 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { applyEthernet, EthernetInterface, PhyInfo } from "@/lib/interfaces";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
+const mono = { fontFamily: "var(--qz-font-mono)" } as const;
+const wide = { maxWidth: "none" } as const;
+const wideMono = { ...wide, ...mono } as const;
 
 // Mbit/s options VyOS accepts; "auto" maps to no explicit speed leaf.
 const SPEED_OPTIONS = ["auto", "10", "100", "1000", "2500", "5000", "10000"];
 const DUPLEX_OPTIONS = ["auto", "half", "full"];
 
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
+/// Clarity field: label + control + optional helper sentence.
+function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">
+        {label}
+        {required && <span className="clr-required">*</span>}
+      </label>
+      {children}
+      {hint && <div className="clr-subtext">{hint}</div>}
+    </div>
+  );
 }
 
 interface AddrRow {
@@ -119,84 +136,67 @@ export function EthernetFormModal({
       />
 
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <div>
-          <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">
-            Physical Interface <span style={{ color: "var(--qz-danger)" }}>*</span>
-          </label>
+        <Field label="Physical Interface" required>
           {isEdit ? (
-            <input
-              value={name}
-              disabled
-              className={`${inputCls} disabled:opacity-70`}
-              style={monoSt}
-            />
+            <input value={name} disabled className="clr-input" style={wideMono} />
           ) : (
-            <select
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={`${inputCls} cursor-pointer`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              {freeNames.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+            <div className="clr-select-wrapper" style={wide}>
+              <select
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="clr-select"
+                style={wideMono}
+              >
+                {freeNames.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
-        </div>
+        </Field>
 
-        <div>
-          <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">Description</label>
+        <Field label="Description">
           <input
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="WAN uplink"
-            className={inputCls}
-            style={inputSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={wide}
           />
-        </div>
+        </Field>
 
-        <div>
-          <div className="flex items-center justify-between mb-[6px]">
-            <label className="block text-[12px] text-[var(--qz-fg-3)]">IP Addresses</label>
-            <button
-              type="button"
-              onClick={addAddr}
-              className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0"
-            >
-              <Plus size={13} /> Add address
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <div className="flex items-center justify-between">
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP Addresses</label>
+            <button type="button" onClick={addAddr} className="btn btn-sm btn-link-neutral">
+              <Icon shape="plus" size={12} /> Add Address
             </button>
           </div>
           {addresses.length === 0 ? (
-            <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
-              No addresses — use <span style={{ fontFamily: "var(--qz-font-mono)" }}>dhcp</span> or a CIDR like 10.0.0.1/24.
-            </p>
+            <div className="clr-subtext">
+              No addresses — use <span style={mono}>dhcp</span> or a CIDR like 10.0.0.1/24.
+            </div>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
               {addresses.map((a) => (
                 <div key={a.key} className="flex items-center gap-2">
                   <input
                     value={a.value}
                     onChange={(e) => updateAddr(a.key, e.target.value)}
                     placeholder="10.0.0.1/24 or dhcp"
-                    className={inputCls}
-                    style={monoSt}
-                    onFocus={focusBorder}
-                    onBlur={blurBorder}
+                    className="clr-input"
+                    style={wideMono}
                   />
                   <button
                     type="button"
                     onClick={() => removeAddr(a.key)}
                     title="Remove address"
-                    className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent"
-                    style={{ border: "1px solid var(--qz-border)" }}
+                    className="btn btn-sm btn-link-neutral btn-icon"
+                    style={{ flexShrink: 0 }}
                   >
-                    <Trash2 size={14} />
+                    <Icon shape="trash" size={14} />
                   </button>
                 </div>
               ))}
@@ -204,9 +204,8 @@ export function EthernetFormModal({
           )}
         </div>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <div>
-            <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">Speed</label>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+          <Field label="Speed">
             {(() => {
               // Offer only the speeds this port reports supporting; a port
               // with no phy data (or none reported) gets the full list. The
@@ -216,42 +215,40 @@ export function EthernetFormModal({
                 ? SPEED_OPTIONS.filter((s) => s === "auto" || supported.includes(Number(s)))
                 : SPEED_OPTIONS;
               return (
-                <select
-                  value={speed}
-                  onChange={(e) => setSpeed(e.target.value)}
-                  className={`${inputCls} cursor-pointer`}
-                  style={monoSt}
-                  onFocus={focusBorder}
-                  onBlur={blurBorder}
-                >
-                  {(options.includes(speed) ? options : [speed, ...options]).map((s) => (
-                    <option key={s} value={s}>
-                      {s === "auto" ? "Auto" : s}
-                    </option>
-                  ))}
-                </select>
+                <div className="clr-select-wrapper" style={wide}>
+                  <select
+                    value={speed}
+                    onChange={(e) => setSpeed(e.target.value)}
+                    className="clr-select"
+                    style={wideMono}
+                  >
+                    {(options.includes(speed) ? options : [speed, ...options]).map((s) => (
+                      <option key={s} value={s}>
+                        {s === "auto" ? "Auto" : s}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               );
             })()}
-          </div>
-          <div>
-            <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">Duplex</label>
-            <select
-              value={duplex}
-              onChange={(e) => setDuplex(e.target.value)}
-              className={`${inputCls} cursor-pointer`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              {(DUPLEX_OPTIONS.includes(duplex) ? DUPLEX_OPTIONS : [duplex, ...DUPLEX_OPTIONS]).map((d) => (
-                <option key={d} value={d}>
-                  {d === "auto" ? "Auto" : d.charAt(0).toUpperCase() + d.slice(1)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">MTU</label>
+          </Field>
+          <Field label="Duplex">
+            <div className="clr-select-wrapper" style={wide}>
+              <select
+                value={duplex}
+                onChange={(e) => setDuplex(e.target.value)}
+                className="clr-select"
+                style={wideMono}
+              >
+                {(DUPLEX_OPTIONS.includes(duplex) ? DUPLEX_OPTIONS : [duplex, ...DUPLEX_OPTIONS]).map((d) => (
+                  <option key={d} value={d}>
+                    {d === "auto" ? "Auto" : d.charAt(0).toUpperCase() + d.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </Field>
+          <Field label="MTU">
             <input
               type="number"
               min={68}
@@ -259,43 +256,32 @@ export function EthernetFormModal({
               value={mtu}
               onChange={(e) => setMtu(e.target.value)}
               placeholder="1500"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
-          </div>
+          </Field>
         </div>
 
-        <label className="flex items-center gap-[10px] cursor-pointer select-none">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
           <Switch on={enabled} onChange={setEnabled} />
-          <span className="text-[13px] text-[var(--qz-fg-2)]">Enabled</span>
+          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Enabled</span>
         </label>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
-            {error}
-          </p>
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Add interface"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Add Interface"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

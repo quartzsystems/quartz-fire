@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { formatUptime } from "@/lib/bgp-status";
@@ -17,21 +17,29 @@ const REFRESH_MS = 5000;
 const dash = (v: string | number | null | undefined) =>
   v === null || v === undefined || v === "" ? "—" : String(v);
 
-/// State → badge. `Full` (adjacency complete) is healthy; the transient states
+const pillStyle = {
+  fontFamily: "var(--qz-font-mono)",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+} as const;
+
+/// State → pill. `Full` (adjacency complete) is healthy; the transient states
 /// (Init, 2-Way, ExStart, Exchange, Loading) are "working on it"; Down is bad.
-function stateBadge(state: string) {
+function statePill(state: string) {
   const s = state.toLowerCase();
-  if (s.startsWith("full")) return "badge badge-ok";
-  if (s.startsWith("down")) return "badge badge-crit";
-  return "badge badge-muted";
+  if (s.startsWith("full")) return "label label-success";
+  if (s.startsWith("down")) return "label label-danger";
+  return "label";
 }
 
 function StatTile({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-lg p-4 flex flex-col gap-1" style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}>
-      <span className="text-[11px] uppercase tracking-wider text-[var(--qz-fg-4)]">{label}</span>
-      <span className="text-[20px] font-semibold text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>{value}</span>
-      {sub && <span className="text-[11px] text-[var(--qz-fg-4)]">{sub}</span>}
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="card-block flex flex-col gap-1">
+        <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--cds-alias-typography-color-200)" }}>{label}</span>
+        <span style={{ fontSize: 20, fontWeight: 600, fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>{value}</span>
+        {sub && <span className="clr-subtext" style={{ marginTop: 0 }}>{sub}</span>}
+      </div>
     </div>
   );
 }
@@ -45,7 +53,7 @@ function neighborColumns(): Column<OspfNeighborState>[] {
       key: "state",
       header: "State",
       value: (r) => r.state,
-      render: (r) => <span className={stateBadge(r.state)}>{r.state}</span>,
+      render: (r) => <span className={statePill(r.state)} style={pillStyle}>{r.state}</span>,
       sortable: true,
       width: 140,
     },
@@ -67,7 +75,7 @@ function interfaceColumns(): Column<OspfInterfaceState>[] {
       key: "passive",
       header: "Passive",
       value: (r) => (r.passive ? "yes" : "no"),
-      render: (r) => (r.passive ? <span className="badge badge-muted">passive</span> : <span className="text-[var(--qz-fg-4)]">—</span>),
+      render: (r) => (r.passive ? <span className="label" style={pillStyle}>passive</span> : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>),
       width: 100,
     },
   ];
@@ -110,16 +118,17 @@ export function OspfStatusPanel() {
   }, [load]);
 
   if (status === "loading") {
-    return <div className="text-[13px] text-[var(--qz-fg-4)]">Loading OSPF status…</div>;
+    return <div className="clr-secondary">Loading OSPF status…</div>;
   }
   if (status === "error") {
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-          <AlertTriangle size={15} /> {errorMsg}
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
         </div>
         <div>
-          <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
+          <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
         </div>
       </div>
     );
@@ -138,35 +147,39 @@ export function OspfStatusPanel() {
           <StatTile label="Adjacencies" value={`${fullNeighbors}/${totalNeighbors}`} sub="full / total" />
         </div>
         <div className="flex flex-col items-end gap-2">
-          {lastUpdated && <span className="text-[12px] text-[var(--qz-fg-4)]">Updated {lastUpdated.toLocaleTimeString()}</span>}
-          <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load("poll")}>Refresh</Button>
+          {lastUpdated && <span className="clr-secondary">Updated {lastUpdated.toLocaleTimeString()}</span>}
+          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
         </div>
       </div>
 
       {!running ? (
-        <div className="rounded-lg p-6 text-center text-[13px] text-[var(--qz-fg-4)]" style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}>
-          OSPF is not running (ospfd reports no router-id).
+        <div className="card" style={{ marginTop: 0 }}>
+          <div className="card-block clr-secondary" style={{ padding: 24, textAlign: "center" }}>
+            OSPF is not running (ospfd reports no router-id).
+          </div>
         </div>
       ) : (
         <>
           {summary!.areas.length > 0 && (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {summary!.areas.map((a) => (
-                <div key={a.area} className="rounded-lg p-4 flex flex-col gap-1" style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>{a.area}</span>
-                    {a.backbone && <span className="badge badge-info">backbone</span>}
+                <div key={a.area} className="card" style={{ marginTop: 0 }}>
+                  <div className="card-block flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>{a.area}</span>
+                      {a.backbone && <span className="label label-info" style={pillStyle}>backbone</span>}
+                    </div>
+                    <span className="clr-subtext" style={{ marginTop: 0 }}>
+                      {dash(a.interfaces_active)}/{dash(a.interfaces_total)} interfaces active · {dash(a.neighbors_full)} full
+                    </span>
                   </div>
-                  <span className="text-[11px] text-[var(--qz-fg-4)]">
-                    {dash(a.interfaces_active)}/{dash(a.interfaces_total)} interfaces active · {dash(a.neighbors_full)} full
-                  </span>
                 </div>
               ))}
             </div>
           )}
 
           <div className="flex flex-col gap-2">
-            <h3 className="text-[14px] font-semibold text-[var(--qz-fg-1)] m-0">Neighbors</h3>
+            <h3 className="clr-section" style={{ margin: 0, color: "var(--cds-alias-typography-color-450)" }}>Neighbors</h3>
             <DataTable
               rows={summary!.neighbors}
               columns={neighborColumns()}
@@ -178,7 +191,7 @@ export function OspfStatusPanel() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <h3 className="text-[14px] font-semibold text-[var(--qz-fg-1)] m-0">Interfaces</h3>
+            <h3 className="clr-section" style={{ margin: 0, color: "var(--cds-alias-typography-color-450)" }}>Interfaces</h3>
             <DataTable
               rows={summary!.interfaces}
               columns={interfaceColumns()}

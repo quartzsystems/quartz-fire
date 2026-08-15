@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { TILE_REGISTRY } from "./tiles";
 
 export interface TileInstance {
@@ -242,14 +242,14 @@ export function DashboardGrid({
               gridRow: `${tile.y + 1} / span ${Math.max(1, tile.h)}`,
             }}
             className={[
-              "surface relative overflow-hidden transition-shadow",
+              "card relative overflow-hidden transition-shadow",
               editing ? "cursor-move select-none" : "",
               isResizing
-                ? "ring-2 ring-[var(--qz-accent)] shadow-[var(--qz-shadow-3)] z-20"
+                ? "ring-2 ring-[var(--cds-alias-interaction-action)] shadow-[var(--cds-alias-object-shadow-300)] z-20"
                 : isDragging
-                  ? "border-2 border-dashed border-[var(--qz-accent)] opacity-50"
+                  ? "border-2 border-dashed border-[var(--cds-alias-interaction-action)] opacity-50"
                   : editing
-                    ? "ring-1 ring-[var(--qz-border-strong)]"
+                    ? "ring-1 ring-[var(--cds-alias-object-border-color-shade)]"
                     : "",
             ].join(" ")}
           >
@@ -258,8 +258,8 @@ export function DashboardGrid({
                 isDragging
                   ? "invisible h-full"
                   : editing
-                    ? "pointer-events-none h-full overflow-hidden"
-                    : "h-full overflow-auto"
+                    ? "pointer-events-none h-full overflow-hidden flex flex-col"
+                    : "h-full overflow-hidden flex flex-col"
               }
             >
               {def.render()}
@@ -270,7 +270,7 @@ export function DashboardGrid({
                 {isResizing && (
                   <div
                     className="absolute top-2 left-2 z-20 rounded-md px-2 py-1 text-[11px] font-semibold text-[var(--qz-fg-on-accent)]"
-                    style={{ background: "var(--qz-accent)", fontFamily: "var(--qz-font-mono)" }}
+                    style={{ background: "var(--cds-alias-interaction-action)", fontFamily: "var(--qz-font-mono)" }}
                   >
                     {tile.w} × {tile.h}
                   </div>
@@ -280,9 +280,10 @@ export function DashboardGrid({
                   aria-label="Remove tile"
                   onPointerDown={(e) => e.stopPropagation()}
                   onClick={() => onRemove(tile.id)}
-                  className="absolute top-2 right-2 z-20 grid h-6 w-6 place-items-center rounded-md border border-[var(--qz-border)] bg-[var(--qz-surface-raised)] text-[var(--qz-fg-3)] transition-colors hover:border-[var(--qz-danger)] hover:text-[var(--qz-danger)]"
+                  className="close absolute top-2 right-2 z-20"
+                  style={{ background: "var(--cds-alias-object-container-background)" }}
                 >
-                  <X size={13} />
+                  <Icon shape="times" size={16} />
                 </button>
                 <div
                   aria-label="Resize tile"
@@ -290,7 +291,7 @@ export function DashboardGrid({
                   onPointerMove={onResizeMove}
                   onPointerUp={endResize}
                   onPointerCancel={endResize}
-                  className="absolute bottom-[5px] right-[5px] z-20 h-3.5 w-3.5 cursor-se-resize border-b-2 border-r-2 border-[var(--qz-fg-3)] hover:border-[var(--qz-accent)]"
+                  className="absolute bottom-[5px] right-[5px] z-20 h-3.5 w-3.5 cursor-se-resize border-b-2 border-r-2 border-[var(--cds-alias-typography-color-200)] hover:border-[var(--cds-alias-interaction-action)]"
                 />
               </>
             )}
@@ -315,9 +316,9 @@ export function DashboardGrid({
               pointerEvents: "none",
               zIndex: 60,
             }}
-            className="surface overflow-hidden opacity-95 rotate-[1deg] ring-2 ring-[var(--qz-accent)] shadow-[var(--qz-shadow-3)]"
+            className="card overflow-hidden opacity-95 rotate-[1deg] ring-2 ring-[var(--cds-alias-interaction-action)] shadow-[var(--cds-alias-object-shadow-300)]"
           >
-            <div className="pointer-events-none h-full overflow-hidden">{dragDef.render()}</div>
+            <div className="pointer-events-none h-full overflow-hidden flex flex-col">{dragDef.render()}</div>
           </div>,
           document.body,
         )}

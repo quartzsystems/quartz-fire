@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, ShieldAlert } from "lucide-react";
 import {
   IpsAlert,
   IpsSettings,
@@ -102,75 +101,90 @@ export function RecentIpsAlertsTile() {
   const visible = settings ? rows.filter((r) => settings[r.level]?.log ?? true) : rows;
 
   return (
-    <div className="p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between gap-2 mb-3 flex-shrink-0">
-        <div className="flex items-center gap-[9px] min-w-0">
-          <ShieldAlert size={18} className="text-[var(--qz-accent)]" />
-          <h2 className="text-[16px] font-bold text-[var(--qz-fg-1)] m-0 truncate" style={{ letterSpacing: "-0.01em" }}>
-            IPS Alerts
-          </h2>
+    <>
+      <div className="card-header flex-shrink-0">
+        IPS Alerts
+        <span className="ml-auto flex items-center gap-2">
           <Link
             href="/services/intrusion-prevention?tab=alerts"
-            className="inline-flex items-center gap-[3px] text-[11px] text-[var(--qz-fg-4)] hover:text-[var(--qz-fg-2)] flex-shrink-0"
+            className="text-[12px] flex-shrink-0"
+            style={{ fontWeight: 400 }}
           >
-            View all <ArrowRight size={11} />
+            View all →
           </Link>
-        </div>
-        <LiveButton paused={paused} onToggle={togglePause} />
+          <LiveButton paused={paused} onToggle={togglePause} />
+        </span>
       </div>
 
-      {running === false && (
-        <div className="text-[12px] text-[var(--qz-fg-4)] mb-2 flex-shrink-0">
-          IPS engine is not running — showing logged history.
-        </div>
-      )}
+      <div className="card-block flex-1 min-h-0 flex flex-col" style={{ paddingTop: 8, paddingBottom: 8 }}>
+        {running === false && (
+          <div className="text-[12px] text-[var(--cds-alias-typography-color-200)] mb-2 flex-shrink-0">
+            IPS engine is not running — showing logged history.
+          </div>
+        )}
 
-      {visible.length === 0 ? (
-        <div className="flex-1 grid place-items-center text-[12px] text-[var(--qz-fg-4)] text-center px-4">
-          No alerts yet — alerts appear when inspected traffic matches a signature.
-        </div>
-      ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto -mx-2 flex flex-col gap-[4px]">
-          {visible.map((r) => {
-            const meta = THREAT_LEVELS.find((l) => l.level === r.level) ?? THREAT_LEVELS[4];
-            const alarm = settings?.[r.level]?.alarm ?? false;
-            const route = `${r.src ?? "?"}${r.spt != null ? `:${r.spt}` : ""} → ${r.dst ?? "?"}${r.dpt != null ? `:${r.dpt}` : ""}`;
-            return (
-              <div
-                key={r.id}
-                className="flex items-center gap-[8px] px-2 py-[6px] rounded-md text-[12px] flex-shrink-0"
-                style={{
-                  background: alarm ? "color-mix(in oklab, var(--qz-danger) 7%, transparent)" : undefined,
-                }}
-                title={`${meta.label} · SID ${r.sid}${r.category ? ` · ${r.category}` : ""}\n${route}${r.proto ? ` (${r.proto})` : ""}`}
-              >
-                <span
-                  className="flex-shrink-0"
-                  style={{ width: 8, height: 8, borderRadius: 999, background: meta.color }}
-                  aria-label={meta.label}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[var(--qz-fg-2)] truncate">{r.signature}</div>
-                  <div className="text-[11px] text-[var(--qz-fg-4)] truncate" style={{ fontFamily: "var(--qz-font-mono)" }}>
-                    {route}
-                  </div>
-                </div>
-                {r.action === "blocked" ? (
-                  <span className="badge badge-crit flex-shrink-0">Blocked</span>
-                ) : (
-                  <span className="badge badge-ok flex-shrink-0">Allowed</span>
-                )}
-                <span
-                  className="text-[11px] text-[var(--qz-fg-4)] flex-shrink-0 text-right"
-                  style={{ fontFamily: "var(--qz-font-mono)" }}
+        {visible.length === 0 ? (
+          <div className="flex-1 grid place-items-center text-[12px] text-[var(--cds-alias-typography-color-200)] text-center px-4">
+            No alerts yet — alerts appear when inspected traffic matches a signature.
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 overflow-y-auto -mx-2 flex flex-col gap-[4px]">
+            {visible.map((r) => {
+              const meta = THREAT_LEVELS.find((l) => l.level === r.level) ?? THREAT_LEVELS[4];
+              const alarm = settings?.[r.level]?.alarm ?? false;
+              const route = `${r.src ?? "?"}${r.spt != null ? `:${r.spt}` : ""} → ${r.dst ?? "?"}${r.dpt != null ? `:${r.dpt}` : ""}`;
+              return (
+                <div
+                  key={r.id}
+                  className="flex items-center gap-[8px] px-2 py-[6px] rounded-md text-[12px] flex-shrink-0"
+                  style={{
+                    background: alarm
+                      ? "color-mix(in oklab, var(--cds-alias-status-danger) 7%, transparent)"
+                      : undefined,
+                  }}
+                  title={`${meta.label} · SID ${r.sid}${r.category ? ` · ${r.category}` : ""}\n${route}${r.proto ? ` (${r.proto})` : ""}`}
                 >
-                  {alertTime(r.ts)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
+                  <span
+                    className="flex-shrink-0"
+                    style={{ width: 8, height: 8, borderRadius: 999, background: meta.color }}
+                    aria-label={meta.label}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[var(--cds-alias-typography-color-400)] truncate">{r.signature}</div>
+                    <div
+                      className="text-[11px] text-[var(--cds-alias-typography-color-200)] truncate"
+                      style={{ fontFamily: "var(--qz-font-mono)" }}
+                    >
+                      {route}
+                    </div>
+                  </div>
+                  {r.action === "blocked" ? (
+                    <span
+                      className="label label-danger flex-shrink-0"
+                      style={{ fontFamily: "var(--qz-font-mono)", fontSize: 10, letterSpacing: "0.06em" }}
+                    >
+                      Blocked
+                    </span>
+                  ) : (
+                    <span
+                      className="label label-success flex-shrink-0"
+                      style={{ fontFamily: "var(--qz-font-mono)", fontSize: 10, letterSpacing: "0.06em" }}
+                    >
+                      Allowed
+                    </span>
+                  )}
+                  <span
+                    className="text-[11px] text-[var(--cds-alias-typography-color-200)] flex-shrink-0 text-right"
+                    style={{ fontFamily: "var(--qz-font-mono)" }}
+                  >
+                    {alertTime(r.ts)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

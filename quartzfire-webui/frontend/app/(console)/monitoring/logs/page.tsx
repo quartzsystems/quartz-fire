@@ -16,7 +16,7 @@
 // it no longer appears in.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eraser, Pause, Play, RotateCw, Search } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
@@ -54,10 +54,16 @@ function SourcePill({ source }: { source: UnifiedSource }) {
   return <span className={`badge ${m.badge}`}>{m.label}</span>;
 }
 
+const pillStyle: React.CSSProperties = {
+  fontFamily: "var(--qz-font-mono)",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+};
+
 function ActionPill({ action }: { action: UnifiedAction }) {
-  if (action === "allowed") return <span className="badge badge-ok">Allowed</span>;
-  if (action === "blocked") return <span className="badge badge-crit">Blocked</span>;
-  return <span className="badge badge-warn">Alert</span>;
+  if (action === "allowed") return <span className="label label-success" style={pillStyle}>Allowed</span>;
+  if (action === "blocked") return <span className="label label-danger" style={pillStyle}>Blocked</span>;
+  return <span className="label label-warning" style={pillStyle}>Alert</span>;
 }
 
 const time = (ts: number) =>
@@ -329,30 +335,31 @@ export default function UnifiedLogsPage() {
   const resize = useColumnResize("logs", cols.map((c) => ({ key: c.key, width: c.width })));
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Logs
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2>Logs</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Every traffic and security event in one live, time-sorted pane — firewall, content filtering, and IPS / App Control / Geolocation alerts
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
+      <div>
         <div className="flex flex-col gap-3">
           {/* Controls */}
           <div className="flex items-center gap-3 flex-wrap">
             <div className="relative">
-              <Search size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]" />
+              <Icon
+                shape="search"
+                size={14}
+                className="absolute left-[9px] top-1/2 -translate-y-1/2"
+                style={{ color: "var(--cds-alias-typography-color-200)" }}
+              />
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Filter logs…"
-                className="rounded-md pl-8 pr-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[240px]"
-                style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
+                className="clr-input"
+                style={{ paddingLeft: 30, width: 240, maxWidth: 240 }}
               />
             </div>
 
@@ -368,13 +375,13 @@ export default function UnifiedLogsPage() {
 
             <div className="ml-auto flex items-center gap-3">
               <ColumnsMenu vis={vis} />
-              <Button kind="secondary" size="sm" icon={RotateCw} onClick={refresh}>
+              <Button kind="secondary" size="sm" icon="refresh" onClick={refresh}>
                 Refresh
               </Button>
-              <Button kind="secondary" size="sm" icon={paused ? Play : Pause} onClick={togglePause}>
+              <Button kind="secondary" size="sm" icon={paused ? "play" : "pause"} onClick={togglePause}>
                 {paused ? "Resume" : "Pause"}
               </Button>
-              <Button kind="secondary" size="sm" icon={Eraser} onClick={clear}>
+              <Button kind="secondary" size="sm" icon="times" onClick={clear}>
                 Clear
               </Button>
               <span className="inline-flex items-center gap-[6px] text-[12px] text-[var(--qz-fg-4)]">
@@ -382,10 +389,10 @@ export default function UnifiedLogsPage() {
                   className="inline-block w-[7px] h-[7px] rounded-full"
                   style={{
                     background: paused
-                      ? "var(--qz-fg-4)"
+                      ? "var(--cds-alias-typography-color-200)"
                       : stream === "live"
-                        ? "var(--qz-success)"
-                        : "var(--qz-warn)",
+                        ? "var(--cds-alias-status-success)"
+                        : "var(--cds-alias-status-warning)",
                   }}
                 />
                 {paused ? "Paused" : stream === "live" ? "Live" : stream === "connecting" ? "Connecting…" : "Reconnecting…"}
@@ -420,7 +427,7 @@ export default function UnifiedLogsPage() {
           </div>
 
           {/* Table */}
-          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-subtle)" }}>
             <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
               <colgroup>
                 {cols.map((c) => (
@@ -466,7 +473,7 @@ export default function UnifiedLogsPage() {
             </table>
           </div>
 
-          <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+          <p className="clr-secondary m-0">
             The newest {MAX_ROWS} events are kept. Firewall traffic streams live; Content Filtering is polled every {CF_POLL_MS / 1000}s.
             SSL-intercepted HTTPS appears under Content Filtering, not Firewall.
           </p>

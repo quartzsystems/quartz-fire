@@ -9,8 +9,8 @@
     "test": "node --test --no-warnings --experimental-strip-types --import ./test/register.mjs \"test/**/*.test.ts\""
   },
   "dependencies": {
+    "@clr/icons": "^13.0.2",
     "cobe": "^2.0.1",
-    "lucide-react": "^1.21.0",
     "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1"

@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Eraser, Pause, Play, RotateCw, Search } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
@@ -62,7 +62,7 @@ function ActionPill({ action }: { action: Row["action"] }) {
   return <span className="badge badge-warn">Reject</span>;
 }
 
-const dash = <span className="text-[var(--qz-fg-4)]">—</span>;
+const dash = <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;
 
 const time = (ts: number) =>
   ts ? new Date(ts).toLocaleTimeString(undefined, { hour12: false }) : "—";
@@ -79,7 +79,7 @@ interface MonCol {
 }
 
 const MONITOR_COLUMNS: MonCol[] = [
-  { key: "time", header: "Time", width: 90, className: "mono text-[var(--qz-fg-3)]" },
+  { key: "time", header: "Time", width: 90, className: "mono text-[var(--cds-alias-typography-color-300)]" },
   { key: "action", header: "Action", width: 100 },
   { key: "rule", header: "Rule", ellipsis: true },
   { key: "src", header: "Source", className: "mono", ellipsis: true },
@@ -87,7 +87,7 @@ const MONITOR_COLUMNS: MonCol[] = [
   { key: "dst", header: "Destination", className: "mono", ellipsis: true },
   { key: "dpt", header: "Dst Port", width: 70, className: "mono" },
   { key: "proto", header: "Protocol", width: 90, className: "mono" },
-  { key: "iface", header: "Interface", width: 140, className: "mono text-[var(--qz-fg-3)]" },
+  { key: "iface", header: "Interface", width: 140, className: "mono text-[var(--cds-alias-typography-color-300)]" },
 ];
 
 function monitorCell(
@@ -115,7 +115,7 @@ function monitorCell(
         <>
           <Link
             href="/firewall/rules"
-            className="no-underline text-[var(--qz-fg-1)] hover:text-[var(--qz-accent)]"
+            className="no-underline text-[var(--cds-alias-typography-color-450)] hover:text-[var(--cds-alias-interaction-action)]"
             title={
               r.rule === null
                 ? `${scopeLabel(r.chain)} default action`
@@ -125,7 +125,7 @@ function monitorCell(
             {ruleLabel(r)}
           </Link>
           {r.chain !== "forward" && (
-            <span className="text-[11px] text-[var(--qz-fg-4)]"> · {scopeLabel(r.chain)}</span>
+            <span className="text-[11px] text-[var(--cds-alias-typography-color-200)]"> · {scopeLabel(r.chain)}</span>
           )}
         </>
       );
@@ -142,7 +142,7 @@ function monitorCell(
         <>
           {r.proto ?? "—"}
           {r.proto === "icmp" && r.icmp_type != null && (
-            <span className="text-[var(--qz-fg-4)]"> t{r.icmp_type}</span>
+            <span className="text-[var(--cds-alias-typography-color-200)]"> t{r.icmp_type}</span>
           )}
         </>
       );
@@ -379,72 +379,67 @@ export default function TrafficMonitorPage() {
   const resize = useColumnResize("firewall-monitor", cols.map((c) => ({ key: c.key, width: c.width })));
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Traffic Monitor
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Traffic Monitor</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Live traffic and the firewall rule each connection hit — one entry per new connection
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        <div className="flex flex-col gap-3">
-          {/* Logging setup banner */}
-          {configState === "ready" && !logging.complete && (
-            <div
-              className="flex items-center gap-3 px-3 py-2 rounded-md flex-wrap"
-              style={{
-                background: "var(--qz-accent-soft)",
-                border: "1px solid color-mix(in oklab, var(--qz-accent) 30%, transparent)",
-              }}
-            >
-              <AlertTriangle size={15} className="text-[var(--qz-fg-2)] flex-shrink-0" />
-              <span className="text-[13px] text-[var(--qz-fg-1)]">
-                {logging.total_rules === 0 && logging.chains_without_default_log.length === 3
-                  ? "Traffic logging is off — nothing will appear here until it's enabled."
-                  : `Logging is only partially enabled (${logging.logged_rules} of ${logging.total_rules} rules) — some traffic won't appear here.`}
-              </span>
-              <div className="ml-auto">
-                <Button kind="primary" size="sm" onClick={enableLogging} disabled={enabling}>
-                  {enabling ? "Enabling…" : "Enable logging"}
-                </Button>
-              </div>
+      <div className="flex flex-col gap-3">
+        {/* Logging setup banner */}
+        {configState === "ready" && !logging.complete && (
+          <div className="alert alert-warning alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">
+              {logging.total_rules === 0 && logging.chains_without_default_log.length === 3
+                ? "Traffic logging is off — nothing will appear here until it's enabled."
+                : `Logging is only partially enabled (${logging.logged_rules} of ${logging.total_rules} rules) — some traffic won't appear here.`}
             </div>
-          )}
-
-          {/* Controls */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative">
-              <Search size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Filter traffic…"
-                className="rounded-md pl-8 pr-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[240px]"
-                style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
-              />
+            <div className="alert-actions">
+              <Button kind="primary" size="sm" onClick={enableLogging} disabled={enabling}>
+                {enabling ? "Enabling…" : "Enable Logging"}
+              </Button>
             </div>
+          </div>
+        )}
 
-            <Segmented
-              items={[
-                { value: "all", label: "All" },
-                { value: "accept", label: "Allowed" },
-                { value: "blocked", label: "Blocked" },
-              ]}
-              value={actionFilter}
-              onChange={(v) => setActionFilter(v as typeof actionFilter)}
+        {/* Controls */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative">
+            <Icon
+              shape="search"
+              size={14}
+              className="absolute left-[9px] top-1/2 -translate-y-1/2"
+              style={{ color: "var(--cds-alias-typography-color-200)" }}
             />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter traffic…"
+              className="clr-input"
+              style={{ paddingLeft: 30, width: 240, maxWidth: 240 }}
+            />
+          </div>
 
+          <Segmented
+            items={[
+              { value: "all", label: "All" },
+              { value: "accept", label: "Allowed" },
+              { value: "blocked", label: "Blocked" },
+            ]}
+            value={actionFilter}
+            onChange={(v) => setActionFilter(v as typeof actionFilter)}
+          />
+
+          <div className="clr-select-wrapper" style={{ width: "auto" }}>
             <select
               value={protoFilter}
               onChange={(e) => setProtoFilter(e.target.value)}
               title="Filter by protocol"
-              className="rounded-md px-2 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-              style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+              className="clr-select"
+              style={{ width: "auto", minWidth: 100 }}
             >
               <option value="all">All protocols</option>
               <option value="tcp">TCP</option>
@@ -452,13 +447,15 @@ export default function TrafficMonitorPage() {
               <option value="icmp">ICMP</option>
               <option value="other">Other</option>
             </select>
+          </div>
 
+          <div className="clr-select-wrapper" style={{ width: "auto" }}>
             <select
               value={ifaceFilter}
               onChange={(e) => setIfaceFilter(e.target.value)}
               title="Filter by interface (matches either side)"
-              className="rounded-md px-2 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-              style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+              className="clr-select"
+              style={{ width: "auto", minWidth: 100 }}
             >
               <option value="all">All interfaces</option>
               {ifaceOptions.map((n) => (
@@ -467,13 +464,15 @@ export default function TrafficMonitorPage() {
                 </option>
               ))}
             </select>
+          </div>
 
+          <div className="clr-select-wrapper" style={{ width: "auto", maxWidth: 220 }}>
             <select
               value={ruleFilter}
               onChange={(e) => setRuleFilter(e.target.value)}
               title="Filter by the rule that fired"
-              className="rounded-md px-2 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-              style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)", maxWidth: 220 }}
+              className="clr-select"
+              style={{ width: "auto", minWidth: 100, maxWidth: 220 }}
             >
               <option value="all">All rules</option>
               <option value="default">Default action</option>
@@ -483,101 +482,110 @@ export default function TrafficMonitorPage() {
                 </option>
               ))}
             </select>
-
-            <div className="ml-auto flex items-center gap-3">
-              <ColumnsMenu vis={vis} />
-              <Button kind="secondary" size="sm" icon={RotateCw} onClick={refresh}>
-                Refresh
-              </Button>
-              <Button kind="secondary" size="sm" icon={paused ? Play : Pause} onClick={togglePause}>
-                {paused ? "Resume" : "Pause"}
-              </Button>
-              <Button kind="secondary" size="sm" icon={Eraser} onClick={clear}>
-                Clear
-              </Button>
-              <span className="inline-flex items-center gap-[6px] text-[12px] text-[var(--qz-fg-4)]">
-                <span
-                  className="inline-block w-[7px] h-[7px] rounded-full"
-                  style={{
-                    background: paused
-                      ? "var(--qz-fg-4)"
-                      : stream === "live"
-                        ? "var(--qz-success)"
-                        : "var(--qz-warn)",
-                  }}
-                />
-                {paused ? "Paused" : stream === "live" ? "Live" : stream === "connecting" ? "Connecting…" : "Reconnecting…"}
-                {" · "}
-                {visible.length} {visible.length === 1 ? "entry" : "entries"}
-              </span>
-            </div>
           </div>
 
-          {/* Table */}
-          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-            <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
-              <colgroup>
-                {cols.map((c) => (
-                  <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+          <div className="ml-auto flex items-center gap-3">
+            <ColumnsMenu vis={vis} />
+            <Button kind="secondary" size="sm" icon="refresh" onClick={refresh}>
+              Refresh
+            </Button>
+            <Button kind="secondary" size="sm" icon={paused ? "play" : "pause"} onClick={togglePause}>
+              {paused ? "Resume" : "Pause"}
+            </Button>
+            <Button kind="secondary" size="sm" icon="eraser" onClick={clear}>
+              Clear
+            </Button>
+            <span
+              className="inline-flex items-center gap-[6px]"
+              style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}
+            >
+              <span
+                className="inline-block w-[7px] h-[7px] rounded-full"
+                style={{
+                  background: paused
+                    ? "var(--cds-alias-typography-color-200)"
+                    : stream === "live"
+                      ? "var(--cds-alias-status-success)"
+                      : "var(--cds-alias-status-warning)",
+                }}
+              />
+              {paused ? "Paused" : stream === "live" ? "Live" : stream === "connecting" ? "Connecting…" : "Reconnecting…"}
+              {" · "}
+              {visible.length} {visible.length === 1 ? "entry" : "entries"}
+            </span>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+          <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
+            <colgroup>
+              {cols.map((c) => (
+                <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                {cols.map((c, i) => (
+                  <th key={c.key} {...resize.thProps(i)}>
+                    {c.header}
+                    {resize.handle(i)}
+                  </th>
                 ))}
-              </colgroup>
-              <thead>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.length === 0 ? (
                 <tr>
-                  {cols.map((c, i) => (
-                    <th key={c.key} {...resize.thProps(i)}>
-                      {c.header}
-                      {resize.handle(i)}
-                    </th>
-                  ))}
+                  <td
+                    colSpan={cols.length}
+                    className="text-center text-[var(--cds-alias-typography-color-200)]"
+                    style={{ cursor: "default" }}
+                  >
+                    {rows.length === 0
+                      ? "Waiting for traffic… (only logged rules and default-log traffic appear here)"
+                      : "No entries match the filter."}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {visible.length === 0 ? (
-                  <tr>
-                    <td colSpan={cols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
-                      {rows.length === 0
-                        ? "Waiting for traffic… (only logged rules and default-log traffic appear here)"
-                        : "No entries match the filter."}
-                    </td>
+              ) : (
+                visible.map((r) => (
+                  <tr key={r.id} style={{ cursor: "default" }}>
+                    {cols.map((c) => (
+                      <td
+                        key={c.key}
+                        className={c.className}
+                        style={c.ellipsis ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : undefined}
+                      >
+                        {monitorCell(c.key, r, ruleLabel, scopeLabel)}
+                      </td>
+                    ))}
                   </tr>
-                ) : (
-                  visible.map((r) => (
-                    <tr key={r.id} style={{ cursor: "default" }}>
-                      {cols.map((c) => (
-                        <td
-                          key={c.key}
-                          className={c.className}
-                          style={c.ellipsis ? { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : undefined}
-                        >
-                          {monitorCell(c.key, r, ruleLabel, scopeLabel)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-          <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
-            Entries stream from the firewall&apos;s kernel log; the newest {MAX_ROWS} are kept. Each rule&apos;s
-            logging can be toggled individually when editing it under{" "}
-            <Link href="/firewall/rules" className="text-[var(--qz-fg-3)]">
-              Rules
-            </Link>
-            .
-          </p>
+        <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+          Entries stream from the firewall&apos;s kernel log; the newest {MAX_ROWS} are kept. Each rule&apos;s
+          logging can be toggled individually when editing it under{" "}
+          <Link href="/firewall/rules" className="text-[var(--cds-alias-typography-color-300)]">
+            Rules
+          </Link>
+          .
+        </p>
 
-          {configState === "error" && (
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-fg-4)]">
-              <AlertTriangle size={14} />
-              Couldn&apos;t read the firewall config — rule names are unavailable.
-              <Button kind="secondary" size="sm" icon={RotateCw} onClick={loadConfig}>
+        {configState === "error" && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">Couldn&apos;t read the firewall config — rule names are unavailable.</div>
+            <div className="alert-actions">
+              <Button kind="secondary" size="sm" icon="refresh" onClick={loadConfig}>
                 Retry
               </Button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

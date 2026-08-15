@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { X } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 
-/// Centered overlay dialog. Clicking the backdrop or pressing Escape closes it.
+/// Clarity modal. Clicking the backdrop or pressing Escape closes it.
+/// Children render inside the padded dialog body; compose with ModalHeader
+/// and (optionally) ModalFooter.
 export function ModalShell({
   onClose,
   maxWidth = 520,
@@ -22,35 +24,18 @@ export function ModalShell({
   }, [onClose]);
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.55)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 50,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "var(--qz-ink-0)",
-          border: "1px solid var(--qz-border)",
-          borderRadius: 12,
-          boxShadow: "0 24px 64px rgba(0,0,0,0.4)",
-          width: "100%",
-          maxWidth,
-          maxHeight: "90vh",
-          overflowY: "auto",
-          padding: 28,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
+    <>
+      <div className="modal-backdrop" onClick={onClose} />
+      <div className="modal" onClick={onClose}>
+        <div className="modal-dialog" style={{ width: maxWidth }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content">
+            <div className="modal-body" style={{ padding: "20px 24px" }}>
+              {children}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -64,20 +49,25 @@ export function ModalHeader({
   onClose: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between mb-6">
+    <div className="flex items-start justify-between mb-5">
       <div>
-        <h2 className="text-[17px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.01em" }}>
+        <h3 className="clr-section" style={{ color: "var(--cds-alias-typography-color-450)" }}>
           {title}
-        </h2>
-        {subtitle && <p className="text-[13px] text-[var(--qz-fg-3)] m-0 mt-[3px]">{subtitle}</p>}
+        </h3>
+        {subtitle && (
+          <p className="clr-secondary" style={{ marginTop: 3 }}>
+            {subtitle}
+          </p>
+        )}
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="text-[var(--qz-fg-4)] hover:text-[var(--qz-fg-1)] transition-colors cursor-pointer bg-transparent border-0 p-0 mt-[2px]"
-      >
-        <X size={18} />
+      <button type="button" className="close" aria-label="Close" onClick={onClose}>
+        <Icon shape="times" size={18} />
       </button>
     </div>
   );
+}
+
+/// Right-aligned action row for the bottom of a modal (primary action last).
+export function ModalFooter({ children }: { children: React.ReactNode }) {
+  return <div className="flex justify-end gap-2 mt-6">{children}</div>;
 }

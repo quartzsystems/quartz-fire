@@ -11,8 +11,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
 
@@ -34,7 +34,7 @@ const AC_RULE_COLS = [
 ];
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { useDashboard } from "@/lib/DashboardContext";
 import {
   AcAction,
@@ -59,8 +59,10 @@ import { acMatchFromSelections } from "@/lib/rule-services";
 
 type Tab = "actions" | "policies" | "alerts";
 
-const inputStyle = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const dash = <span className="text-[var(--qz-fg-4)]">—</span>;
+const dash = <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;
+
+/// Clarity status pill (mono uppercase), per the design reference.
+const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" } as const;
 
 /// The ct-mark ACTION_ID field is 3 bits → at most 7 actions bound at once.
 const MAX_BOUND_ACTIONS = 7;
@@ -131,14 +133,14 @@ function ActionsTab({
   return (
     <div className="flex flex-col gap-4 max-w-[980px]">
       <div className="flex items-center gap-3">
-        <p className="text-[13px] text-[var(--qz-fg-4)] m-0 flex-1">
+        <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0 flex-1">
           An action decides allow or block per application and per category. Attach one to firewall
           rules on the Policies tab. Application rules take precedence over category rules.
         </p>
         <Button
           kind="primary"
           size="sm"
-          icon={Plus}
+          icon="plus"
           onClick={() => {
             setCreating(true);
             setEditing({
@@ -147,11 +149,11 @@ function ActionsTab({
             });
           }}
         >
-          Add action
+          Add Action
         </Button>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {AC_ACTION_COLS.map((c) => (
@@ -173,7 +175,7 @@ function ActionsTab({
           <tbody>
             {actionNames.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={5} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
                   No actions yet — add one to get started.
                 </td>
               </tr>
@@ -190,37 +192,32 @@ function ActionsTab({
                       setEditing({ name, action: structuredClone(a) });
                     }}
                   >
-                    <td className="font-semibold text-[var(--qz-fg-1)]">{name}</td>
-                    <td className="text-[var(--qz-fg-3)]">{summarize(a)}</td>
+                    <td className="font-semibold text-[var(--cds-alias-typography-color-450)]">{name}</td>
+                    <td className="text-[var(--cds-alias-typography-color-300)]">{summarize(a)}</td>
                     <td>{verdictBadge(a.default_action)}</td>
-                    <td className="mono text-[var(--qz-fg-3)]">{uses > 0 ? uses : dash}</td>
+                    <td className="mono text-[var(--cds-alias-typography-color-300)]">{uses > 0 ? uses : dash}</td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button
-                          className="icon-btn"
+                          type="button"
+                          className="btn btn-sm btn-link-neutral btn-icon"
                           title="Edit"
                           onClick={() => {
                             setCreating(false);
                             setEditing({ name, action: structuredClone(a) });
                           }}
-                          style={{ background: "transparent", border: 0, cursor: "pointer", color: "var(--qz-fg-3)" }}
                         >
-                          <Pencil size={15} />
+                          <Icon shape="pencil" size={15} />
                         </button>
                         <button
-                          className="icon-btn"
+                          type="button"
+                          className="btn btn-sm btn-link-neutral btn-icon"
                           title={uses > 0 ? "In use by policies — detach first" : "Remove"}
                           disabled={uses > 0}
                           onClick={() => removeAction(name)}
-                          style={{
-                            background: "transparent",
-                            border: 0,
-                            cursor: uses > 0 ? "not-allowed" : "pointer",
-                            color: uses > 0 ? "var(--qz-fg-4)" : "var(--qz-danger)",
-                            opacity: uses > 0 ? 0.5 : 1,
-                          }}
+                          style={{ color: uses > 0 ? undefined : "var(--cds-alias-status-danger)" }}
                         >
-                          <Trash2 size={15} />
+                          <Icon shape="trash" size={15} />
                         </button>
                       </div>
                     </td>
@@ -232,7 +229,7 @@ function ActionsTab({
         </table>
       </div>
 
-      <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+      <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0">
         Signature set:{" "}
         {catalog.available
           ? `nDPI ${catalog.ndpi_version} · ${catalog.num_protocols} applications`
@@ -340,49 +337,50 @@ function ActionEditor({
       />
 
       <div className="flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <label className="text-[13px] text-[var(--qz-fg-3)] w-[70px]">Name</label>
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <label className="clr-control-label">Name</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Global"
-            className="flex-1 rounded-md px-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none"
-            style={inputStyle}
+            className="clr-input"
+            style={{ maxWidth: "none" }}
           />
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative">
-            <Search size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]" />
+            <Icon shape="search" size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--cds-alias-typography-color-200)]" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search applications…"
-              className="rounded-md pl-8 pr-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[220px]"
-              style={inputStyle}
+              className="clr-input"
+              style={{ width: 220, maxWidth: "none", paddingLeft: 30 }}
             />
           </div>
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="rounded-md px-2 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-            style={inputStyle}
-          >
-            <option value="all">All categories</option>
-            {groups.map((g) => (
-              <option key={g.category} value={g.category}>
-                {g.category}
-              </option>
-            ))}
-          </select>
+          <div className="clr-select-wrapper" style={{ width: "auto" }}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="clr-select"
+            >
+              <option value="all">All categories</option>
+              {groups.map((g) => (
+                <option key={g.category} value={g.category}>
+                  {g.category}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div
           className="rounded-md overflow-auto"
-          style={{ border: "1px solid var(--qz-border)", maxHeight: "42vh" }}
+          style={{ border: "1px solid var(--cds-alias-object-border-color)", maxHeight: "42vh" }}
         >
           {visibleGroups.length === 0 ? (
-            <div className="text-center text-[13px] text-[var(--qz-fg-4)] py-6">No applications match.</div>
+            <div className="text-center text-[13px] text-[var(--cds-alias-typography-color-200)] py-6">No applications match.</div>
           ) : (
             visibleGroups.map((g) => {
               const catVerdict = action.categories[g.category];
@@ -390,32 +388,34 @@ function ActionEditor({
                 <div key={g.category}>
                   <div
                     className="flex items-center gap-3 px-3 py-[7px] sticky top-0"
-                    style={{ background: "var(--qz-input-bg)", borderBottom: "1px solid var(--qz-border)" }}
+                    style={{ background: "var(--cds-alias-object-container-background-shade)", borderBottom: "1px solid var(--cds-alias-object-border-subtle)" }}
                   >
-                    <span className="text-[13px] font-semibold text-[var(--qz-fg-1)] flex-1">{g.category}</span>
-                    <span className="text-[11px] text-[var(--qz-fg-4)]">Select by category:</span>
-                    <button
-                      onClick={() => setCategoryVerdict(g.category, "allow")}
-                      className="text-[11px] px-2 py-[2px] rounded"
-                      style={{ border: "1px solid var(--qz-border)", background: catVerdict === "allow" ? "var(--qz-accent-soft)" : "transparent", color: "var(--qz-fg-2)", cursor: "pointer" }}
-                    >
-                      Allow all
-                    </button>
-                    <button
-                      onClick={() => setCategoryVerdict(g.category, "block")}
-                      className="text-[11px] px-2 py-[2px] rounded"
-                      style={{ border: "1px solid var(--qz-border)", background: catVerdict === "block" ? "color-mix(in oklab, var(--qz-danger) 15%, transparent)" : "transparent", color: "var(--qz-fg-2)", cursor: "pointer" }}
-                    >
-                      Block all
-                    </button>
+                    <span className="text-[13px] font-semibold text-[var(--cds-alias-typography-color-450)] flex-1">{g.category}</span>
+                    <span className="text-[11px] text-[var(--cds-alias-typography-color-200)]">Select by category:</span>
+                    <span className="btn-group">
+                      <button
+                        type="button"
+                        onClick={() => setCategoryVerdict(g.category, "allow")}
+                        className={`btn btn-sm${catVerdict === "allow" ? " btn-primary" : ""}`}
+                      >
+                        Allow All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryVerdict(g.category, "block")}
+                        className={`btn btn-sm${catVerdict === "block" ? " btn-danger" : ""}`}
+                      >
+                        Block All
+                      </button>
+                    </span>
                     {catVerdict && (
                       <button
+                        type="button"
                         onClick={() => clearCategory(g.category)}
-                        className="text-[11px] text-[var(--qz-fg-4)]"
-                        style={{ background: "transparent", border: 0, cursor: "pointer" }}
+                        className="btn btn-sm btn-link-neutral"
                         title="Clear category rule"
                       >
-                        clear
+                        Clear
                       </button>
                     )}
                   </div>
@@ -426,10 +426,10 @@ function ActionEditor({
                       <div
                         key={app.id}
                         className="flex items-center gap-3 px-3 py-[6px]"
-                        style={{ borderBottom: "1px solid var(--qz-border)" }}
+                        style={{ borderBottom: "1px solid var(--cds-alias-object-border-subtle)" }}
                       >
-                        <span className="text-[13px] text-[var(--qz-fg-1)] flex-1">{app.name}</span>
-                        <span className="text-[11px] text-[var(--qz-fg-4)] w-[64px] text-right">
+                        <span className="text-[13px] text-[var(--cds-alias-typography-color-450)] flex-1">{app.name}</span>
+                        <span className="text-[11px] text-[var(--cds-alias-typography-color-200)] w-[64px] text-right">
                           {explicit ? "app rule" : action.categories[app.category] ? "category" : "default"}
                         </span>
                         <Segmented
@@ -453,7 +453,7 @@ function ActionEditor({
 
         <div className="flex items-center gap-5 flex-wrap">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] text-[var(--qz-fg-3)]">When application does not match:</span>
+            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)]">When application does not match:</span>
             <Segmented
               items={[
                 { value: "allow", label: "Allow" },
@@ -464,7 +464,7 @@ function ActionEditor({
             />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[13px] text-[var(--qz-fg-3)]">Block mode:</span>
+            <span className="text-[13px] text-[var(--cds-alias-typography-color-300)]">Block mode:</span>
             <Segmented
               items={[
                 { value: "drop", label: "Drop" },
@@ -476,14 +476,14 @@ function ActionEditor({
           </div>
         </div>
 
-        <div className="flex items-center gap-3 justify-end mt-1">
+        <ModalFooter>
           <Button kind="secondary" onClick={onCancel}>
             Cancel
           </Button>
           <Button kind="primary" onClick={save}>
-            {isNew ? "Add action" : "Save action"}
+            {isNew ? "Add Action" : "Save Action"}
           </Button>
-        </div>
+        </ModalFooter>
       </div>
     </ModalShell>
   );
@@ -585,16 +585,16 @@ function PoliciesTab({
     onSave({ ...config, bindings });
   };
 
-  if (state === "loading") return <div className="text-[13px] text-[var(--qz-fg-4)]">Loading firewall rules…</div>;
+  if (state === "loading") return <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading firewall rules…</div>;
   if (state === "error")
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-          <AlertTriangle size={15} />
-          {errorMsg}
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
         </div>
         <div>
-          <Button kind="secondary" icon={RotateCw} onClick={load}>
+          <Button kind="secondary" icon="refresh" onClick={load}>
             Retry
           </Button>
         </div>
@@ -605,14 +605,14 @@ function PoliciesTab({
 
   return (
     <div className="flex flex-col gap-3 max-w-[900px]">
-      <p className="text-[13px] text-[var(--qz-fg-4)] m-0">
+      <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0">
         Attach an Application Control action to an Allow rule to classify and enforce its traffic.
         Rules for routed traffic are eligible — not traffic to or from the firewall itself. At most{" "}
         {MAX_BOUND_ACTIONS} actions can be active at once ({boundActionCount} in use
         {saving ? " · Saving…" : ""}).
       </p>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {AC_RULE_COLS.map((c) => (
@@ -632,9 +632,9 @@ function PoliciesTab({
           <tbody>
             {eligible.length === 0 ? (
               <tr>
-                <td colSpan={5} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={5} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
                   No eligible Allow rules — create them under{" "}
-                  <Link href="/firewall/rules" className="text-[var(--qz-fg-3)]">
+                  <Link href="/firewall/rules" className="text-[var(--cds-alias-typography-color-300)]">
                     Firewall → Rules
                   </Link>
                   .
@@ -645,33 +645,35 @@ function PoliciesTab({
                 const bound = bindingByRule.get(r.rule) ?? "";
                 return (
                   <tr key={r.rule} style={{ cursor: "default", opacity: r.enabled ? 1 : 0.55 }}>
-                    <td className="mono text-[var(--qz-fg-3)]">{r.rule}</td>
+                    <td className="mono text-[var(--cds-alias-typography-color-300)]">{r.rule}</td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.name ?? <span className="text-[var(--qz-fg-4)]">Rule {r.rule}</span>}
+                      {r.name ?? <span className="text-[var(--cds-alias-typography-color-200)]">Rule {r.rule}</span>}
                     </td>
-                    <td className="mono text-[12px] text-[var(--qz-fg-3)]">
+                    <td className="mono text-[12px] text-[var(--cds-alias-typography-color-300)]">
                       {(r.from.iface ?? "any") + " → " + (r.to.iface ?? "any")}
                     </td>
                     <td>
                       <span className="badge badge-ok">Allow</span>
                     </td>
                     <td onMouseDown={(e) => e.stopPropagation()}>
-                      <select
-                        value={bound}
-                        onChange={(e) => setRuleAction(r, e.target.value || null)}
-                        className="rounded-md px-2 py-[6px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer w-full"
-                        style={{
-                          ...inputStyle,
-                          color: bound ? "var(--qz-accent)" : "var(--qz-fg-4)",
-                        }}
-                      >
-                        <option value="">None</option>
-                        {actionNames.map((n) => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+                        <select
+                          value={bound}
+                          onChange={(e) => setRuleAction(r, e.target.value || null)}
+                          className="clr-select"
+                          style={{
+                            maxWidth: "none",
+                            color: bound ? "var(--cds-alias-interaction-action)" : "var(--cds-alias-typography-color-200)",
+                          }}
+                        >
+                          <option value="">None</option>
+                          {actionNames.map((n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -701,10 +703,20 @@ interface AcAlertCol {
 }
 
 const AC_ALERT_COLUMNS: AcAlertCol[] = [
-  { key: "time", header: "Time", width: 90, className: "mono text-[var(--qz-fg-3)]", cell: (r) => (r.ts ? new Date(r.ts).toLocaleTimeString(undefined, { hour12: false }) : "—") },
-  { key: "action", header: "Action", width: 90, cell: (r) => (r.action === "block" ? <span className="badge badge-crit">Blocked</span> : <span className="badge badge-ok">Allowed</span>) },
-  { key: "app", header: "Application", width: 150, className: "text-[var(--qz-fg-1)]", cell: (r) => r.app },
-  { key: "category", header: "Category", width: 130, className: "text-[var(--qz-fg-3)]", cell: (r) => r.category ?? dash },
+  { key: "time", header: "Time", width: 90, className: "mono text-[var(--cds-alias-typography-color-300)]", cell: (r) => (r.ts ? new Date(r.ts).toLocaleTimeString(undefined, { hour12: false }) : "—") },
+  {
+    key: "action",
+    header: "Action",
+    width: 90,
+    cell: (r) =>
+      r.action === "block" ? (
+        <span className="label label-danger" style={pillStyle}>BLOCKED</span>
+      ) : (
+        <span className="label label-success" style={pillStyle}>ALLOWED</span>
+      ),
+  },
+  { key: "app", header: "Application", width: 150, className: "text-[var(--cds-alias-typography-color-450)]", cell: (r) => r.app },
+  { key: "category", header: "Category", width: 130, className: "text-[var(--cds-alias-typography-color-300)]", cell: (r) => r.category ?? dash },
   {
     key: "srcdst",
     header: "Source → Destination",
@@ -713,15 +725,15 @@ const AC_ALERT_COLUMNS: AcAlertCol[] = [
     cell: (r) => (
       <>
         {r.src ?? "?"}
-        {r.spt != null && <span className="text-[var(--qz-fg-4)]">:{r.spt}</span>}
+        {r.spt != null && <span className="text-[var(--cds-alias-typography-color-200)]">:{r.spt}</span>}
         {" → "}
         {r.dst ?? "?"}
-        {r.dpt != null && <span className="text-[var(--qz-fg-4)]">:{r.dpt}</span>}
+        {r.dpt != null && <span className="text-[var(--cds-alias-typography-color-200)]">:{r.dpt}</span>}
       </>
     ),
   },
   { key: "sni", header: "SNI / Host", width: 150, className: "mono text-[12px]", ellipsis: true, cell: (r) => r.sni ?? dash },
-  { key: "policy", header: "Policy", width: 130, className: "text-[12px] text-[var(--qz-fg-3)]", cell: (r) => r.action_name || dash },
+  { key: "policy", header: "Policy", width: 130, className: "text-[12px] text-[var(--cds-alias-typography-color-300)]", cell: (r) => r.action_name || dash },
 ];
 
 function AlertsTab() {
@@ -822,13 +834,13 @@ function AlertsTab() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
-          <Search size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]" />
+          <Icon shape="search" size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--cds-alias-typography-color-200)]" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter alerts…"
-            className="rounded-md pl-8 pr-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[240px]"
-            style={inputStyle}
+            className="clr-input"
+            style={{ width: 240, maxWidth: "none", paddingLeft: 30 }}
           />
         </div>
         <Segmented
@@ -845,7 +857,7 @@ function AlertsTab() {
           <Button
             kind="secondary"
             size="sm"
-            icon={RotateCw}
+            icon="refresh"
             onClick={() => {
               clear();
               setStream("connecting");
@@ -854,16 +866,16 @@ function AlertsTab() {
           >
             Refresh
           </Button>
-          <Button kind="secondary" size="sm" icon={paused ? Play : Pause} onClick={togglePause}>
+          <Button kind="secondary" size="sm" icon={paused ? "play" : "pause"} onClick={togglePause}>
             {paused ? "Resume" : "Pause"}
           </Button>
-          <Button kind="secondary" size="sm" icon={Eraser} onClick={clear}>
+          <Button kind="secondary" size="sm" icon="times" onClick={clear}>
             Clear
           </Button>
-          <span className="inline-flex items-center gap-[6px] text-[12px] text-[var(--qz-fg-4)]">
+          <span className="inline-flex items-center gap-[6px] text-[12px] text-[var(--cds-alias-typography-color-200)]">
             <span
               className="inline-block w-[7px] h-[7px] rounded-full"
-              style={{ background: paused ? "var(--qz-fg-4)" : stream === "live" ? "var(--qz-success)" : "var(--qz-warn)" }}
+              style={{ background: paused ? "var(--cds-alias-typography-color-200)" : stream === "live" ? "var(--cds-alias-status-success)" : "var(--cds-alias-status-warning)" }}
             />
             {paused ? "Paused" : stream === "live" ? "Live" : stream === "connecting" ? "Connecting…" : "Reconnecting…"}
             {" · "}
@@ -872,7 +884,7 @@ function AlertsTab() {
         </div>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={alertResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: alertResize.tableLayout }}>
           <colgroup>
             {cols.map((c) => (
@@ -892,7 +904,7 @@ function AlertsTab() {
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={cols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={cols.length} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
                   {rows.length === 0
                     ? "No alerts yet — they appear when classified traffic matches an action."
                     : "No alerts match the filter."}
@@ -904,7 +916,7 @@ function AlertsTab() {
                   key={r.key}
                   style={{
                     cursor: "default",
-                    background: r.action === "block" ? "color-mix(in oklab, var(--qz-danger) 7%, transparent)" : undefined,
+                    background: r.action === "block" ? "var(--cds-alias-status-danger-tint)" : undefined,
                   }}
                 >
                   {cols.map((c) => (
@@ -923,7 +935,7 @@ function AlertsTab() {
         </table>
       </div>
 
-      <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+      <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0">
         Live decisions stream from qfappd; history is read from the persistent event log on the device
         (survives reboots). The newest {MAX_ALERTS} are shown. Blocked rows are highlighted.
       </p>
@@ -983,86 +995,70 @@ export default function ApplicationControlPage() {
   );
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Application Control
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Application Control</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Identify applications with deep packet inspection (nDPI) and allow or block them per firewall rule
         </p>
       </div>
 
-      <div className="px-[36px] pb-4 flex-shrink-0">
-        <Tabs
-          items={[
-            { value: "actions", label: "Actions", count: Object.keys(config.actions).length },
-            { value: "policies", label: "Policies", count: config.bindings.length },
-            { value: "alerts", label: "Alerts" },
-          ]}
-          value={tab}
-          onChange={(v) => setTab(v as Tab)}
-          trailing={
-            status?.status?.policy_last_error || status?.apply?.ok === false ? (
-              <span
-                className="inline-flex items-center gap-[6px] text-[12px] text-[var(--qz-danger)]"
-                title={status?.status?.policy_last_error || status?.apply?.error}
-              >
-                <AlertTriangle size={13} /> Last apply rejected
-              </span>
-            ) : status?.running ? (
-              <span className="badge badge-ok">qfappd running</span>
-            ) : (
-              <span className="badge badge-muted">qfappd not reporting</span>
-            )
-          }
-        />
-      </div>
+      <Tabs
+        items={[
+          { value: "actions", label: "Actions", count: Object.keys(config.actions).length },
+          { value: "policies", label: "Policies", count: config.bindings.length },
+          { value: "alerts", label: "Alerts" },
+        ]}
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+        trailing={
+          status?.status?.policy_last_error || status?.apply?.ok === false ? (
+            <span
+              className="inline-flex items-center gap-[6px] text-[12px] text-[var(--cds-alias-status-danger)]"
+              title={status?.status?.policy_last_error || status?.apply?.error}
+            >
+              <Icon shape="exclamation-triangle" size={13} /> Last apply rejected
+            </span>
+          ) : status?.running ? (
+            <span className="badge badge-ok">qfappd running</span>
+          ) : (
+            <span className="badge badge-muted">qfappd not reporting</span>
+          )
+        }
+      />
 
       {status?.apply?.ok === false && (
-        <div
-          className="mx-[36px] mb-4 flex items-center gap-3 px-3 py-2 rounded-md flex-shrink-0"
-          style={{
-            background: "color-mix(in oklab, var(--qz-danger) 12%, transparent)",
-            border: "1px solid color-mix(in oklab, var(--qz-danger) 35%, transparent)",
-          }}
-        >
-          <AlertTriangle size={15} className="text-[var(--qz-danger)] flex-shrink-0" />
-          <span className="text-[13px] text-[var(--qz-fg-1)]">
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">
             The saved configuration failed validation and was <strong>not</strong> applied — the
             previously applied policy is still enforced. {status.apply.error}
-          </span>
+          </div>
         </div>
       )}
       {status?.apply?.ok === true &&
         status.settings_mtime != null &&
         status.settings_mtime > status.apply.desired_mtime && (
-          <div
-            className="mx-[36px] mb-4 flex items-center gap-3 px-3 py-2 rounded-md flex-shrink-0"
-            style={{
-              background: "color-mix(in oklab, var(--qz-warn, #d9a544) 12%, transparent)",
-              border: "1px solid color-mix(in oklab, var(--qz-warn, #d9a544) 35%, transparent)",
-            }}
-          >
-            <AlertTriangle size={15} className="text-[var(--qz-fg-2)] flex-shrink-0" />
-            <span className="text-[13px] text-[var(--qz-fg-1)]">
+          <div className="alert alert-warning alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">
               Saved changes have not been applied yet. This normally takes a second — if it
               persists, check <span className="mono">journalctl -u quartzfire-appcontrol-apply</span>{" "}
               on the device.
-            </span>
+            </div>
           </div>
         )}
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {state === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading Application Control…</div>}
+      <div>
+        {state === "loading" && <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading Application Control…</div>}
         {state === "error" && (
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
+            <div className="alert alert-danger alert-sm">
+              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+              <div className="alert-text">{errorMsg}</div>
             </div>
             <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>
+              <Button kind="secondary" icon="refresh" onClick={() => load()}>
                 Retry
               </Button>
             </div>

@@ -19,7 +19,7 @@ export interface PingPoint {
 }
 
 const LINE = DOWN_COLOR;
-const MISS = "var(--qz-danger)";
+const MISS = "var(--cds-alias-status-danger)";
 
 /** A "nice" upper bound for the y-axis: round the max latency up so the top
  *  gridline is a clean number and the line never touches the ceiling. */
@@ -127,11 +127,11 @@ export function PingChart({
                 x2={W - padR}
                 y1={yy}
                 y2={yy}
-                stroke="var(--qz-border)"
+                stroke="var(--cds-alias-object-border-subtle)"
                 strokeWidth={1}
                 strokeDasharray={f === 0 ? undefined : "3 3"}
               />
-              <text x={padL - 8} y={yy} textAnchor="end" dominantBaseline="middle" fontSize={11} fill="var(--qz-fg-4)">
+              <text x={padL - 8} y={yy} textAnchor="end" dominantBaseline="middle" fontSize={11} fill="var(--cds-alias-typography-color-200)">
                 {f === 0 ? "0" : ms.toFixed(yDecimals)}
               </text>
             </g>
@@ -143,25 +143,25 @@ export function PingChart({
           transform={`translate(14 ${padT + innerH / 2}) rotate(-90)`}
           textAnchor="middle"
           fontSize={11}
-          fill="var(--qz-fg-3)"
+          fill="var(--cds-alias-typography-color-300)"
         >
           Latency (ms)
         </text>
 
         {/* x ticks + labels */}
         {xTicks.map((s) => (
-          <text key={s} x={x(s)} y={H - padB + 16} textAnchor="middle" fontSize={11} fill="var(--qz-fg-4)">
+          <text key={s} x={x(s)} y={H - padB + 16} textAnchor="middle" fontSize={11} fill="var(--cds-alias-typography-color-200)">
             {s}
           </text>
         ))}
         {/* x-axis title */}
-        <text x={padL + innerW / 2} y={H - 6} textAnchor="middle" fontSize={11} fill="var(--qz-fg-3)">
+        <text x={padL + innerW / 2} y={H - 6} textAnchor="middle" fontSize={11} fill="var(--cds-alias-typography-color-300)">
           Packet
         </text>
 
         {/* hover guide */}
         {hoverX != null && (
-          <line x1={hoverX} x2={hoverX} y1={padT} y2={baseY} stroke="var(--qz-fg-4)" strokeWidth={1} strokeDasharray="3 3" />
+          <line x1={hoverX} x2={hoverX} y1={padT} y2={baseY} stroke="var(--cds-alias-typography-color-200)" strokeWidth={1} strokeDasharray="3 3" />
         )}
 
         {/* latency line */}
@@ -184,7 +184,7 @@ export function PingChart({
               cy={y(p.ms)}
               r={hover === p.seq ? 4 : 2.6}
               fill={LINE}
-              stroke="var(--qz-surface)"
+              stroke="var(--cds-alias-object-container-background)"
               strokeWidth={1}
             />
           ),

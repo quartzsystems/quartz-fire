@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PieChart } from "lucide-react";
 import { AcStatus, fetchAcStatus } from "@/lib/appcontrol";
 import { AppSliceInput, TopAppsDonut } from "./TopAppsDonut";
 import { LiveButton } from "./LiveButton";
@@ -52,30 +51,38 @@ export function TopApplicationsTile() {
       : null;
 
   return (
-    <div className="p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between gap-2 mb-3 flex-shrink-0">
-        <div className="flex items-center gap-[9px] min-w-0">
-          <PieChart size={18} className="text-[var(--qz-accent)]" />
-          <h2 className="text-[16px] font-bold text-[var(--qz-fg-1)] m-0 truncate" style={{ letterSpacing: "-0.01em" }}>
-            Top Applications
-          </h2>
-          <span className="text-[11px] text-[var(--qz-fg-4)] flex-shrink-0">by classified bytes</span>
-        </div>
+    <>
+      <div className="card-header flex-shrink-0">
+        Top Applications
+        <span
+          className="ml-auto text-[12px] flex-shrink-0"
+          style={{ fontWeight: 400, color: "var(--cds-alias-typography-color-200)" }}
+        >
+          by classified bytes
+        </span>
         <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
       </div>
 
-      {error && !status && <div className="text-[13px] text-[var(--qz-danger)] mb-2">{error}</div>}
+      <div className="card-block flex-1 min-h-0 flex flex-col">
+        {error && !status && (
+          <div className="text-[13px] mb-2" style={{ color: "var(--cds-alias-status-danger)" }}>
+            {error}
+          </div>
+        )}
 
-      {empty ? (
-        <div className="flex-1 grid place-items-center text-[12px] text-[var(--qz-fg-4)]">{empty}</div>
-      ) : (
-        // Stretch the donut + legend to the tile's full remaining space: the
-        // donut fills the height as a square pinned left, the legend runs to the
-        // right edge (see TopAppsDonut `fill`).
-        <div className="flex-1 min-h-0 flex flex-col [&>*]:flex-1 [&>*]:min-h-0">
-          <TopAppsDonut apps={apps} totalBytes={totalBytes} fill />
-        </div>
-      )}
-    </div>
+        {empty ? (
+          <div className="flex-1 grid place-items-center text-[12px] text-[var(--cds-alias-typography-color-200)]">
+            {empty}
+          </div>
+        ) : (
+          // Stretch the donut + legend to the tile's full remaining space: the
+          // donut fills the height as a square pinned left, the legend hugs the
+          // card's right edge (see TopAppsDonut `fill`).
+          <div className="flex-1 min-h-0 flex flex-col [&>*]:flex-1 [&>*]:min-h-0">
+            <TopAppsDonut apps={apps} totalBytes={totalBytes} fill />
+          </div>
+        )}
+      </div>
+    </>
   );
 }

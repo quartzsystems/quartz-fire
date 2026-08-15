@@ -45,25 +45,26 @@ export function InterfacesPanel({ live, interfaces, onSaved }: {
   };
 
   return (
-    <div className="flex flex-col gap-4 max-w-[560px]">
-      <p className="text-[13px] text-[var(--qz-fg-3)] m-0">
-        Select the interfaces IKE/IPsec should listen on. A peer stays down until the interface carrying its local address is enabled here.
-      </p>
+    <div className="card" style={{ maxWidth: 560 }}>
+      <div className="card-block flex flex-col gap-4">
+        <p className="text-[13px] m-0" style={{ color: "var(--cds-alias-typography-color-300)" }}>
+          Select the interfaces IKE/IPsec should listen on. A peer stays down until the interface carrying its local address is enabled here.
+        </p>
 
-      {names.length === 0 && <p className="text-[13px] text-[var(--qz-fg-4)] m-0">No interfaces available.</p>}
+        {names.length === 0 && <p className="text-[13px] m-0" style={{ color: "var(--cds-alias-typography-color-200)" }}>No interfaces available.</p>}
 
-      <div className="rounded-lg divide-y divide-[var(--qz-border)]" style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}>
-        {names.map((name) => (
-          <label key={name} className="flex items-center justify-between px-3 py-[10px] cursor-pointer select-none">
-            <span className="text-[13px] text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>{name}</span>
-            <Switch on={selected.has(name)} onChange={(v) => toggle(name, v)} />
-          </label>
-        ))}
+        <div className="flex flex-col" style={{ border: "1px solid var(--cds-alias-object-border-subtle)", borderRadius: 4 }}>
+          {names.map((name, i) => (
+            <label key={name} className="flex items-center justify-between px-3 py-[10px] cursor-pointer select-none" style={{ borderTop: i === 0 ? undefined : "1px solid var(--cds-alias-object-border-subtle)" }}>
+              <span className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-450)", fontFamily: "var(--qz-font-mono)" }}>{name}</span>
+              <Switch on={selected.has(name)} onChange={(v) => toggle(name, v)} />
+            </label>
+          ))}
+        </div>
+
+        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
       </div>
-
-      {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
-
-      <div>
+      <div className="card-footer">
         <Button kind="primary" size="sm" onClick={apply} disabled={saving || !dirty}>
           {saving ? "Applying…" : "Apply"}
         </Button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { AlertTriangle, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { BootSaveState, getBootSaveState, retryBootSave, subscribeBootSave } from "@/lib/bootSave";
 
 /// Global pill showing the state of the background boot-config save (commits
@@ -19,35 +19,37 @@ export function SaveIndicator() {
   const base: React.CSSProperties = {
     position: "fixed",
     bottom: 18,
-    left: 258, // clears the 240px sidebar
-    zIndex: 80,
-    background: "var(--qz-surface-raised)",
-    border: "1px solid var(--qz-border)",
-    borderRadius: 8,
+    left: 18,
+    zIndex: 1060,
+    background: "var(--cds-alias-object-overlay-background)",
+    border: "1px solid var(--cds-alias-object-border-color-shade)",
+    borderRadius: "var(--clr-base-border-radius-m)",
     padding: "10px 14px",
-    boxShadow: "0 12px 28px rgba(0,0,0,0.45)",
+    boxShadow: "var(--cds-alias-object-shadow-200)",
     fontSize: 13,
-    color: "var(--qz-fg-1)",
+    color: "var(--cds-alias-typography-color-450)",
   };
 
   if (state.status === "saving") {
     return (
-      <div style={{ ...base, borderLeft: "3px solid var(--qz-accent)" }} className="flex items-center gap-2">
-        <RotateCw size={14} className="animate-spin" style={{ color: "var(--qz-accent)" }} />
+      <div
+        style={{ ...base, borderLeft: "3px solid var(--cds-alias-interaction-action)" }}
+        className="flex items-center gap-2"
+      >
+        <span className="spinner spinner-sm" />
         Saving to boot config…
       </div>
     );
   }
 
   return (
-    <div style={{ ...base, borderLeft: "3px solid var(--qz-danger)" }} className="flex items-center gap-2">
-      <AlertTriangle size={14} style={{ color: "var(--qz-danger)" }} />
+    <div
+      style={{ ...base, borderLeft: "3px solid var(--cds-alias-status-danger)" }}
+      className="flex items-center gap-2"
+    >
+      <Icon shape="exclamation-triangle" size={14} style={{ color: "var(--cds-alias-status-danger)" }} />
       <span>{state.message}</span>
-      <button
-        onClick={retryBootSave}
-        className="ml-2 rounded-md px-2 py-1 text-[12px]"
-        style={{ border: "1px solid var(--qz-border)", background: "var(--qz-input-bg)", color: "var(--qz-fg-1)" }}
-      >
+      <button type="button" className="btn btn-sm btn-neutral" style={{ marginLeft: 8 }} onClick={retryBootSave}>
         Retry
       </button>
     </div>

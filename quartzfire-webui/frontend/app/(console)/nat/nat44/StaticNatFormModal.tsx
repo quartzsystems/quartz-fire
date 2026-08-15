@@ -1,27 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { applyStaticNat, StaticNatMapping } from "@/lib/nat";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
+const mono = { fontFamily: "var(--qz-font-mono)" } as const;
+const wide = { maxWidth: "none" } as const;
+const wideMono = { ...wide, ...mono } as const;
 
-function focusBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/// Clarity field: label + control + optional helper sentence.
+function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -125,7 +120,7 @@ export function StaticNatFormModal({
           ))}
         </datalist>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Rule Number">
             <input
               type="number"
@@ -134,10 +129,8 @@ export function StaticNatFormModal({
               value={rule}
               onChange={(e) => setRule(e.target.value)}
               placeholder="100"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
           <Field label="Interface" hint="Optional — leave blank to match any interface.">
@@ -146,10 +139,8 @@ export function StaticNatFormModal({
               value={iface}
               onChange={(e) => setIface(e.target.value)}
               placeholder="eth0"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
         </div>
@@ -159,23 +150,19 @@ export function StaticNatFormModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Web server 1:1"
-            className={inputCls}
-            style={inputSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={wide}
           />
         </Field>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Internal Address" hint="The private host (LAN side).">
             <input
               value={internalAddress}
               onChange={(e) => setInternalAddress(e.target.value)}
               placeholder="192.168.1.10"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
           <Field label="External Address" hint="The public address (WAN side).">
@@ -183,43 +170,32 @@ export function StaticNatFormModal({
               value={externalAddress}
               onChange={(e) => setExternalAddress(e.target.value)}
               placeholder="203.0.113.10"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
         </div>
 
-        <label className="flex items-center gap-[10px] cursor-pointer select-none">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
           <Switch on={enabled} onChange={setEnabled} />
-          <span className="text-[13px] text-[var(--qz-fg-2)]">Enabled</span>
+          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Enabled</span>
         </label>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
-            {error}
-          </p>
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create mapping"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Mapping"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

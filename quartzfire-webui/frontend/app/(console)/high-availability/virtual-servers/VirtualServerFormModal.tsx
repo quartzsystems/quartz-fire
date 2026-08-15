@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import {
@@ -9,11 +9,8 @@ import {
   Field,
   ModalFooter,
   TextInput,
-  inputCls,
-  inputSt,
+  monoStyle,
   numOrNull,
-  focusBorder,
-  blurBorder,
 } from "../formkit";
 import {
   ALGORITHMS,
@@ -49,24 +46,28 @@ function RealServerRow({
 }) {
   const set = (patch: Partial<RealServer>) => onChange({ ...rs, ...patch });
   return (
-    <div className="rounded-md p-3 flex flex-col gap-3" style={inputSt}>
+    <div
+      className="p-3 flex flex-col gap-3"
+      style={{
+        border: "1px solid var(--cds-alias-object-border-subtle)",
+        borderRadius: "var(--clr-base-border-radius-s)",
+      }}
+    >
       <div className="flex items-center gap-2">
         <input
           value={rs.address}
           onChange={(e) => set({ address: e.target.value })}
           placeholder="192.0.2.11"
-          className={inputCls}
-          style={{ ...inputSt, fontFamily: "var(--qz-font-mono)" }}
-          onFocus={focusBorder}
-          onBlur={blurBorder}
+          className="clr-input"
+          style={{ maxWidth: "none", ...monoStyle }}
         />
         <button
           type="button"
           onClick={onRemove}
           aria-label="Remove real server"
-          className="grid place-items-center w-8 h-8 rounded-md bg-transparent border border-[var(--qz-border)] text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer flex-shrink-0"
+          className="btn btn-sm btn-link-neutral btn-icon flex-shrink-0"
         >
-          <Trash2 size={14} />
+          <Icon shape="trash" size={14} />
         </button>
       </div>
       <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
@@ -180,19 +181,19 @@ export function VirtualServerFormModal({
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "2fr 1fr 1fr" }}>
           <Field label="Algorithm">
-            <select
-              value={vs.algorithm ?? ""}
-              onChange={(e) => set({ algorithm: (e.target.value || null) as Algorithm | null })}
-              className={inputCls}
-              style={inputSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              <option value="">— (default)</option>
-              {ALGORITHMS.map((a) => (
-                <option key={a} value={a}>{ALGO_LABEL[a]}</option>
-              ))}
-            </select>
+            <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+              <select
+                value={vs.algorithm ?? ""}
+                onChange={(e) => set({ algorithm: (e.target.value || null) as Algorithm | null })}
+                className="clr-select"
+                style={{ maxWidth: "none" }}
+              >
+                <option value="">— (default)</option>
+                {ALGORITHMS.map((a) => (
+                  <option key={a} value={a}>{ALGO_LABEL[a]}</option>
+                ))}
+              </select>
+            </div>
           </Field>
           <Field label="Delay loop (s)">
             <TextInput value={vs.delay_loop?.toString() ?? ""} onChange={(v) => set({ delay_loop: numOrNull(v) })} placeholder="10" mono />
@@ -202,8 +203,8 @@ export function VirtualServerFormModal({
           </Field>
         </div>
 
-        <div>
-          <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[8px]">Real servers</label>
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <label className="clr-control-label">Real servers</label>
           <div className="flex flex-col gap-2">
             {vs.real_servers.map((r, i) => (
               <RealServerRow
@@ -216,15 +217,15 @@ export function VirtualServerFormModal({
             <button
               type="button"
               onClick={() => set({ real_servers: [...vs.real_servers, emptyRealServer()] })}
-              className="inline-flex items-center gap-[6px] self-start text-[12px] font-medium px-[10px] py-[6px] rounded-md bg-transparent border border-[var(--qz-border)] text-[var(--qz-fg-2)] hover:text-[var(--qz-fg-1)] hover:border-[var(--qz-border-strong)] transition-colors cursor-pointer"
+              className="btn btn-sm btn-neutral self-start"
             >
-              <Plus size={13} /> Add real server
+              <Icon shape="plus" size={13} /> Add Real Server
             </button>
           </div>
         </div>
 
         <ErrorText msg={error} />
-        <ModalFooter onCancel={onClose} saving={saving} submitLabel={isEdit ? "Apply changes" : "Add virtual server"} />
+        <ModalFooter onCancel={onClose} saving={saving} submitLabel={isEdit ? "Apply Changes" : "Add Virtual Server"} />
       </form>
     </ModalShell>
   );

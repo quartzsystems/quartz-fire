@@ -13,8 +13,9 @@ export interface TooltipRow {
 }
 
 /// Series colors for download vs upload. Shared so every usage chart agrees.
-export const DOWN_COLOR = "var(--qz-accent)"; // green-500
-export const UP_COLOR = "var(--qz-green-300)"; // lighter green
+/// Clarity: traffic charts use greens only — blue is reserved for info states.
+export const DOWN_COLOR = "#00d992"; // download / RX
+export const UP_COLOR = "#7be8c4"; // upload / TX
 
 const TIP_W = 150;
 
@@ -43,21 +44,21 @@ export function ChartTooltip({
         left,
         top,
         minWidth: TIP_W - 10,
-        background: "var(--qz-surface-raised)",
-        border: "1px solid var(--qz-border)",
-        boxShadow: "var(--qz-shadow-2)",
+        background: "var(--cds-alias-object-overlay-background)",
+        border: "1px solid var(--cds-alias-object-border-color-shade)",
+        boxShadow: "var(--cds-alias-object-shadow-200)",
       }}
     >
-      <div className="text-[var(--qz-fg-3)] mb-1" style={{ fontFamily: "var(--qz-font-mono)" }}>
+      <div className="text-[var(--cds-alias-typography-color-300)] mb-1" style={{ fontFamily: "var(--qz-font-mono)" }}>
         {title}
       </div>
       {rows.map((r, i) => (
         <div key={r.label} className="flex items-center justify-between gap-3" style={{ marginTop: i ? 3 : 0 }}>
-          <span className="inline-flex items-center gap-[5px] text-[var(--qz-fg-2)]">
+          <span className="inline-flex items-center gap-[5px] text-[var(--cds-alias-typography-color-400)]">
             <span style={{ width: 7, height: 7, borderRadius: 999, background: r.color, flexShrink: 0 }} />
             {r.label}
           </span>
-          <span className="text-[var(--qz-fg-1)] font-semibold" style={{ fontFamily: "var(--qz-font-mono)" }}>
+          <span className="text-[var(--cds-alias-typography-color-450)] font-semibold" style={{ fontFamily: "var(--qz-font-mono)" }}>
             {r.value}
           </span>
         </div>

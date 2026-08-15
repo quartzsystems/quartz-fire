@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import {
   applyOspfInterface,
@@ -11,23 +12,15 @@ import {
   OSPF_NETWORK_TYPES,
 } from "@/lib/ospf";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const inputStyle = { maxWidth: "none", width: "100%" } as const;
+const monoStyle = { ...inputStyle, fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -111,64 +104,71 @@ export function InterfaceFormModal({ initial, existingNames, areas, interfaces, 
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Interface">
-            <input list="ospf-if-interfaces" value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="eth1" className={`${inputCls} disabled:opacity-70`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input list="ospf-if-interfaces" value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="eth1" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Area" hint="Area this interface belongs to.">
-            <input list="ospf-if-areas" value={area} onChange={(e) => setArea(e.target.value)} placeholder="0" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input list="ospf-if-areas" value={area} onChange={(e) => setArea(e.target.value)} placeholder="0" className="clr-input" style={monoStyle} />
           </Field>
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Cost" hint="Interface output cost (1–65535).">
-            <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder="auto" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={cost} onChange={(e) => setCost(e.target.value)} placeholder="auto" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Priority" hint="DR election priority (0 = never DR).">
-            <input value={priority} onChange={(e) => setPriority(e.target.value)} placeholder="1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={priority} onChange={(e) => setPriority(e.target.value)} placeholder="1" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Hello interval" hint="Seconds between hellos.">
-            <input value={hello} onChange={(e) => setHello(e.target.value)} placeholder="10" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={hello} onChange={(e) => setHello(e.target.value)} placeholder="10" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Dead interval" hint="Seconds before declaring a neighbor down.">
-            <input value={dead} onChange={(e) => setDead(e.target.value)} placeholder="40" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={dead} onChange={(e) => setDead(e.target.value)} placeholder="40" className="clr-input" style={monoStyle} />
           </Field>
         </div>
 
         <Field label="Network type">
-          <select value={networkType} onChange={(e) => setNetworkType(e.target.value as OspfNetworkType | "")} className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder}>
-            <option value="">Default</option>
-            {OSPF_NETWORK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+            <select value={networkType} onChange={(e) => setNetworkType(e.target.value as OspfNetworkType | "")} className="clr-select" style={{ ...inputStyle, fontFamily: "var(--qz-font-mono)" }}>
+              <option value="">Default</option>
+              {OSPF_NETWORK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
         </Field>
 
         <Field label="Authentication password" hint="Simple (plaintext) OSPF authentication — leave blank for none.">
-          <input value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="secret" type="password" className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} placeholder="secret" type="password" className="clr-input" style={inputStyle} />
         </Field>
 
         <div className="flex flex-wrap gap-x-6 gap-y-3">
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className="flex items-center gap-2 cursor-pointer select-none" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
             <Switch on={passive} onChange={setPassive} />
             Passive
           </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className="flex items-center gap-2 cursor-pointer select-none" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
             <Switch on={bfd} onChange={setBfd} />
             BFD
           </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className="flex items-center gap-2 cursor-pointer select-none" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
             <Switch on={mtuIgnore} onChange={setMtuIgnore} />
             MTU ignore
           </label>
         </div>
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
+        {error && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
+        )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button type="button" onClick={onClose} className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer" style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}>
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" disabled={saving} className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0" style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Add interface"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Add Interface"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

@@ -6,8 +6,8 @@
 // small hook that owns visibility state and persists it per table.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Columns3, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 
 export interface ColumnSpec {
   key: string;
@@ -99,22 +99,13 @@ export function ColumnsMenu({ vis }: { vis: ColumnVisibility }) {
   }, [open]);
 
   return (
-    <div className="relative" ref={ref}>
-      <Button kind="secondary" size="sm" icon={Columns3} onClick={() => setOpen((o) => !o)}>
+    <div className="clr-dropdown" ref={ref}>
+      <Button kind="secondary" size="sm" icon="grid-view" onClick={() => setOpen((o) => !o)}>
         Columns
       </Button>
       {open && (
-        <div
-          className="absolute right-0 mt-1 z-20 rounded-md py-1 min-w-[200px]"
-          style={{
-            background: "var(--qz-surface)",
-            border: "1px solid var(--qz-border)",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
-          }}
-        >
-          <div className="px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--qz-fg-4)]">
-            Show columns
-          </div>
+        <div className="dropdown-menu right" style={{ minWidth: 200 }}>
+          <div className="dropdown-header">Show columns</div>
           {vis.columns.map((c) => {
             const visible = vis.isVisible(c.key);
             const lastVisible = visible && vis.visibleCount === 1;
@@ -122,33 +113,33 @@ export function ColumnsMenu({ vis }: { vis: ColumnVisibility }) {
               <button
                 key={c.key}
                 type="button"
+                className="dropdown-item"
                 onClick={() => vis.toggle(c.key)}
                 disabled={lastVisible}
-                className="flex items-center gap-2 w-full px-3 py-[6px] text-[13px] text-left bg-transparent border-0 text-[var(--qz-fg-2)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span
-                  className="grid place-items-center w-[15px] h-[15px] rounded-[4px] flex-shrink-0"
-                  style={{
-                    border: "1px solid var(--qz-border-strong)",
-                    background: visible ? "var(--qz-accent)" : "var(--qz-input-bg)",
-                  }}
-                >
-                  {visible && <Check size={11} style={{ color: "var(--qz-fg-on-accent)" }} />}
-                </span>
+                <input
+                  type="checkbox"
+                  className="qz-check"
+                  checked={visible}
+                  readOnly
+                  tabIndex={-1}
+                  style={{ pointerEvents: "none" }}
+                />
                 {c.header}
               </button>
             );
           })}
-          <div className="my-1 mx-3 border-t" style={{ borderColor: "var(--qz-divider)" }} />
+          <hr className="dropdown-divider" />
           <button
             type="button"
+            className="dropdown-item"
             onClick={() => {
               vis.reset();
               setOpen(false);
             }}
-            className="flex items-center gap-2 w-full px-3 py-[6px] text-[13px] text-left bg-transparent border-0 text-[var(--qz-fg-3)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] hover:text-[var(--qz-fg-1)] transition-colors cursor-pointer"
           >
-            <RotateCcw size={13} /> Reset layout
+            <Icon shape="undo" size={13} />
+            Reset layout
           </button>
         </div>
       )}

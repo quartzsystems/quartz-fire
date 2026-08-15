@@ -11,19 +11,16 @@
 // otherwise, and this page warns before that bites.
 //
 // UI conventions mirror the SSL Inspection page (the sibling this feature sits
-// behind): the full-height page shell, the 28px title, rounded-lg cards on
-// var(--qz-input-bg), the --qz-fg-* text tokens, .badge indicators, and themed
-// modals instead of window.confirm/window.prompt.
+// behind): Clarity cards, tabs, .badge indicators, and themed modals instead of
+// window.confirm/window.prompt.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  AlertTriangle, Check, Pencil, Plus, RotateCw, Trash2, ShieldAlert, ShieldCheck, Search, X,
-} from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
 import { Tabs } from "@/components/ui/Tabs";
@@ -36,10 +33,10 @@ import {
   setContentFilteringEnabled, testCfUrl, validateCidr, validateDomain,
 } from "@/lib/content-filtering";
 
-const inputStyle = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const cardStyle = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const fieldLabel = "text-[11px] uppercase tracking-wide text-[var(--qz-fg-4)]";
-const inputCls = "rounded-md px-3 py-[6px] text-[13px] text-[var(--qz-fg-1)] outline-none";
+const fieldLabel = "clr-control-label";
+
+/// Clarity status pill (mono uppercase), per the design reference.
+const pillStyle = { fontFamily: "var(--qz-font-mono)", letterSpacing: "0.06em" } as const;
 
 // ── status indicator (label + badge row) ─────────────────────────────────────
 
@@ -47,7 +44,7 @@ function Indicator({ label, state, detail }: { label: string; state: "ok" | "war
   const cls = state === "ok" ? "badge-ok" : state === "warn" ? "badge-warn" : "badge-muted";
   return (
     <div className="flex items-center justify-between gap-3 py-[5px]">
-      <span className="text-[13px] text-[var(--qz-fg-3)]">{label}</span>
+      <span className="text-[13px] text-[var(--cds-alias-typography-color-300)]">{label}</span>
       <span className={`badge ${cls}`}>{detail ?? (state === "ok" ? "OK" : "—")}</span>
     </div>
   );
@@ -79,23 +76,25 @@ function ListEditor({
           <span key={it} className="inline-flex items-center gap-1 badge badge-muted mono">
             {it}
             <button type="button" onClick={() => onChange(items.filter((x) => x !== it))}
-              className="text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)]" title="Remove">
-              <X size={11} />
+              className="hover:text-[var(--cds-alias-status-danger)]" title="Remove"
+              style={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center" }}>
+              <Icon shape="times" size={12} />
             </button>
           </span>
         ))}
-        {items.length === 0 && <span className="text-[12px] text-[var(--qz-fg-4)]">none</span>}
+        {items.length === 0 && <span className="text-[12px] text-[var(--cds-alias-typography-color-200)]">none</span>}
       </div>
       <div className="flex gap-2">
         <input
-          value={draft} placeholder={placeholder} style={inputStyle}
+          value={draft} placeholder={placeholder}
           onChange={(e) => { setDraft(e.target.value); setErr(null); }}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
-          className={`flex-1 ${inputCls} mono`}
+          className="clr-input flex-1 mono"
+          style={{ maxWidth: "none" }}
         />
-        <Button kind="secondary" size="sm" icon={Plus} onClick={add}>Add</Button>
+        <Button kind="secondary" size="sm" icon="plus" onClick={add}>Add</Button>
       </div>
-      {err && <span className="text-[12px] text-[var(--qz-danger)]">{err}</span>}
+      {err && <span className="text-[12px] text-[var(--cds-alias-status-danger)]">{err}</span>}
     </div>
   );
 }
@@ -121,8 +120,8 @@ function GroupEditor({
   const toggleRow = (title: string, hint: string, on: boolean, onToggle: (v: boolean) => void) => (
     <div className="flex items-center justify-between gap-3">
       <div>
-        <div className="text-[13px] text-[var(--qz-fg-2)]">{title}</div>
-        <div className="text-[12px] text-[var(--qz-fg-4)]">{hint}</div>
+        <div className="text-[13px] text-[var(--cds-alias-typography-color-400)]">{title}</div>
+        <div className="text-[12px] text-[var(--cds-alias-typography-color-200)]">{hint}</div>
       </div>
       <Switch on={on} onChange={onToggle} />
     </div>
@@ -132,15 +131,15 @@ function GroupEditor({
     <ModalShell onClose={onClose} maxWidth={720}>
       <ModalHeader title={`Action: ${g.name}`} onClose={onClose} />
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <span className={fieldLabel}>Description</span>
-          <input value={g.description ?? ""} style={inputStyle}
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <label className={fieldLabel}>Description</label>
+          <input value={g.description ?? ""}
             onChange={(e) => set("description", e.target.value || null)}
-            className={`w-full ${inputCls}`} />
+            className="clr-input" style={{ maxWidth: "none" }} />
         </div>
 
         {isDefault ? (
-          <p className="text-[13px] text-[var(--qz-fg-3)] m-0">
+          <p className="text-[13px] text-[var(--cds-alias-typography-color-300)] m-0">
             This is the <b>default</b> action — clients not matched by any other action&apos;s source subnet
             land here. It needs no source subnets.
           </p>
@@ -155,21 +154,25 @@ function GroupEditor({
         <div className="flex flex-col gap-1">
           <span className={fieldLabel}>Blocked categories ({g.categories.length} selected)</span>
           <div className="flex items-center gap-2 my-1">
-            <Search size={13} className="text-[var(--qz-fg-4)]" />
-            <input value={catSearch} placeholder="Search categories…" style={inputStyle}
-              onChange={(e) => setCatSearch(e.target.value)} className={`flex-1 ${inputCls}`} />
+            <Icon shape="search" size={13} className="text-[var(--cds-alias-typography-color-200)]" />
+            <input value={catSearch} placeholder="Search categories…"
+              onChange={(e) => setCatSearch(e.target.value)}
+              className="clr-input flex-1" style={{ maxWidth: "none" }} />
           </div>
-          <div className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto rounded-md p-1" style={cardStyle}>
+          <div
+            className="grid grid-cols-2 gap-1 max-h-40 overflow-y-auto rounded-md p-1"
+            style={{ background: "var(--cds-alias-object-container-background)", border: "1px solid var(--cds-alias-object-border-color)" }}
+          >
             {shownCats.length === 0 && (
-              <span className="text-[12px] text-[var(--qz-fg-4)] col-span-2 p-2">
+              <span className="text-[12px] text-[var(--cds-alias-typography-color-200)] col-span-2 p-2">
                 No categories installed yet — run a blocklist update on the Overview tab.
               </span>
             )}
             {shownCats.map((c) => (
-              <label key={c.name} className="flex items-center gap-2 text-[12px] px-1 py-0.5 cursor-pointer text-[var(--qz-fg-2)]">
+              <label key={c.name} className="clr-checkbox-wrapper cursor-pointer text-[12px] px-1 py-0.5 text-[var(--cds-alias-typography-color-400)]">
                 <input type="checkbox" checked={g.categories.includes(c.name)} onChange={() => toggleCat(c.name)} />
                 <span className="flex-1 truncate">{c.name}</span>
-                <span className="text-[10px] text-[var(--qz-fg-4)]">{c.entries.toLocaleString()}</span>
+                <span className="text-[10px] text-[var(--cds-alias-typography-color-200)]">{c.entries.toLocaleString()}</span>
               </label>
             ))}
           </div>
@@ -199,10 +202,10 @@ function GroupEditor({
         <ListEditor label="Blocked MIME types" items={g.blockMimeTypes} onChange={(v) => set("blockMimeTypes", v)}
           placeholder="application/x-dosexec" />
       </div>
-      <div className="flex justify-end gap-2 mt-6">
-        <Button kind="ghost" size="sm" onClick={onClose}>Cancel</Button>
-        <Button kind="primary" size="sm" icon={Check} onClick={() => onSave(g)}>Save group</Button>
-      </div>
+      <ModalFooter>
+        <Button kind="secondary" size="sm" onClick={onClose}>Cancel</Button>
+        <Button kind="primary" size="sm" icon="check" onClick={() => onSave(g)}>Save Group</Button>
+      </ModalFooter>
     </ModalShell>
   );
 }
@@ -223,20 +226,20 @@ function NameModal({ existing, onCreate, onClose }: {
   };
   return (
     <ModalShell onClose={onClose} maxWidth={440}>
-      <ModalHeader title="New action" subtitle="Clients are mapped to an action by source subnet." onClose={onClose} />
+      <ModalHeader title="New Action" subtitle="Clients are mapped to an action by source subnet." onClose={onClose} />
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <span className={fieldLabel}>Action name</span>
-          <input autoFocus value={name} style={inputStyle} placeholder="engineering"
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <label className={fieldLabel}>Action name</label>
+          <input autoFocus value={name} placeholder="engineering"
             onChange={(e) => { setName(e.target.value); setErr(null); }}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), submit())}
-            className={`w-full ${inputCls}`} />
-          {err && <span className="text-[12px] text-[var(--qz-danger)]">{err}</span>}
+            className="clr-input" style={{ maxWidth: "none" }} />
+          {err && <div className="clr-subtext" style={{ color: "var(--cds-alias-status-danger)" }}>{err}</div>}
         </div>
-        <div className="flex justify-end gap-2">
-          <Button kind="ghost" size="sm" onClick={onClose}>Cancel</Button>
-          <Button kind="primary" size="sm" icon={Plus} onClick={submit}>Create</Button>
-        </div>
+        <ModalFooter>
+          <Button kind="secondary" size="sm" onClick={onClose}>Cancel</Button>
+          <Button kind="primary" size="sm" icon="plus" onClick={submit}>Create</Button>
+        </ModalFooter>
       </div>
     </ModalShell>
   );
@@ -257,23 +260,18 @@ function ConfirmModal({
     <ModalShell onClose={close} maxWidth={460}>
       <ModalHeader title={title} onClose={close} />
       <div className="flex flex-col gap-4">
-        <div className="flex gap-3 rounded-md px-3 py-3"
-          style={{ background: "var(--qz-warn-soft)", border: "1px solid color-mix(in oklab, var(--qz-warn) 35%, transparent)" }}>
-          <ShieldAlert size={16} className="flex-shrink-0 mt-[1px]" style={{ color: "var(--qz-warn)" }} />
-          <div className="text-[13px] text-[var(--qz-fg-2)] flex flex-col gap-2 [&_p]:m-0">{children}</div>
+        <div className="alert alert-warning">
+          <Icon shape="shield-x" size={16} className="alert-icon" />
+          <div className="alert-text flex flex-col gap-2 [&_p]:m-0">{children}</div>
         </div>
-        <div className="flex gap-2 justify-end">
-          <button type="button" onClick={close} disabled={working}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer disabled:opacity-50"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}>
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={close} disabled={working}>
             Cancel
           </button>
-          <button type="button" onClick={run} disabled={working}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0 disabled:opacity-70"
-            style={{ background: "var(--qz-warn)", color: "white" }}>
+          <button type="button" className="btn btn-warning" onClick={run} disabled={working}>
             {working ? "Working…" : confirmLabel}
           </button>
-        </div>
+        </ModalFooter>
       </div>
     </ModalShell>
   );
@@ -300,12 +298,20 @@ const CF_GROUP_COLS = [
 ];
 
 const CF_LOG_COLUMNS: CfLogCol[] = [
-  { key: "time", header: "Time", className: "mono text-[12px] text-[var(--qz-fg-3)] whitespace-nowrap", cell: (l) => l.ts.replace("T", " ") },
-  { key: "client", header: "Client", className: "mono text-[12px] text-[var(--qz-fg-3)]", cell: (l) => l.client_ip },
-  { key: "group", header: "Group", className: "text-[12px] text-[var(--qz-fg-2)]", cell: (l) => l.group ?? "—" },
-  { key: "url", header: "URL", className: "text-[12px] text-[var(--qz-fg-2)] max-w-[22rem] truncate", title: (l) => l.url, cell: (l) => l.url },
-  { key: "category", header: "Category", className: "text-[12px] text-[var(--qz-fg-3)]", cell: (l) => l.category ?? "—" },
-  { key: "action", header: "Action", cell: (l) => <span className={`badge ${l.action === "blocked" ? "badge-warn" : "badge-ok"}`}>{l.action}</span> },
+  { key: "time", header: "Time", className: "mono text-[12px] text-[var(--cds-alias-typography-color-300)] whitespace-nowrap", cell: (l) => l.ts.replace("T", " ") },
+  { key: "client", header: "Client", className: "mono text-[12px] text-[var(--cds-alias-typography-color-300)]", cell: (l) => l.client_ip },
+  { key: "group", header: "Group", className: "text-[12px] text-[var(--cds-alias-typography-color-400)]", cell: (l) => l.group ?? "—" },
+  { key: "url", header: "URL", className: "text-[12px] text-[var(--cds-alias-typography-color-400)] max-w-[22rem] truncate", title: (l) => l.url, cell: (l) => l.url },
+  { key: "category", header: "Category", className: "text-[12px] text-[var(--cds-alias-typography-color-300)]", cell: (l) => l.category ?? "—" },
+  {
+    key: "action",
+    header: "Action",
+    cell: (l) => (
+      <span className={`label ${l.action === "blocked" ? "label-danger" : "label-success"}`} style={pillStyle}>
+        {l.action.toUpperCase()}
+      </span>
+    ),
+  },
 ];
 
 export default function ContentFilteringPage() {
@@ -421,99 +427,101 @@ export default function ContentFilteringPage() {
   const bl = status?.blocklist_update;
 
   if (loading) {
-    return <div className="px-[36px] pt-[28px] text-[13px] text-[var(--qz-fg-4)]">Loading…</div>;
+    return <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading…</div>;
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0 flex items-start gap-3">
-        <div className="flex-1">
-          <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-            Content Filtering
-          </h1>
-          <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div className="flex items-start gap-3">
+        <div style={{ marginRight: "auto" }}>
+          <h2>Content Filtering</h2>
+          <p className="clr-secondary" style={{ marginTop: 4 }}>
             URL / category filtering and content scanning via e2guardian (ICAP) behind SSL Inspection
           </p>
         </div>
-        <div className="flex items-center gap-2 pt-1">
-          <span className="text-[13px] text-[var(--qz-fg-3)]">{live.enabled ? "Enabled" : "Disabled"}</span>
+        <span className="flex items-center gap-2 pt-1">
+          <span className={`label${live.enabled ? " label-success" : ""}`} style={pillStyle}>
+            {live.enabled ? "ENABLED" : "DISABLED"}
+          </span>
           <span aria-disabled={saving} style={{ opacity: saving ? 0.5 : 1 }}>
             <Switch on={live.enabled} onChange={onToggleRequest} />
           </span>
-        </div>
+        </span>
       </div>
 
-      <div className="px-[36px] pb-4 flex-shrink-0">
-        <Tabs
-          value={tab} onChange={setTab}
-          items={[
-            { value: "overview", label: "Overview" },
-            { value: "groups", label: "Actions", count: draft.groups.length },
-            { value: "blockpage", label: "Block Page" },
-            { value: "logs", label: "Logs" },
-          ]}
-          trailing={
-            dirty ? (
-              <Button size="sm" icon={Check} onClick={onSave} disabled={saving}>
-                {saving ? "Applying…" : "Apply changes"}
-              </Button>
-            ) : undefined
-          }
-        />
-      </div>
+      <Tabs
+        value={tab} onChange={setTab}
+        items={[
+          { value: "overview", label: "Overview" },
+          { value: "groups", label: "Actions", count: draft.groups.length },
+          { value: "blockpage", label: "Block Page" },
+          { value: "logs", label: "Logs" },
+        ]}
+        trailing={
+          dirty ? (
+            <Button size="sm" icon="check" onClick={onSave} disabled={saving}>
+              {saving ? "Applying…" : "Apply Changes"}
+            </Button>
+          ) : undefined
+        }
+      />
 
-      <div className="flex-1 overflow-auto px-[36px] pb-8">
+      <div>
         <div className="max-w-[1000px] flex flex-col gap-4">
           {sslReadError !== null ? (
-            <div className="flex items-start gap-3 rounded-md px-3 py-3 text-[13px] text-[var(--qz-fg-2)]"
-              style={{ background: "var(--qz-warn-soft)", border: "1px solid color-mix(in oklab, var(--qz-warn) 35%, transparent)" }}>
-              <AlertTriangle size={16} className="mt-[1px] shrink-0" style={{ color: "var(--qz-warn)" }} />
-              <div>
+            <div className="alert alert-warning">
+              <Icon shape="exclamation-triangle" size={16} className="alert-icon" />
+              <div className="alert-text">
                 <b>Couldn&apos;t read the SSL Inspection status.</b> Content Filtering needs SSL Inspection
                 enabled, but this page couldn&apos;t confirm its state ({sslReadError}). Check the{" "}
-                <Link href="/services/ssl-inspection" className="text-[var(--qz-info)] underline">SSL Inspection</Link>{" "}
+                <Link href="/services/ssl-inspection" className="underline" style={{ color: "var(--cds-alias-typography-link-color)" }}>SSL Inspection</Link>{" "}
                 page — if it&apos;s enabled there, you can still enable Content Filtering here.
               </div>
             </div>
           ) : !ssl.enabled && (
-            <div className="flex items-start gap-3 rounded-md px-3 py-3 text-[13px] text-[var(--qz-fg-2)]"
-              style={{ background: "var(--qz-warn-soft)", border: "1px solid color-mix(in oklab, var(--qz-warn) 35%, transparent)" }}>
-              <AlertTriangle size={16} className="mt-[1px] shrink-0" style={{ color: "var(--qz-warn)" }} />
-              <div>
+            <div className="alert alert-warning">
+              <Icon shape="exclamation-triangle" size={16} className="alert-icon" />
+              <div className="alert-text">
                 <b>SSL Inspection is disabled.</b> Content Filtering has no decrypted traffic to inspect and the
                 commit will be refused. Enable it on the{" "}
-                <Link href="/services/ssl-inspection" className="text-[var(--qz-info)] underline">SSL Inspection</Link> page first.
+                <Link href="/services/ssl-inspection" className="underline" style={{ color: "var(--cds-alias-typography-link-color)" }}>SSL Inspection</Link> page first.
               </div>
             </div>
           )}
 
           {tab === "overview" && (
             <div className="grid md:grid-cols-2 gap-4">
-              <section className="rounded-lg px-5 py-4 flex flex-col gap-1" style={cardStyle}>
-                <h2 className="text-[13px] font-semibold text-[var(--qz-fg-1)] m-0 mb-1">Daemon &amp; ICAP</h2>
-                <Indicator label="e2guardian running" state={status?.e2guardian_active ? "ok" : "muted"}
-                  detail={status?.e2guardian_active ? "active" : "stopped"} />
-                <Indicator label="ICAP listener" state={status?.icap_listening ? "ok" : "muted"}
-                  detail={status?.icap_listening ? `:${status?.icap_port ?? live.listenPort}` : "down"} />
-                <Indicator label="SSL Inspection (required)"
-                  state={sslReadError !== null ? "warn" : ssl.enabled ? "ok" : "warn"}
-                  detail={sslReadError !== null ? "unknown" : ssl.enabled ? "enabled" : "disabled"} />
-                <Indicator label="Last apply" state={status?.apply_ok === false ? "warn" : "muted"}
-                  detail={status?.apply_error ? "error" : status?.apply_ok ? "ok" : "—"} />
+              <section className="card">
+                <div className="card-header">Daemon &amp; ICAP</div>
+                <div className="card-block flex flex-col gap-1">
+                  <Indicator label="e2guardian running" state={status?.e2guardian_active ? "ok" : "muted"}
+                    detail={status?.e2guardian_active ? "active" : "stopped"} />
+                  <Indicator label="ICAP listener" state={status?.icap_listening ? "ok" : "muted"}
+                    detail={status?.icap_listening ? `:${status?.icap_port ?? live.listenPort}` : "down"} />
+                  <Indicator label="SSL Inspection (required)"
+                    state={sslReadError !== null ? "warn" : ssl.enabled ? "ok" : "warn"}
+                    detail={sslReadError !== null ? "unknown" : ssl.enabled ? "enabled" : "disabled"} />
+                  <Indicator label="Last apply" state={status?.apply_ok === false ? "warn" : "muted"}
+                    detail={status?.apply_error ? "error" : status?.apply_ok ? "ok" : "—"} />
+                </div>
               </section>
 
-              <section className="rounded-lg px-5 py-4 flex flex-col gap-1" style={cardStyle}>
-                <div className="flex items-center justify-between mb-1">
-                  <h2 className="text-[13px] font-semibold text-[var(--qz-fg-1)] m-0">Blocklists (UT1)</h2>
-                  <Button kind="secondary" size="sm" icon={RotateCw} onClick={onUpdateNow}>Update now</Button>
+              <section className="card">
+                <div className="card-header">
+                  Blocklists (UT1)
+                  <span style={{ marginLeft: "auto" }}>
+                    <Button kind="secondary" size="sm" icon="refresh" onClick={onUpdateNow}>Update Now</Button>
+                  </span>
                 </div>
-                <Indicator label="Installed categories" state={(status?.installed_categories ?? 0) > 0 ? "ok" : "muted"}
-                  detail={String(status?.installed_categories ?? 0)} />
-                <Indicator label="Last update"
-                  state={bl?.state === "failed" ? "warn" : bl?.state === "ok" ? "ok" : "muted"}
-                  detail={bl?.state === "ok" ? `${bl.categories ?? "?"} cats` : bl?.state ?? "never"} />
-                {bl?.error && <p className="text-[12px] text-[var(--qz-danger)] mt-1 m-0">{bl.error}</p>}
-                <Indicator label="Blocked (last 200 log lines)" state={blocked24h > 0 ? "warn" : "muted"} detail={String(blocked24h)} />
+                <div className="card-block flex flex-col gap-1">
+                  <Indicator label="Installed categories" state={(status?.installed_categories ?? 0) > 0 ? "ok" : "muted"}
+                    detail={String(status?.installed_categories ?? 0)} />
+                  <Indicator label="Last update"
+                    state={bl?.state === "failed" ? "warn" : bl?.state === "ok" ? "ok" : "muted"}
+                    detail={bl?.state === "ok" ? `${bl.categories ?? "?"} cats` : bl?.state ?? "never"} />
+                  {bl?.error && <p className="text-[12px] text-[var(--cds-alias-status-danger)] mt-1 m-0">{bl.error}</p>}
+                  <Indicator label="Blocked (last 200 log lines)" state={blocked24h > 0 ? "warn" : "muted"} detail={String(blocked24h)} />
+                </div>
               </section>
 
               <TestUrlWidget groups={draft.groups} setToast={setToast} />
@@ -523,14 +531,14 @@ export default function ContentFilteringPage() {
           {tab === "groups" && (
             <div className="flex flex-col gap-4">
               <div className="flex items-center gap-3">
-                <p className="text-[13px] text-[var(--qz-fg-4)] m-0 flex-1">
+                <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0 flex-1">
                   An action decides what a set of clients can reach — blocked categories, custom allow/block
                   lists, and content scanning. Clients are mapped to an action by source subnet; the first
                   action is the default that unmatched clients fall to.
                 </p>
-                <Button kind="primary" size="sm" icon={Plus} onClick={() => setAddingGroup(true)}>Add action</Button>
+                <Button kind="primary" size="sm" icon="plus" onClick={() => setAddingGroup(true)}>Add Action</Button>
               </div>
-              <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+              <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
                 <table ref={groupResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: groupResize.tableLayout }}>
                   <colgroup>
                     {CF_GROUP_COLS.map((c) => (
@@ -552,7 +560,7 @@ export default function ContentFilteringPage() {
                   <tbody>
                     {draft.groups.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                        <td colSpan={5} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
                           No actions — add one to start filtering. The first action is the default (unmatched clients).
                         </td>
                       </tr>
@@ -560,41 +568,35 @@ export default function ContentFilteringPage() {
                       draft.groups.map((g, i) => (
                         <tr key={g.name} style={{ cursor: "pointer" }} onClick={() => setEditing(g)}>
                           <td>
-                            <div className="font-semibold text-[var(--qz-fg-1)] flex items-center gap-1.5">
+                            <div className="font-semibold text-[var(--cds-alias-typography-color-450)] flex items-center gap-1.5">
                               {g.name}
                               {i === 0 && <span className="badge badge-muted">default</span>}
                             </div>
-                            {g.description && <div className="text-[11px] text-[var(--qz-fg-4)]">{g.description}</div>}
+                            {g.description && <div className="text-[11px] text-[var(--cds-alias-typography-color-200)]">{g.description}</div>}
                           </td>
-                          <td className="text-[12px] text-[var(--qz-fg-3)]">{i === 0 ? "unmatched" : (g.sourceAddress.join(", ") || "—")}</td>
-                          <td className="text-[12px] text-[var(--qz-fg-3)]">
+                          <td className="text-[12px] text-[var(--cds-alias-typography-color-300)]">{i === 0 ? "unmatched" : (g.sourceAddress.join(", ") || "—")}</td>
+                          <td className="text-[12px] text-[var(--cds-alias-typography-color-300)]">
                             {g.blanketBlock
                               ? <span className="badge badge-warn">blanket block</span>
                               : `${g.categories.length} categor${g.categories.length === 1 ? "y" : "ies"}`}
                           </td>
-                          <td className="text-[12px] text-[var(--qz-fg-3)]">
+                          <td className="text-[12px] text-[var(--cds-alias-typography-color-300)]">
                             {g.blockDomains.length + g.blockUrlRegex.length}b / {g.allowDomains.length}a
                             {g.phraseFiltering && " · phrase"}{g.safeSearch && " · safe"}
                           </td>
                           <td onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-1">
-                              <button className="icon-btn" title="Edit" onClick={() => setEditing(g)}
-                                style={{ background: "transparent", border: 0, cursor: "pointer", color: "var(--qz-fg-3)" }}>
-                                <Pencil size={15} />
+                              <button type="button" className="btn btn-sm btn-link-neutral btn-icon" title="Edit" onClick={() => setEditing(g)}>
+                                <Icon shape="pencil" size={15} />
                               </button>
                               {/* The default (first) action always exists — deleting it just
                                   re-seeds on reload, so only non-default actions are removable. */}
-                              <button className="icon-btn"
+                              <button type="button" className="btn btn-sm btn-link-neutral btn-icon"
                                 title={i === 0 ? "The default action cannot be removed" : "Remove"}
                                 disabled={i === 0}
                                 onClick={() => setDraft({ ...draft, groups: draft.groups.filter((x) => x.name !== g.name) })}
-                                style={{
-                                  background: "transparent", border: 0,
-                                  cursor: i === 0 ? "not-allowed" : "pointer",
-                                  color: i === 0 ? "var(--qz-fg-4)" : "var(--qz-danger)",
-                                  opacity: i === 0 ? 0.5 : 1,
-                                }}>
-                                <Trash2 size={15} />
+                                style={{ color: i === 0 ? undefined : "var(--cds-alias-status-danger)" }}>
+                                <Icon shape="trash" size={15} />
                               </button>
                             </div>
                           </td>
@@ -609,43 +611,47 @@ export default function ContentFilteringPage() {
 
           {tab === "blockpage" && (
             <div className="grid md:grid-cols-2 gap-4">
-              <section className="rounded-lg px-5 py-4 flex flex-col gap-3" style={cardStyle}>
-                <div className="flex flex-col gap-1">
-                  <span className={fieldLabel}>Message</span>
-                  <textarea value={draft.blockPage.message ?? ""} style={inputStyle} rows={3}
-                    onChange={(e) => setDraft({ ...draft, blockPage: { ...draft.blockPage, message: e.target.value || null } })}
-                    className={`w-full ${inputCls}`} placeholder="This site is blocked by policy." />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className={fieldLabel}>Contact</span>
-                  <input value={draft.blockPage.contact ?? ""} style={inputStyle}
-                    onChange={(e) => setDraft({ ...draft, blockPage: { ...draft.blockPage, contact: e.target.value || null } })}
-                    className={`w-full ${inputCls}`} placeholder="it@example.com" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className={fieldLabel}>Access log level</span>
-                  <Segmented value={draft.logLevel}
-                    onChange={(v) => setDraft({ ...draft, logLevel: v as LogLevel })}
-                    items={[
-                      { value: "none", label: "None" },
-                      { value: "blocked-only", label: "Blocked only" },
-                      { value: "all", label: "All" },
-                    ]} />
+              <section className="card">
+                <div className="card-block flex flex-col gap-3">
+                  <div className="clr-form-control" style={{ marginTop: 0 }}>
+                    <label className={fieldLabel}>Message</label>
+                    <textarea value={draft.blockPage.message ?? ""} rows={3}
+                      onChange={(e) => setDraft({ ...draft, blockPage: { ...draft.blockPage, message: e.target.value || null } })}
+                      className="clr-textarea" style={{ maxWidth: "none" }} placeholder="This site is blocked by policy." />
+                  </div>
+                  <div className="clr-form-control" style={{ marginTop: 0 }}>
+                    <label className={fieldLabel}>Contact</label>
+                    <input value={draft.blockPage.contact ?? ""}
+                      onChange={(e) => setDraft({ ...draft, blockPage: { ...draft.blockPage, contact: e.target.value || null } })}
+                      className="clr-input" style={{ maxWidth: "none" }} placeholder="it@example.com" />
+                  </div>
+                  <div className="clr-form-control" style={{ marginTop: 0 }}>
+                    <label className={fieldLabel}>Access log level</label>
+                    <Segmented value={draft.logLevel}
+                      onChange={(v) => setDraft({ ...draft, logLevel: v as LogLevel })}
+                      items={[
+                        { value: "none", label: "None" },
+                        { value: "blocked-only", label: "Blocked only" },
+                        { value: "all", label: "All" },
+                      ]} />
+                  </div>
                 </div>
               </section>
-              <section className="rounded-lg px-5 py-4" style={{ ...cardStyle, minHeight: 200 }}>
-                <div className={`${fieldLabel} mb-2`}>Live preview</div>
-                <div className="rounded-md p-4 text-center" style={{ background: "#0f1115", color: "#e6e8ec" }}>
-                  <div className="text-[15px] font-semibold" style={{ color: "#ff5c5c" }}>Access blocked</div>
-                  <p className="text-[12px] mt-1" style={{ color: "#c3c8d1" }}>
-                    {draft.blockPage.message || "This site is blocked by QuartzFire Content Filtering."}
-                  </p>
-                  <div className="text-[11px] mt-3 text-left inline-block" style={{ color: "#8b93a1" }}>
-                    URL: example.com · Category: adult · Group: default
+              <section className="card" style={{ minHeight: 200 }}>
+                <div className="card-block">
+                  <div className={`${fieldLabel} mb-2`}>Live preview</div>
+                  <div className="rounded-md p-4 text-center" style={{ background: "#0f1115", color: "#e6e8ec" }}>
+                    <div className="text-[15px] font-semibold" style={{ color: "#ff5c5c" }}>Access blocked</div>
+                    <p className="text-[12px] mt-1" style={{ color: "#c3c8d1" }}>
+                      {draft.blockPage.message || "This site is blocked by QuartzFire Content Filtering."}
+                    </p>
+                    <div className="text-[11px] mt-3 text-left inline-block" style={{ color: "#8b93a1" }}>
+                      URL: example.com · Category: adult · Group: default
+                    </div>
+                    {draft.blockPage.contact && (
+                      <p className="text-[11px] mt-2" style={{ color: "#8b93a1" }}>Need access? Contact {draft.blockPage.contact}.</p>
+                    )}
                   </div>
-                  {draft.blockPage.contact && (
-                    <p className="text-[11px] mt-2" style={{ color: "#8b93a1" }}>Need access? Contact {draft.blockPage.contact}.</p>
-                  )}
                 </div>
               </section>
             </div>
@@ -654,9 +660,9 @@ export default function ContentFilteringPage() {
           {tab === "logs" && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
-                <input value={logFilter.group} placeholder="Filter by group" style={inputStyle}
+                <input value={logFilter.group} placeholder="Filter by group"
                   onChange={(e) => setLogFilter((f) => ({ ...f, group: e.target.value }))}
-                  className={inputCls} />
+                  className="clr-input" style={{ width: 200, maxWidth: "none" }} />
                 <Segmented value={logFilter.action || "all"}
                   onChange={(v) => setLogFilter((f) => ({ ...f, action: v === "all" ? "" : v }))}
                   items={[
@@ -666,10 +672,10 @@ export default function ContentFilteringPage() {
                   ]} />
                 <div className="ml-auto flex items-center gap-3">
                   <ColumnsMenu vis={logVis} />
-                  <span className="text-[11px] text-[var(--qz-fg-4)]">auto-refresh · {logs.length} shown</span>
+                  <span className="text-[11px] text-[var(--cds-alias-typography-color-200)]">auto-refresh · {logs.length} shown</span>
                 </div>
               </div>
-              <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+              <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
                 <table ref={logResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: logResize.tableLayout }}>
                   <colgroup>
                     {logCols.map((c) => (
@@ -689,7 +695,7 @@ export default function ContentFilteringPage() {
                   <tbody>
                     {logs.length === 0 && (
                       <tr>
-                        <td colSpan={logCols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>No log entries.</td>
+                        <td colSpan={logCols.length} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>No log entries.</td>
                       </tr>
                     )}
                     {logs.map((l, i) => (
@@ -728,7 +734,7 @@ export default function ContentFilteringPage() {
       {confirmEnable && (
         <ConfirmModal
           title="Enable Content Filtering?"
-          confirmLabel="Enable filtering"
+          confirmLabel="Enable Filtering"
           onCancel={() => setConfirmEnable(false)}
           onConfirm={async () => { setConfirmEnable(false); await applyEnable(true); }}
         >
@@ -757,31 +763,35 @@ function TestUrlWidget({ groups, setToast }: { groups: FilterGroup[]; setToast: 
     catch (e) { setToast(`Test failed: ${(e as Error).message}`); } finally { setBusy(false); }
   };
   return (
-    <section className="rounded-lg px-5 py-4 md:col-span-2 flex flex-col gap-3" style={cardStyle}>
-      <h2 className="text-[13px] font-semibold text-[var(--qz-fg-1)] m-0 flex items-center gap-1.5">
-        <Search size={14} className="text-[var(--qz-fg-3)]" /> Test URL
-      </h2>
-      <div className="flex flex-wrap gap-2">
-        <input value={url} placeholder="https://example.com/page" style={inputStyle}
-          onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && run()}
-          className={`flex-1 min-w-[16rem] ${inputCls} mono`} />
-        <select value={group} onChange={(e) => setGroup(e.target.value)} style={inputStyle}
-          className={`${inputCls} cursor-pointer`}>
-          <option value="">Default group</option>
-          {groups.map((g) => <option key={g.name} value={g.name}>{g.name}</option>)}
-        </select>
-        <Button size="sm" onClick={run} disabled={busy}>{busy ? "Testing…" : "Test"}</Button>
+    <section className="card md:col-span-2">
+      <div className="card-header">
+        <Icon shape="search" size={14} />
+        Test URL
       </div>
-      {verdict && (
-        <div className="flex items-center gap-2 text-[13px]">
-          {verdict.action === "blocked"
-            ? <span className="badge badge-warn">Blocked</span>
-            : <span className="badge badge-ok inline-flex items-center gap-1"><ShieldCheck size={13} /> Allowed</span>}
-          <span className="text-[var(--qz-fg-4)]">
-            {verdict.matched ? `matched ${verdict.matched}` : verdict.reason}{verdict.category ? ` (${verdict.category})` : ""}
-          </span>
+      <div className="card-block flex flex-col gap-3">
+        <div className="flex flex-wrap gap-2">
+          <input value={url} placeholder="https://example.com/page"
+            onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && run()}
+            className="clr-input flex-1 min-w-[16rem] mono" style={{ maxWidth: "none" }} />
+          <div className="clr-select-wrapper" style={{ width: "auto" }}>
+            <select value={group} onChange={(e) => setGroup(e.target.value)} className="clr-select">
+              <option value="">Default group</option>
+              {groups.map((g) => <option key={g.name} value={g.name}>{g.name}</option>)}
+            </select>
+          </div>
+          <Button size="sm" onClick={run} disabled={busy}>{busy ? "Testing…" : "Test"}</Button>
         </div>
-      )}
+        {verdict && (
+          <div className="flex items-center gap-2 text-[13px]">
+            {verdict.action === "blocked"
+              ? <span className="badge badge-warn">Blocked</span>
+              : <span className="badge badge-ok inline-flex items-center gap-1"><Icon shape="shield-check" size={13} /> Allowed</span>}
+            <span className="text-[var(--cds-alias-typography-color-200)]">
+              {verdict.matched ? `matched ${verdict.matched}` : verdict.reason}{verdict.category ? ` (${verdict.category})` : ""}
+            </span>
+          </div>
+        )}
+      </div>
     </section>
   );
 }

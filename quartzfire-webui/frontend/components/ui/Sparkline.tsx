@@ -6,7 +6,8 @@ interface SparklineProps {
 
 export function Sparkline({
   data,
-  color = "var(--qz-accent)",
+  // Clarity: traffic/usage series are green (#00d992); blue is reserved for info.
+  color = "#00d992",
   height = 36,
 }: SparklineProps) {
   const W = 200;

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Check, GripVertical, Info, Plus, RotateCw, Search, Undo2 } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import {
   aliasDisplayName,
@@ -60,7 +60,7 @@ function EndpointCell({
   descriptions: Record<string, string>;
 }) {
   const sel = ruleSelection(rule, side, config.auto_groups, config);
-  if (sel.length === 0) return <span className="text-[var(--qz-fg-4)]">Any</span>;
+  if (sel.length === 0) return <span className="text-[var(--cds-alias-typography-color-200)]">Any</span>;
   // Friendly names — interface descriptions, alias and zone display names; the
   // tooltip keeps the technical names.
   const raw = sel.map((e) =>
@@ -85,10 +85,13 @@ function EndpointCell({
   const overflow = names.length - SHOWN;
   const shown = overflow > 0 ? names.slice(0, SHOWN) : names;
   return (
-    <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--qz-fg-1)" }} title={raw.join(", ")}>
+    <span
+      style={{ fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}
+      title={raw.join(", ")}
+    >
       {shown.join(", ")}
-      {overflow > 0 && <span className="text-[var(--qz-fg-4)]"> +{overflow}</span>}
-      {allIfaces && <span className="text-[var(--qz-fg-4)]"> · iface</span>}
+      {overflow > 0 && <span className="text-[var(--cds-alias-typography-color-200)]"> +{overflow}</span>}
+      {allIfaces && <span className="text-[var(--cds-alias-typography-color-200)]"> · iface</span>}
     </span>
   );
 }
@@ -109,7 +112,7 @@ export default function FirewallRulesPage() {
   const [modal, setModal] = useState<{ rule?: FirewallRule } | null>(null);
 
   // Display order as a list of rule keys. Dragging edits this locally;
-  // "Apply order" commits the renumbering in one transaction.
+  // "Apply Order" commits the renumbering in one transaction.
   const [order, setOrder] = useState<string[]>([]);
   const [applyingOrder, setApplyingOrder] = useState(false);
 
@@ -284,11 +287,14 @@ export default function FirewallRulesPage() {
     // A rule spanning several zone pairs is counted once per pair — its real
     // hit count is the total across them.
     const parts = r.scopes.map((s) => counters.get(counterKey(s.chain, r.rule))).filter((x) => x !== undefined);
-    if (parts.length === 0) return <span className="text-[var(--qz-fg-4)]">—</span>;
+    if (parts.length === 0) return <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;
     const c = parts.reduce((a, b) => ({ packets: a.packets + b.packets, bytes: a.bytes + b.bytes }));
     return (
       <span
-        style={{ fontFamily: "var(--qz-font-mono)", color: c.packets > 0 ? "var(--qz-fg-1)" : "var(--qz-fg-4)" }}
+        style={{
+          fontFamily: "var(--qz-font-mono)",
+          color: c.packets > 0 ? "var(--cds-alias-typography-color-450)" : "var(--cds-alias-typography-color-200)",
+        }}
         title={`${c.packets.toLocaleString()} packets · ${formatBytes(c.bytes)}`}
       >
         {hitFormat.format(c.packets)}
@@ -300,10 +306,10 @@ export default function FirewallRulesPage() {
     if (r.policy) {
       const p = policyByName.get(r.policy);
       return (
-        <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--qz-fg-1)" }}>
+        <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>
           {r.policy}
           {p && (
-            <span className="text-[var(--qz-fg-4)]">
+            <span className="text-[var(--cds-alias-typography-color-200)]">
               {" "}
               · {PROTOCOL_LABEL[p.protocol].toLowerCase()}:{p.ports.join(",")}
             </span>
@@ -313,245 +319,236 @@ export default function FirewallRulesPage() {
     }
     if (r.protocol) {
       return (
-        <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--qz-fg-1)" }}>
+        <span style={{ fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>
           {r.protocol === "icmp" ? "ping" : r.protocol}
         </span>
       );
     }
-    return <span className="text-[var(--qz-fg-4)]">Any</span>;
+    return <span className="text-[var(--cds-alias-typography-color-200)]">Any</span>;
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Rules
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Rules</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           IPv4 rules for forwarded traffic and traffic to or from the firewall itself, evaluated top to bottom — drag
           to reorder
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading firewall rules…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading firewall rules…</div>}
+      {status === "error" && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
+          <div className="alert-actions">
+            <Button kind="secondary" size="sm" icon="refresh" onClick={() => load()}>Retry</Button>
           </div>
-        )}
-        {status === "ready" && (
-          <div className="flex flex-col gap-3">
-            {/* Zones add a second layer of filtering, and the two AND together —
-                say so, because a rule that allows traffic here can still be
-                denied by a zone (and vice versa). */}
-            {data.zones.length > 0 && (
-              <div
-                className="flex items-start gap-2 rounded-md px-3 py-[9px] text-[12px] text-[var(--qz-fg-3)]"
-                style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-              >
-                <Info size={14} className="flex-shrink-0 mt-[1px] text-[var(--qz-fg-4)]" />
-                <span>
-                  Zones are configured. Rules without a zone are checked first, for every packet — traffic has to pass
-                  both them and the rules of its zone pair. Deny by default is set per zone on the{" "}
-                  <Link href="/firewall/zones" className="text-[var(--qz-fg-1)] underline">
-                    Zones
-                  </Link>{" "}
-                  page.
-                </span>
+        </div>
+      )}
+      {status === "ready" && (
+        <div className="flex flex-col gap-3">
+          {/* Zones add a second layer of filtering, and the two AND together —
+              say so, because a rule that allows traffic here can still be
+              denied by a zone (and vice versa). */}
+          {data.zones.length > 0 && (
+            <div className="alert alert-info alert-sm">
+              <Icon shape="info-circle" size={14} className="alert-icon" />
+              <div className="alert-text">
+                Zones are configured. Rules without a zone are checked first, for every packet — traffic has to pass
+                both them and the rules of its zone pair. Deny by default is set per zone on the{" "}
+                <Link href="/firewall/zones" className="text-[var(--cds-alias-typography-color-450)] underline">
+                  Zones
+                </Link>{" "}
+                page.
               </div>
-            )}
-            {/* Controls */}
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative">
-                <Search
-                  size={14}
-                  className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]"
-                />
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search rules…"
-                  className="rounded-md pl-8 pr-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[240px]"
-                  style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--qz-accent)")}
-                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--qz-border)")}
-                />
-              </div>
+            </div>
+          )}
+          {/* Controls */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative">
+              <Icon
+                shape="search"
+                size={14}
+                className="absolute left-[9px] top-1/2 -translate-y-1/2"
+                style={{ color: "var(--cds-alias-typography-color-200)" }}
+              />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search rules…"
+                className="clr-input"
+                style={{ paddingLeft: 30, width: 240, maxWidth: 240 }}
+              />
+            </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] text-[var(--qz-fg-4)]">Default action</span>
-                {/* Unset means the VyOS base-chain default, accept — showing
-                    drop would both misreport it and make Deny unselectable
-                    (the change event never fires on an unchanged value). */}
+            <div className="flex items-center gap-2">
+              <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>Default action</span>
+              {/* Unset means the VyOS base-chain default, accept — showing
+                  drop would both misreport it and make Deny unselectable
+                  (the change event never fires on an unchanged value). */}
+              <div className="clr-select-wrapper" style={{ width: "auto" }}>
                 <select
                   value={data.default_action === "drop" ? "drop" : "accept"}
                   onChange={(e) => changeDefaultAction(e.target.value as "accept" | "drop")}
                   disabled={defaultDropBlocked !== null}
                   title={defaultDropBlocked ?? undefined}
-                  className="rounded-md px-2 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-                  style={{
-                    background: "var(--qz-input-bg)",
-                    border: "1px solid var(--qz-border)",
-                    opacity: defaultDropBlocked !== null ? 0.5 : 1,
-                  }}
+                  className="clr-select"
+                  style={{ width: "auto", minWidth: 100, fontFamily: "var(--qz-font-mono)" }}
                 >
                   <option value="drop">Deny</option>
                   <option value="accept">Allow</option>
                 </select>
               </div>
-
-              <div className="ml-auto flex items-center gap-3">
-                <Button kind="secondary" size="sm" icon={RotateCw} onClick={refresh} disabled={refreshing}>
-                  {refreshing ? "Refreshing…" : "Refresh"}
-                </Button>
-                <Button kind="primary" size="sm" icon={Plus} onClick={() => setModal({})}>
-                  Create rule
-                </Button>
-                <span className="text-[12px] text-[var(--qz-fg-4)]">
-                  {visibleRules.length} {visibleRules.length === 1 ? "rule" : "rules"}
-                </span>
-              </div>
             </div>
 
-            {/* Pending-order bar */}
-            {orderDirty && (
-              <div
-                className="flex items-center gap-3 px-3 py-2 rounded-md"
-                style={{
-                  background: "var(--qz-accent-soft)",
-                  border: "1px solid color-mix(in oklab, var(--qz-accent) 30%, transparent)",
-                }}
-              >
-                <span className="text-[13px] font-medium text-[var(--qz-fg-1)]">
-                  Rule order changed — not applied yet.
-                </span>
-                <div className="ml-auto flex items-center gap-2">
-                  <Button kind="secondary" size="sm" icon={Undo2} onClick={() => setOrder(data.rules.map(ruleKey))} disabled={applyingOrder}>
-                    Reset
-                  </Button>
-                  <Button kind="primary" size="sm" icon={Check} onClick={commitOrder} disabled={applyingOrder}>
-                    {applyingOrder ? "Applying…" : "Apply order"}
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Table */}
-            <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
-              <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
-                <colgroup>
-                  {RULE_COLS.map((c) => (
-                    <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
-                  ))}
-                  <col style={{ width: 90 }} />
-                </colgroup>
-                <thead>
-                  <tr>
-                    {RULE_COLS.map((c, i) => (
-                      <th key={c.key} {...resize.thProps(i)}>
-                        {c.header}
-                        {resize.handle(i)}
-                      </th>
-                    ))}
-                    <th className="text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleRules.length === 0 ? (
-                    <tr>
-                      <td colSpan={9} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
-                        {q ? "No rules match the search." : "No firewall rules configured."}
-                      </td>
-                    </tr>
-                  ) : (
-                    visibleRules.map((r) => {
-                      const position = orderedRules.indexOf(r) + 1;
-                      return (
-                        <tr
-                          key={ruleKey(r)}
-                          draggable={dragEnabled}
-                          onDragStart={(e) => {
-                            dragIndex.current = orderedRules.indexOf(r);
-                            setDragging(true);
-                            e.dataTransfer.effectAllowed = "move";
-                          }}
-                          onDragOver={(e) => onRowDragOver(e, orderedRules.indexOf(r))}
-                          onDrop={(e) => e.preventDefault()}
-                          onDragEnd={() => {
-                            dragIndex.current = null;
-                            setDragging(false);
-                          }}
-                          style={{
-                            opacity: r.enabled ? 1 : 0.55,
-                            cursor: dragEnabled ? (dragging ? "grabbing" : "grab") : "default",
-                          }}
-                        >
-                          <td className="mono">
-                            <span className="inline-flex items-center gap-[6px]">
-                              {dragEnabled && (
-                                <GripVertical size={13} className="text-[var(--qz-fg-4)] flex-shrink-0" />
-                              )}
-                              {position}
-                            </span>
-                          </td>
-                          <td>
-                            <span className="inline-flex items-center gap-[5px]">
-                              <ActionPill action={r.action} />
-                              {r.ips && (
-                                <span className="badge badge-warn" title="Matches are inspected by the IPS engine">
-                                  IPS
-                                </span>
-                              )}
-                            </span>
-                          </td>
-                          <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {r.name ?? <span className="text-[var(--qz-fg-4)]">—</span>}
-                          </td>
-                          <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            <EndpointCell rule={r} side="from" config={data} descriptions={ifaceDescriptions} />
-                          </td>
-                          <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            <EndpointCell rule={r} side="to" config={data} descriptions={ifaceDescriptions} />
-                          </td>
-                          <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {policyCell(r)}
-                          </td>
-                          <td>{hitsCell(r)}</td>
-                          <td>
-                            <span className={r.enabled ? "badge badge-ok" : "badge badge-muted"}>
-                              {r.enabled ? "Enabled" : "Disabled"}
-                            </span>
-                          </td>
-                          <td onMouseDown={(e) => e.stopPropagation()} style={{ cursor: "default" }} className="text-right">
-                            <RowActions
-                              label={`rule ${r.rule}`}
-                              onEdit={() => setModal({ rule: r })}
-                              onDelete={() => remove(r)}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
+            <div className="ml-auto flex items-center gap-3">
+              <Button kind="secondary" size="sm" icon="refresh" onClick={refresh} disabled={refreshing}>
+                {refreshing ? "Refreshing…" : "Refresh"}
+              </Button>
+              <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+                Create Rule
+              </Button>
+              <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+                {visibleRules.length} {visibleRules.length === 1 ? "rule" : "rules"}
+              </span>
             </div>
-
-            <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
-              Forwarded traffic matching no rule falls through to the default action. Traffic to or from the Firewall
-              itself is allowed unless a rule denies it.
-              {q && " Reordering is disabled while a search filter is active."}
-            </p>
           </div>
-        )}
-      </div>
+
+          {/* Pending-order bar */}
+          {orderDirty && (
+            <div className="alert alert-warning alert-sm">
+              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+              <div className="alert-text">Rule order changed — not applied yet.</div>
+              <div className="alert-actions" style={{ display: "flex", gap: 8 }}>
+                <Button kind="secondary" size="sm" icon="undo" onClick={() => setOrder(data.rules.map(ruleKey))} disabled={applyingOrder}>
+                  Reset
+                </Button>
+                <Button kind="primary" size="sm" icon="check" onClick={commitOrder} disabled={applyingOrder}>
+                  {applyingOrder ? "Applying…" : "Apply Order"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Table */}
+          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
+            <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
+              <colgroup>
+                {RULE_COLS.map((c) => (
+                  <col key={c.key} style={{ width: resize.colWidth(c.key) }} />
+                ))}
+                <col style={{ width: 90 }} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {RULE_COLS.map((c, i) => (
+                    <th key={c.key} {...resize.thProps(i)}>
+                      {c.header}
+                      {resize.handle(i)}
+                    </th>
+                  ))}
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRules.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="text-center text-[var(--cds-alias-typography-color-200)]"
+                      style={{ cursor: "default" }}
+                    >
+                      {q ? "No rules match the search." : "No firewall rules configured."}
+                    </td>
+                  </tr>
+                ) : (
+                  visibleRules.map((r) => {
+                    const position = orderedRules.indexOf(r) + 1;
+                    return (
+                      <tr
+                        key={ruleKey(r)}
+                        draggable={dragEnabled}
+                        onDragStart={(e) => {
+                          dragIndex.current = orderedRules.indexOf(r);
+                          setDragging(true);
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragOver={(e) => onRowDragOver(e, orderedRules.indexOf(r))}
+                        onDrop={(e) => e.preventDefault()}
+                        onDragEnd={() => {
+                          dragIndex.current = null;
+                          setDragging(false);
+                        }}
+                        style={{
+                          opacity: r.enabled ? 1 : 0.55,
+                          cursor: dragEnabled ? (dragging ? "grabbing" : "grab") : "default",
+                        }}
+                      >
+                        <td className="mono">
+                          <span className="inline-flex items-center gap-[6px]">
+                            {dragEnabled && (
+                              <Icon
+                                shape="drag-handle"
+                                size={13}
+                                className="flex-shrink-0"
+                                style={{ color: "var(--cds-alias-typography-color-200)" }}
+                              />
+                            )}
+                            {position}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="inline-flex items-center gap-[5px]">
+                            <ActionPill action={r.action} />
+                            {r.ips && (
+                              <span className="badge badge-warn" title="Matches are inspected by the IPS engine">
+                                IPS
+                              </span>
+                            )}
+                          </span>
+                        </td>
+                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {r.name ?? <span className="text-[var(--cds-alias-typography-color-200)]">—</span>}
+                        </td>
+                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <EndpointCell rule={r} side="from" config={data} descriptions={ifaceDescriptions} />
+                        </td>
+                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <EndpointCell rule={r} side="to" config={data} descriptions={ifaceDescriptions} />
+                        </td>
+                        <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {policyCell(r)}
+                        </td>
+                        <td>{hitsCell(r)}</td>
+                        <td>
+                          <span className={r.enabled ? "badge badge-ok" : "badge badge-muted"}>
+                            {r.enabled ? "Enabled" : "Disabled"}
+                          </span>
+                        </td>
+                        <td onMouseDown={(e) => e.stopPropagation()} style={{ cursor: "default" }} className="text-right">
+                          <RowActions
+                            label={`rule ${r.rule}`}
+                            onEdit={() => setModal({ rule: r })}
+                            onDelete={() => remove(r)}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
+            Forwarded traffic matching no rule falls through to the default action. Traffic to or from the Firewall
+            itself is allowed unless a rule denies it.
+            {q && " Reordering is disabled while a search filter is active."}
+          </p>
+        </div>
+      )}
 
       {modal && (
         <RuleFormModal

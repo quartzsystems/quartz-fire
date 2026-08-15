@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { useDashboard } from "@/lib/DashboardContext";
@@ -38,7 +39,7 @@ function groupColumns(): Column<VrrpGroup>[] {
         r.addresses.length ? (
           <span className="font-mono text-[12px]">{r.addresses.map((a) => a.address).join(", ")}</span>
         ) : (
-          <span className="text-[var(--qz-fg-4)]">—</span>
+          <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
         ),
       width: 220,
     },
@@ -68,7 +69,7 @@ function syncColumns(): Column<VrrpSyncGroup>[] {
             ))}
           </span>
         ) : (
-          <span className="text-[var(--qz-fg-4)]">—</span>
+          <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>
         ),
     },
   ];
@@ -138,104 +139,86 @@ export default function VrrpPage() {
     }
   };
 
-  const tabs: [Section, string, number | null][] = [
-    ["groups", "Groups", cfg?.groups.length ?? 0],
-    ["sync-groups", "Sync Groups", cfg?.syncGroups.length ?? 0],
-    ["global", "Global", null],
-  ];
-
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          VRRP
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2>VRRP</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Virtual Router Redundancy Protocol — a floating gateway that fails over between routers
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading VRRP configuration…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading VRRP configuration…</div>}
+      {status === "error" && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
+          <div className="alert-actions">
+            <button type="button" className="alert-action" onClick={() => load()}>
+              Retry
+            </button>
           </div>
-        )}
-        {status === "ready" && cfg && (
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-1 border-b border-[var(--qz-border)]">
-              {tabs.map(([id, label, count]) => {
-                const active = section === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setSection(id)}
-                    className={[
-                      "px-3 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
-                      active ? "text-[var(--qz-accent)] border-[var(--qz-accent)]" : "text-[var(--qz-fg-3)] border-transparent hover:text-[var(--qz-fg-1)]",
-                    ].join(" ")}
-                  >
-                    {label}
-                    {count !== null && <span className="ml-[6px] text-[12px] text-[var(--qz-fg-4)]">{count}</span>}
-                  </button>
-                );
-              })}
-            </div>
+        </div>
+      )}
+      {status === "ready" && cfg && (
+        <div className="flex flex-col gap-5">
+          <Tabs
+            items={[
+              { value: "groups", label: "Groups", count: cfg.groups.length },
+              { value: "sync-groups", label: "Sync Groups", count: cfg.syncGroups.length },
+              { value: "global", label: "Global" },
+            ]}
+            value={section}
+            onChange={(v) => setSection(v as Section)}
+          />
 
-            {section === "groups" && (
-              <DataTable
-                rows={cfg.groups}
-                columns={groupColumns()}
-                rowId={(r) => r.name}
-                storageKey="ha-vrrp-groups"
-                searchPlaceholder="Search groups…"
-                emptyMessage="No VRRP groups configured."
-                onRefresh={() => load("refresh")}
-                toolbar={
-                  <Button kind="primary" size="sm" icon={Plus} onClick={() => setGroupModal({})}>
-                    Add group
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions label={`group ${row.name}`} onEdit={() => setGroupModal({ group: row })} onDelete={() => removeGroup(row)} />
-                )}
-              />
-            )}
+          {section === "groups" && (
+            <DataTable
+              rows={cfg.groups}
+              columns={groupColumns()}
+              rowId={(r) => r.name}
+              storageKey="ha-vrrp-groups"
+              searchPlaceholder="Search groups…"
+              emptyMessage="No VRRP groups configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setGroupModal({ group: row })}
+              toolbar={
+                <Button kind="primary" size="sm" icon="plus" onClick={() => setGroupModal({})}>
+                  Add Group
+                </Button>
+              }
+              actions={(row) => (
+                <RowActions label={`group ${row.name}`} onEdit={() => setGroupModal({ group: row })} onDelete={() => removeGroup(row)} />
+              )}
+            />
+          )}
 
-            {section === "sync-groups" && (
-              <DataTable
-                rows={cfg.syncGroups}
-                columns={syncColumns()}
-                rowId={(r) => r.name}
-                storageKey="ha-vrrp-sync-groups"
-                searchPlaceholder="Search sync-groups…"
-                emptyMessage="No VRRP sync-groups configured."
-                onRefresh={() => load("refresh")}
-                toolbar={
-                  <Button kind="primary" size="sm" icon={Plus} onClick={() => setSyncModal({})}>
-                    Add sync-group
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions label={`sync-group ${row.name}`} onEdit={() => setSyncModal({ group: row })} onDelete={() => removeSync(row)} />
-                )}
-              />
-            )}
+          {section === "sync-groups" && (
+            <DataTable
+              rows={cfg.syncGroups}
+              columns={syncColumns()}
+              rowId={(r) => r.name}
+              storageKey="ha-vrrp-sync-groups"
+              searchPlaceholder="Search sync-groups…"
+              emptyMessage="No VRRP sync-groups configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setSyncModal({ group: row })}
+              toolbar={
+                <Button kind="primary" size="sm" icon="plus" onClick={() => setSyncModal({})}>
+                  Add Sync Group
+                </Button>
+              }
+              actions={(row) => (
+                <RowActions label={`sync-group ${row.name}`} onEdit={() => setSyncModal({ group: row })} onDelete={() => removeSync(row)} />
+              )}
+            />
+          )}
 
-            {section === "global" && (
-              <GlobalParametersPanel live={cfg.global} onSaved={(msg) => { setToast(msg); load("refresh"); }} />
-            )}
-          </div>
-        )}
-      </div>
+          {section === "global" && (
+            <GlobalParametersPanel live={cfg.global} onSaved={(msg) => { setToast(msg); load("refresh"); }} />
+          )}
+        </div>
+      )}
 
       {groupModal && cfg && (
         <GroupFormModal

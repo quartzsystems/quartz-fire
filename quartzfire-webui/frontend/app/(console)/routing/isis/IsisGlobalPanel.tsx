@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Save } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Switch } from "@/components/ui/Switch";
 import { Button } from "@/components/ui/Button";
 import {
@@ -16,37 +16,29 @@ import {
   ISIS_REDIST_IPV6,
 } from "@/lib/isis";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const inputStyle = { maxWidth: "none", width: "100%" } as const;
+const monoStyle = { ...inputStyle, fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">
-        {label} {required && <span style={{ color: "var(--qz-danger)" }}>*</span>}
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">
+        {label} {required && <span style={{ color: "var(--cds-alias-status-danger)" }}>*</span>}
       </label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg p-5 flex flex-col gap-4" style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}>
-      <div>
-        <h3 className="text-[14px] font-semibold text-[var(--qz-fg-1)] m-0">{title}</h3>
-        {subtitle && <p className="text-[12px] text-[var(--qz-fg-4)] m-0 mt-[2px]">{subtitle}</p>}
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="card-header">{title}</div>
+      <div className="card-block flex flex-col gap-4">
+        {subtitle && <p className="clr-secondary" style={{ margin: 0 }}>{subtitle}</p>}
+        {children}
       </div>
-      {children}
     </div>
   );
 }
@@ -55,9 +47,9 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
   return (
     <label className="flex items-start gap-[10px] cursor-pointer select-none">
       <div className="pt-[1px]"><Switch on={on} onChange={onChange} /></div>
-      <span className="text-[13px] text-[var(--qz-fg-2)]">
+      <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
         {label}
-        {hint && <span className="block text-[11px] text-[var(--qz-fg-4)]">{hint}</span>}
+        {hint && <span className="block clr-subtext" style={{ marginTop: 0 }}>{hint}</span>}
       </span>
     </label>
   );
@@ -84,17 +76,17 @@ function RedistMatrix({ afi, protocols, entries, onToggle }: {
     entries.some((e) => e.afi === afi && e.protocol === protocol && e.level === level);
   return (
     <div className="flex flex-col gap-1">
-      <div className="grid gap-2 items-center text-[11px] text-[var(--qz-fg-4)]" style={{ gridTemplateColumns: "1fr 70px 70px" }}>
-        <span className="uppercase tracking-wider">{afi}</span>
+      <div className="grid gap-2 items-center clr-subtext" style={{ gridTemplateColumns: "1fr 70px 70px", marginTop: 0 }}>
+        <span style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>{afi}</span>
         <span className="text-center">L1</span>
         <span className="text-center">L2</span>
       </div>
       {protocols.map((proto) => (
         <div key={proto} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 70px 70px" }}>
-          <span className="text-[13px] text-[var(--qz-fg-2)]" style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</span>
+          <span style={{ fontSize: 13, fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" }}>{proto}</span>
           {REDIST_LEVELS.map((level) => (
-            <span key={level} className="text-center">
-              <input type="checkbox" checked={has(proto, level)} onChange={() => onToggle(afi, proto, level)} style={{ accentColor: "var(--qz-accent)" }} />
+            <span key={level} className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
+              <input type="checkbox" checked={has(proto, level)} onChange={() => onToggle(afi, proto, level)} />
             </span>
           ))}
         </div>
@@ -171,24 +163,28 @@ export function IsisGlobalPanel({ live, onSaved }: { live: IsisGlobal; onSaved: 
     <div className="flex flex-col gap-4 max-w-[720px]">
       <Section title="Router" subtitle="IS-IS identity and level.">
         <Field label="Network Entity Title (NET)" required hint="e.g. 49.0001.1921.6800.1002.00 — the area + system-id + NSEL.">
-          <input value={net} onChange={(e) => setNet(e.target.value)} placeholder="49.0001.1921.6800.1002.00" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={net} onChange={(e) => setNet(e.target.value)} placeholder="49.0001.1921.6800.1002.00" className="clr-input" style={monoStyle} />
         </Field>
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="IS type (level)" hint="Which levels this router participates in.">
-            <select value={level} onChange={(e) => setLevel(e.target.value as IsisLevel | "")} className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder}>
-              <option value="">Default (level-1-2)</option>
-              <option value="level-1">level-1</option>
-              <option value="level-1-2">level-1-2</option>
-              <option value="level-2">level-2</option>
-            </select>
+            <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+              <select value={level} onChange={(e) => setLevel(e.target.value as IsisLevel | "")} className="clr-select" style={inputStyle}>
+                <option value="">Default (level-1-2)</option>
+                <option value="level-1">level-1</option>
+                <option value="level-1-2">level-1-2</option>
+                <option value="level-2">level-2</option>
+              </select>
+            </div>
           </Field>
           <Field label="Metric style" hint="wide is required for anything but the smallest legacy network.">
-            <select value={metricStyle} onChange={(e) => setMetricStyle(e.target.value as IsisMetricStyle | "")} className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder}>
-              <option value="">Default (narrow)</option>
-              <option value="narrow">narrow</option>
-              <option value="transition">transition</option>
-              <option value="wide">wide</option>
-            </select>
+            <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+              <select value={metricStyle} onChange={(e) => setMetricStyle(e.target.value as IsisMetricStyle | "")} className="clr-select" style={inputStyle}>
+                <option value="">Default (narrow)</option>
+                <option value="narrow">narrow</option>
+                <option value="transition">transition</option>
+                <option value="wide">wide</option>
+              </select>
+            </div>
           </Field>
         </div>
         <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
@@ -200,9 +196,9 @@ export function IsisGlobalPanel({ live, onSaved }: { live: IsisGlobal; onSaved: 
 
       <Section title="Timers" subtitle="LSP generation / refresh and SPF pacing (seconds).">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <Field label="LSP gen interval"><input value={lspGen} onChange={(e) => setLspGen(e.target.value)} placeholder="30" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
-          <Field label="LSP refresh interval"><input value={lspRefresh} onChange={(e) => setLspRefresh(e.target.value)} placeholder="900" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
-          <Field label="SPF interval"><input value={spfInterval} onChange={(e) => setSpfInterval(e.target.value)} placeholder="1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
+          <Field label="LSP gen interval"><input value={lspGen} onChange={(e) => setLspGen(e.target.value)} placeholder="30" className="clr-input" style={monoStyle} /></Field>
+          <Field label="LSP refresh interval"><input value={lspRefresh} onChange={(e) => setLspRefresh(e.target.value)} placeholder="900" className="clr-input" style={monoStyle} /></Field>
+          <Field label="SPF interval"><input value={spfInterval} onChange={(e) => setSpfInterval(e.target.value)} placeholder="1" className="clr-input" style={monoStyle} /></Field>
         </div>
       </Section>
 
@@ -214,28 +210,33 @@ export function IsisGlobalPanel({ live, onSaved }: { live: IsisGlobal; onSaved: 
       </Section>
 
       <Section title="Originated Default Route" subtitle="default-information originate — advertise a default per family and level.">
-        <div className="grid gap-2 items-center text-[11px] text-[var(--qz-fg-4)]" style={{ gridTemplateColumns: "1fr 70px 70px" }}>
+        <div className="grid gap-2 items-center clr-subtext" style={{ gridTemplateColumns: "1fr 70px 70px", marginTop: 0 }}>
           <span />
           <span className="text-center">L1</span>
           <span className="text-center">L2</span>
         </div>
         {(["ipv4", "ipv6"] as const).map((afi) => (
           <div key={afi} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 70px 70px" }}>
-            <span className="text-[13px] text-[var(--qz-fg-2)]" style={{ fontFamily: "var(--qz-font-mono)" }}>{afi}</span>
+            <span style={{ fontSize: 13, fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-400)" }}>{afi}</span>
             {REDIST_LEVELS.map((level) => (
-              <span key={level} className="text-center">
-                <input type="checkbox" checked={hasOriginate(afi, level)} onChange={() => toggleOriginate(afi, level)} style={{ accentColor: "var(--qz-accent)" }} />
+              <span key={level} className="clr-checkbox-wrapper" style={{ justifyContent: "center" }}>
+                <input type="checkbox" checked={hasOriginate(afi, level)} onChange={() => toggleOriginate(afi, level)} />
               </span>
             ))}
           </div>
         ))}
       </Section>
 
-      {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
+      {error && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{error}</div>
+        </div>
+      )}
 
       <div className="flex justify-end">
-        <Button kind="primary" icon={Save} onClick={save} disabled={saving}>
-          {saving ? "Applying…" : "Save IS-IS settings"}
+        <Button kind="primary" onClick={save} disabled={saving}>
+          {saving ? "Applying…" : "Save IS-IS Settings"}
         </Button>
       </div>
     </div>

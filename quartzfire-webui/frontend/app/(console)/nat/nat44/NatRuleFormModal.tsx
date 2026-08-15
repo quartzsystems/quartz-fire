@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { applyNatRule, NatRule, NatSection } from "@/lib/nat";
 import { ALIAS_GROUP, FirewallAlias, InterfaceAlias } from "@/lib/firewall";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
+const mono = { fontFamily: "var(--qz-font-mono)" } as const;
+const wide = { maxWidth: "none" } as const;
+const wideMono = { ...wide, ...mono } as const;
 
 const PROTOCOLS = ["all", "tcp", "udp", "tcp_udp", "icmp", "esp", "gre"];
 
@@ -18,19 +19,13 @@ const PROTOCOLS = ["all", "tcp", "udp", "tcp_udp", "icmp", "esp", "gre"];
 /// `<type> <name>` group references in the same select.
 const NET_PREFIX = "network:";
 
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/// Clarity field: label + control + optional helper sentence.
+function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -211,7 +206,7 @@ export function NatRuleFormModal({
           ))}
         </datalist>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Rule Number">
             <input
               type="number"
@@ -220,10 +215,8 @@ export function NatRuleFormModal({
               value={rule}
               onChange={(e) => setRule(e.target.value)}
               placeholder="100"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
           <Field label="Protocol">
@@ -232,10 +225,8 @@ export function NatRuleFormModal({
               value={protocol}
               onChange={(e) => setProtocol(e.target.value)}
               placeholder="all"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
         </div>
@@ -245,43 +236,39 @@ export function NatRuleFormModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder={isSource ? "Office Outbound NAT" : "Web Server Port-Forward"}
-            className={inputCls}
-            style={inputSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={wide}
           />
         </Field>
 
         <Field label={ifaceLabel} hint="Interface this rule applies to.">
           {ifaceOptions.length > 0 ? (
-            <select
-              value={iface}
-              onChange={(e) => setIface(e.target.value)}
-              className={`${inputCls} cursor-pointer`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              {ifaceOptions.map((n) => (
-                <option key={n} value={n}>
-                  {descriptions?.[n] ? `${n} — ${descriptions[n]}` : n}
-                </option>
-              ))}
-            </select>
+            <div className="clr-select-wrapper" style={wide}>
+              <select
+                value={iface}
+                onChange={(e) => setIface(e.target.value)}
+                className="clr-select"
+                style={wideMono}
+              >
+                {ifaceOptions.map((n) => (
+                  <option key={n} value={n}>
+                    {descriptions?.[n] ? `${n} — ${descriptions[n]}` : n}
+                  </option>
+                ))}
+              </select>
+            </div>
           ) : (
             <input
               value={iface}
               onChange={(e) => setIface(e.target.value)}
               placeholder="eth0"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           )}
         </Field>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "2fr 1fr" }}>
+        <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 12 }}>
           <Field
             label="Source"
             hint={
@@ -292,17 +279,17 @@ export function NatRuleFormModal({
           >
             <div className="flex gap-2">
               <div style={{ width: 104, flexShrink: 0 }}>
-                <select
-                  value={sourceMode}
-                  onChange={(e) => setSourceMode(e.target.value as "address" | "alias")}
-                  className={`${inputCls} cursor-pointer`}
-                  style={inputSt}
-                  onFocus={focusBorder}
-                  onBlur={blurBorder}
-                >
-                  <option value="address">Address</option>
-                  <option value="alias">Alias</option>
-                </select>
+                <div className="clr-select-wrapper" style={wide}>
+                  <select
+                    value={sourceMode}
+                    onChange={(e) => setSourceMode(e.target.value as "address" | "alias")}
+                    className="clr-select"
+                    style={wide}
+                  >
+                    <option value="address">Address</option>
+                    <option value="alias">Alias</option>
+                  </select>
+                </div>
               </div>
               <div className="flex-1 min-w-0">
                 {sourceMode === "address" ? (
@@ -310,42 +297,40 @@ export function NatRuleFormModal({
                     value={sourceAddress}
                     onChange={(e) => setSourceAddress(e.target.value)}
                     placeholder={isSource ? "10.0.0.0/24" : "any"}
-                    className={inputCls}
-                    style={monoSt}
-                    onFocus={focusBorder}
-                    onBlur={blurBorder}
+                    className="clr-input"
+                    style={wideMono}
                   />
                 ) : (
-                  <select
-                    value={sourceGroup}
-                    onChange={(e) => setSourceGroup(e.target.value)}
-                    className={`${inputCls} cursor-pointer`}
-                    style={monoSt}
-                    onFocus={focusBorder}
-                    onBlur={blurBorder}
-                  >
-                    <option value="" disabled>
-                      {hasAliasOptions ? "Select alias…" : "No aliases defined"}
-                    </option>
-                    {builtinOptions.length > 0 && (
-                      <optgroup label="Interface networks">
-                        {builtinOptions.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {aliasOptions.length > 0 && (
-                      <optgroup label="Aliases">
-                        {aliasOptions.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
+                  <div className="clr-select-wrapper" style={wide}>
+                    <select
+                      value={sourceGroup}
+                      onChange={(e) => setSourceGroup(e.target.value)}
+                      className="clr-select"
+                      style={wideMono}
+                    >
+                      <option value="" disabled>
+                        {hasAliasOptions ? "Select alias…" : "No aliases defined"}
+                      </option>
+                      {builtinOptions.length > 0 && (
+                        <optgroup label="Interface networks">
+                          {builtinOptions.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {aliasOptions.length > 0 && (
+                        <optgroup label="Aliases">
+                          {aliasOptions.map((o) => (
+                            <option key={o.value} value={o.value}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
                 )}
               </div>
             </div>
@@ -355,24 +340,20 @@ export function NatRuleFormModal({
               value={sourcePort}
               onChange={(e) => setSourcePort(e.target.value)}
               placeholder="any"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
         </div>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "2fr 1fr" }}>
+        <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 12 }}>
           <Field label="Destination Address">
             <input
               value={destAddress}
               onChange={(e) => setDestAddress(e.target.value)}
               placeholder={isSource ? "any" : "203.0.113.5"}
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
           <Field label="Destination Port">
@@ -380,23 +361,23 @@ export function NatRuleFormModal({
               value={destPort}
               onChange={(e) => setDestPort(e.target.value)}
               placeholder={isSource ? "any" : "443"}
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
         </div>
 
         {isSource && (
-          <label className="flex items-center gap-[10px] cursor-pointer select-none">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
             <Switch on={masquerade} onChange={setMasquerade} />
-            <span className="text-[13px] text-[var(--qz-fg-2)]">Masquerade (use the outbound interface address)</span>
+            <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
+              Masquerade (use the outbound interface address)
+            </span>
           </label>
         )}
 
         {!masquerade && (
-          <div className="grid gap-4" style={{ gridTemplateColumns: "2fr 1fr" }}>
+          <div className="grid" style={{ gridTemplateColumns: "2fr 1fr", gap: 12 }}>
             <Field
               label={isSource ? "Translation Address" : "Forward-to Address"}
               hint="An IP, CIDR block, or range (192.168.1.10-192.168.1.20)."
@@ -405,10 +386,8 @@ export function NatRuleFormModal({
                 value={translationAddress}
                 onChange={(e) => setTranslationAddress(e.target.value)}
                 placeholder="192.168.1.10"
-                className={inputCls}
-                style={monoSt}
-                onFocus={focusBorder}
-                onBlur={blurBorder}
+                className="clr-input"
+                style={wideMono}
               />
             </Field>
             <Field label="Translation Port">
@@ -416,44 +395,33 @@ export function NatRuleFormModal({
                 value={translationPort}
                 onChange={(e) => setTranslationPort(e.target.value)}
                 placeholder="keep original"
-                className={inputCls}
-                style={monoSt}
-                onFocus={focusBorder}
-                onBlur={blurBorder}
+                className="clr-input"
+                style={wideMono}
               />
             </Field>
           </div>
         )}
 
-        <label className="flex items-center gap-[10px] cursor-pointer select-none">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
           <Switch on={enabled} onChange={setEnabled} />
-          <span className="text-[13px] text-[var(--qz-fg-2)]">Enabled</span>
+          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Enabled</span>
         </label>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
-            {error}
-          </p>
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create rule"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Rule"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

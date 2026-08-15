@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, FileDiff, History, RotateCw } from "lucide-react";
-import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
+import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import {
   CommitEntry,
   fetchCommitDiff,
@@ -42,13 +42,26 @@ function loadSummaryCache(): Record<string, string> {
 
 type Tab = "config" | "system";
 
-/// Syslog severity rendered as a badge — the numeric levels mean nothing at a
+/// Syslog severity rendered as a pill — the numeric levels mean nothing at a
 /// glance.
 function PriorityPill({ priority }: { priority: number }) {
-  if (priority <= 3) return <span className="badge badge-crit">Error</span>;
-  if (priority === 4) return <span className="badge badge-warn">Warning</span>;
-  if (priority === 5) return <span className="badge badge-info">Notice</span>;
-  return <span className="badge badge-muted">Info</span>;
+  const pill = (tone: string | null, text: string) => (
+    <span
+      className={`label${tone ? ` label-${tone}` : ""}`}
+      style={{
+        fontFamily: "var(--qz-font-mono)",
+        letterSpacing: "0.06em",
+        textTransform: "uppercase",
+        width: "fit-content",
+      }}
+    >
+      {text}
+    </span>
+  );
+  if (priority <= 3) return pill("danger", "Error");
+  if (priority === 4) return pill("warning", "Warning");
+  if (priority === 5) return pill("info", "Notice");
+  return pill(null, "Info");
 }
 
 /// Render a millisecond timestamp as `YYYY-MM-DD HH:MM:SS` in the browser's
@@ -72,15 +85,16 @@ function commitColumns(summaries: Record<string, string>): Column<CommitEntry>[]
       value: (r) => summaries[summaryKey(r)] ?? "",
       render: (r) => {
         const s = summaries[summaryKey(r)];
-        if (s === undefined) return <span className="text-[var(--qz-fg-4)]">…</span>;
-        return s ? s : <span className="text-[var(--qz-fg-4)]">—</span>;
+        if (s === undefined) return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>…</span>;
+        return s ? s : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
       },
     },
     {
       key: "comment",
       header: "Comment",
       value: (r) => r.comment ?? "",
-      render: (r) => (r.comment ? r.comment : <span className="text-[var(--qz-fg-4)]">—</span>),
+      render: (r) =>
+        r.comment ? r.comment : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>,
     },
   ];
 }
@@ -141,27 +155,27 @@ function CommitDiffModal({ revision, onClose }: { revision: number; onClose: () 
   return (
     <ModalShell onClose={onClose} maxWidth={720}>
       <ModalHeader
-        title={`Commit revision ${revision}`}
+        title={`Commit Revision ${revision}`}
         subtitle="Configuration changes this commit introduced"
         onClose={onClose}
       />
-      {state.status === "loading" && (
-        <div className="text-[13px] text-[var(--qz-fg-4)]">Loading diff…</div>
-      )}
+      {state.status === "loading" && <div className="clr-secondary">Loading diff…</div>}
       {state.status === "error" && (
-        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-          <AlertTriangle size={15} />
-          {state.text}
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{state.text}</div>
         </div>
       )}
       {state.status === "ready" && (
         <pre
-          className="m-0 rounded-md p-3 text-[12px] leading-[1.6] overflow-auto"
+          className="m-0 rounded-md p-3 overflow-auto"
           style={{
             fontFamily: "var(--qz-font-mono)",
-            background: "var(--qz-input-bg)",
-            border: "1px solid var(--qz-border)",
-            color: "var(--qz-fg-2)",
+            fontSize: 12,
+            lineHeight: 1.6,
+            background: "var(--cds-alias-object-container-background-shade)",
+            border: "1px solid var(--cds-alias-object-border-color-tint)",
+            color: "var(--cds-alias-typography-color-400)",
             maxHeight: "60vh",
             whiteSpace: "pre-wrap",
           }}
@@ -202,44 +216,32 @@ function RollbackModal({
   return (
     <ModalShell onClose={onClose} maxWidth={480}>
       <ModalHeader
-        title={`Roll back to revision ${commit.revision}`}
+        title={`Roll Back to Revision ${commit.revision}`}
         subtitle={`Configuration as committed ${commit.date} by ${commit.user}`}
         onClose={onClose}
       />
       <div className="flex flex-col gap-4">
-        <p className="text-[13px] text-[var(--qz-fg-2)] m-0">
+        <p className="m-0" style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
           The entire configuration returns to the state of this revision — every change committed since
           (by the WebUI, CLI, or API) is undone. No reboot is needed.
         </p>
-        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">
+        <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>
           The rollback applies under commit-confirm: it must be confirmed in the banner within 2 minutes,
           otherwise the current configuration is restored automatically.
         </p>
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="m-0" style={{ fontSize: 12, color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
-        <div className="flex gap-2 justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={working}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer disabled:opacity-50"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose} disabled={working}>
             Cancel
           </button>
-          <button
-            type="button"
-            disabled={working}
-            onClick={run}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-danger)", color: "white", opacity: working ? 0.7 : 1 }}
-          >
-            {working ? "Rolling back…" : "Roll back"}
+          <button type="button" className="btn btn-danger" disabled={working} onClick={run}>
+            {working ? "Rolling back…" : "Roll Back"}
           </button>
-        </div>
+        </ModalFooter>
       </div>
     </ModalShell>
   );
@@ -324,114 +326,92 @@ export default function AuditLogPage() {
     load();
   }, [load]);
 
-  const tabs: [Tab, string, number][] = [
-    ["config", "Config Changes", commits.length],
-    ["system", "System Log", log.length],
-  ];
-
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Audit Log
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Audit Log</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Every configuration change committed on this device, and the firewall&apos;s own system logs — traffic
           logs live on the Traffic Monitor
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading audit log…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>
-                Retry
-              </Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading audit log…</div>}
+      {status === "error" && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
+          <div className="alert-actions">
+            <button type="button" className="alert-action" onClick={() => load()}>
+              Retry
+            </button>
           </div>
-        )}
-        {status === "ready" && (
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-1 border-b border-[var(--qz-border)]">
-              {tabs.map(([id, label, count]) => {
-                const active = tab === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTab(id)}
-                    className={[
-                      "px-3 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
-                      active
-                        ? "text-[var(--qz-accent)] border-[var(--qz-accent)]"
-                        : "text-[var(--qz-fg-3)] border-transparent hover:text-[var(--qz-fg-1)]",
-                    ].join(" ")}
-                  >
-                    {label}
-                    <span className="ml-[6px] text-[12px] text-[var(--qz-fg-4)]">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
+        </div>
+      )}
+      {status === "ready" && (
+        <div className="flex flex-col gap-4">
+          <Tabs
+            items={[
+              { value: "config", label: "Config Changes", count: commits.length },
+              { value: "system", label: "System Log", count: log.length },
+            ]}
+            value={tab}
+            onChange={(v) => setTab(v as Tab)}
+          />
 
-            {tab === "config" ? (
-              <DataTable
-                rows={commits}
-                columns={commitCols}
-                rowId={(r) => String(r.revision)}
-                storageKey="system-audit-commits"
-                searchPlaceholder="Search commits…"
-                emptyMessage="No commit history recorded on this device."
-                onRefresh={() => load("refresh")}
-                actions={(row) => (
-                  <span className="inline-flex items-center gap-1 justify-end">
+          {tab === "config" ? (
+            <DataTable
+              rows={commits}
+              columns={commitCols}
+              rowId={(r) => String(r.revision)}
+              storageKey="system-audit-commits"
+              searchPlaceholder="Search commits…"
+              emptyMessage="No commit history recorded on this device."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setDiffRevision(row.revision)}
+              footerHint="Double-click a commit to see its diff. Drag headers to reorder columns."
+              actions={(row) => (
+                <span className="inline-flex items-center gap-1 justify-end">
+                  <button
+                    type="button"
+                    title={`Show what revision ${row.revision} changed`}
+                    aria-label="Show diff"
+                    onClick={() => setDiffRevision(row.revision)}
+                    className="btn btn-sm btn-link-neutral btn-icon"
+                  >
+                    <Icon shape="file" size={14} />
+                  </button>
+                  {/* Revision 0 IS the current config — nothing to roll back to. */}
+                  {row.revision > 0 && (
                     <button
                       type="button"
-                      title={`Show what revision ${row.revision} changed`}
-                      aria-label="Show diff"
-                      onClick={() => setDiffRevision(row.revision)}
-                      className="grid place-items-center w-7 h-7 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-accent)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer"
+                      title={`Roll the configuration back to revision ${row.revision}`}
+                      aria-label="Roll back to this revision"
+                      onClick={() => setRollbackTarget(row)}
+                      className="btn btn-sm btn-link-neutral btn-icon"
                     >
-                      <FileDiff size={14} />
+                      <Icon shape="history" size={14} />
                     </button>
-                    {/* Revision 0 IS the current config — nothing to roll back to. */}
-                    {row.revision > 0 && (
-                      <button
-                        type="button"
-                        title={`Roll the configuration back to revision ${row.revision}`}
-                        aria-label="Roll back to this revision"
-                        onClick={() => setRollbackTarget(row)}
-                        className="grid place-items-center w-7 h-7 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer"
-                      >
-                        <History size={14} />
-                      </button>
-                    )}
-                  </span>
-                )}
-              />
-            ) : (
-              <DataTable
-                rows={log}
-                columns={logColumns}
-                rowId={(r) => String(r.id)}
-                filters={logFilters}
-                // v2: reset persisted layouts that seeded from the old
-                // stretched-to-fit measurements (unreadably wide columns).
-                storageKey="system-audit-log-v2"
-                searchPlaceholder="Search log messages…"
-                emptyMessage="No system log entries readable on this device."
-                onRefresh={() => load("refresh")}
-              />
-            )}
-          </div>
-        )}
-      </div>
+                  )}
+                </span>
+              )}
+            />
+          ) : (
+            <DataTable
+              rows={log}
+              columns={logColumns}
+              rowId={(r) => String(r.id)}
+              filters={logFilters}
+              // v2: reset persisted layouts that seeded from the old
+              // stretched-to-fit measurements (unreadably wide columns).
+              storageKey="system-audit-log-v2"
+              searchPlaceholder="Search log messages…"
+              emptyMessage="No system log entries readable on this device."
+              onRefresh={() => load("refresh")}
+            />
+          )}
+        </div>
+      )}
 
       {diffRevision !== null && (
         <CommitDiffModal revision={diffRevision} onClose={() => setDiffRevision(null)} />

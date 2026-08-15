@@ -9,7 +9,7 @@ import { DEFAULT_MTU, InterfaceKind } from "@/lib/interfaces";
 export function MtuCell({ mtu, kind }: { mtu: number | null; kind: InterfaceKind }) {
   if (mtu != null) return <>{mtu}</>;
   return (
-    <span className="text-[var(--qz-fg-4)]" title="Default (not set in config)">
+    <span className="text-[var(--cds-alias-typography-color-200)]" title="Default (not set in config)">
       {DEFAULT_MTU[kind]}
     </span>
   );

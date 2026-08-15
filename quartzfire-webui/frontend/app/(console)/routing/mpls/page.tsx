@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { Tabs } from "@/components/ui/Tabs";
 import { MplsConfig, fetchMpls } from "@/lib/mpls";
 import { useDashboard } from "@/lib/DashboardContext";
 import { MplsConfigPanel } from "./MplsConfigPanel";
@@ -40,47 +41,32 @@ export default function MplsPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          MPLS
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+        <h2 style={{ margin: 0 }}>MPLS</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Multiprotocol Label Switching — label forwarding and the LDP control plane
         </p>
       </div>
 
       <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading MPLS configuration…</div>}
+        {status === "loading" && <div className="clr-secondary">Loading MPLS configuration…</div>}
         {status === "error" && (
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
+            <div className="alert alert-danger alert-sm">
+              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+              <div className="alert-text">{errorMsg}</div>
             </div>
             <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
+              <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
             </div>
           </div>
         )}
         {status === "ready" && cfg && (
           <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-1 border-b border-[var(--qz-border)]">
-              {tabs.map(([id, label]) => {
-                const active = section === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setSection(id)}
-                    className={[
-                      "px-3 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
-                      active ? "text-[var(--qz-accent)] border-[var(--qz-accent)]" : "text-[var(--qz-fg-3)] border-transparent hover:text-[var(--qz-fg-1)]",
-                    ].join(" ")}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
+            <Tabs
+              items={tabs.map(([id, label]) => ({ value: id, label }))}
+              value={section}
+              onChange={(v) => setSection(v as Section)}
+            />
 
             {section === "config" && (
               <MplsConfigPanel

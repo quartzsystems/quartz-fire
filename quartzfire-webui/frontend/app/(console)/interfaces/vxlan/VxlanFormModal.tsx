@@ -1,31 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
 import { applyVxlan, VniMapping, VxlanInterface } from "@/lib/interfaces";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
+const mono = { fontFamily: "var(--qz-font-mono)" } as const;
+const wide = { maxWidth: "none" } as const;
+const wideMono = { ...wide, ...mono } as const;
 
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
-
-function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
+/// Clarity field: label + control + optional helper sentence.
+function Field({ label, hint, required, children }: { label: string; hint?: React.ReactNode; required?: boolean; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">
-        {label} {required && <span style={{ color: "var(--qz-danger)" }}>*</span>}
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">
+        {label}
+        {required && <span className="clr-required">*</span>}
       </label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -290,65 +285,57 @@ export function VxlanFormModal({
             disabled={isEdit}
             onChange={(e) => setName(e.target.value)}
             placeholder="vxlan2000"
-            className={`${inputCls} disabled:opacity-70`}
-            style={monoSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={wideMono}
           />
         </Field>
 
-        <div>
-          <div className="flex items-center justify-between mb-[6px]">
-            <label className="block text-[12px] text-[var(--qz-fg-3)]">
-              VNIs <span style={{ color: "var(--qz-danger)" }}>*</span>
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <div className="flex items-center justify-between">
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>
+              VNIs<span className="clr-required">*</span>
             </label>
-            <button
-              type="button"
-              onClick={addVni}
-              className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0"
-            >
-              <Plus size={13} /> Add VNI
+            <button type="button" onClick={addVni} className="btn btn-sm btn-link-neutral">
+              <Icon shape="plus" size={12} /> Add VNI
             </button>
           </div>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
             {vnis.map((r) => (
               <div key={r.key} className="flex items-center gap-2">
                 <input
                   value={r.vni}
                   onChange={(e) => updateVni(r.key, { vni: e.target.value })}
                   placeholder="VNI (e.g. 10010)"
-                  className={inputCls}
-                  style={monoSt}
-                  onFocus={focusBorder}
-                  onBlur={blurBorder}
+                  className="clr-input"
+                  style={wideMono}
                 />
-                <span className="text-[12px] text-[var(--qz-fg-4)] flex-shrink-0">↔ VLAN</span>
+                <span className="clr-subtext" style={{ marginTop: 0, flexShrink: 0 }}>↔ VLAN</span>
                 <input
                   value={r.vlan}
                   onChange={(e) => updateVni(r.key, { vlan: e.target.value })}
                   placeholder="opt."
-                  className={inputCls}
-                  style={{ ...monoSt, maxWidth: 96 }}
-                  onFocus={focusBorder}
-                  onBlur={blurBorder}
+                  className="clr-input"
+                  style={{ ...mono, maxWidth: 96 }}
                 />
                 <button
                   type="button"
                   onClick={() => removeVni(r.key)}
                   disabled={vnis.length === 1}
                   title="Remove VNI"
-                  className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent disabled:opacity-40 disabled:cursor-not-allowed"
-                  style={{ border: "1px solid var(--qz-border)" }}
+                  className="btn btn-sm btn-link-neutral btn-icon"
+                  style={{ flexShrink: 0 }}
                 >
-                  <Trash2 size={14} />
+                  <Icon shape="trash" size={14} />
                 </button>
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[6px]">
-            24-bit segment ID (0–16777215). Give every VNI a VLAN to carry several on this one device (a Single VXLAN Device →
-            <span className="font-mono"> vlan-to-vni</span>, needs BGP-EVPN + a bridge). Leave VLAN blank for a single plain (L3) VNI.
-          </p>
+          <div className="clr-subtext">
+            <span>
+              24-bit segment ID (0–16777215). Give every VNI a VLAN to carry several on this one device (a Single VXLAN Device →
+              <span style={mono}> vlan-to-vni</span>, needs BGP-EVPN + a bridge). Leave VLAN blank for a single plain (L3) VNI.
+            </span>
+          </div>
         </div>
 
         <Field label="Bridge" hint="Add this VTEP to a bridge so its VLANs forward. Required for a Single VXLAN Device; configure the bridge itself under Interfaces → Bridge.">
@@ -357,14 +344,12 @@ export function VxlanFormModal({
             value={bridge}
             onChange={(e) => setBridge(e.target.value)}
             placeholder="br0"
-            className={inputCls}
-            style={monoSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={wideMono}
           />
         </Field>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field
             label="Source Address"
             required={mode === "evpn"}
@@ -374,10 +359,8 @@ export function VxlanFormModal({
               value={sourceAddress}
               onChange={(e) => setSourceAddress(e.target.value)}
               placeholder="172.29.255.1"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
           <Field
@@ -390,49 +373,41 @@ export function VxlanFormModal({
               value={sourceInterface}
               onChange={(e) => setSourceInterface(e.target.value)}
               placeholder="lo"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
         </div>
 
         {mode === "static" && (
-          <div>
-            <div className="flex items-center justify-between mb-[6px]">
-              <label className="block text-[12px] text-[var(--qz-fg-3)]">Remote VTEPs</label>
-              <button
-                type="button"
-                onClick={addRemote}
-                className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0"
-              >
-                <Plus size={13} /> Add remote
+          <div className="clr-form-control" style={{ marginTop: 0 }}>
+            <div className="flex items-center justify-between">
+              <label className="clr-control-label" style={{ marginBottom: 0 }}>Remote VTEPs</label>
+              <button type="button" onClick={addRemote} className="btn btn-sm btn-link-neutral">
+                <Icon shape="plus" size={12} /> Add Remote
               </button>
             </div>
             {remotes.length === 0 ? (
-              <p className="text-[12px] text-[var(--qz-fg-4)] m-0">Add the IP of each remote tunnel endpoint.</p>
+              <div className="clr-subtext">Add the IP of each remote tunnel endpoint.</div>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
                 {remotes.map((r) => (
                   <div key={r.key} className="flex items-center gap-2">
                     <input
                       value={r.value}
                       onChange={(e) => updateRemote(r.key, e.target.value)}
                       placeholder="172.29.255.2"
-                      className={inputCls}
-                      style={monoSt}
-                      onFocus={focusBorder}
-                      onBlur={blurBorder}
+                      className="clr-input"
+                      style={wideMono}
                     />
                     <button
                       type="button"
                       onClick={() => removeRemote(r.key)}
                       title="Remove remote"
-                      className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent"
-                      style={{ border: "1px solid var(--qz-border)" }}
+                      className="btn btn-sm btn-link-neutral btn-icon"
+                      style={{ flexShrink: 0 }}
                     >
-                      <Trash2 size={14} />
+                      <Icon shape="trash" size={14} />
                     </button>
                   </div>
                 ))}
@@ -447,15 +422,13 @@ export function VxlanFormModal({
               value={group}
               onChange={(e) => setGroup(e.target.value)}
               placeholder="239.1.1.1"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
         )}
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="UDP Port" hint="Default 8472; EVPN fabrics use 4789.">
             <input
               type="number"
@@ -464,10 +437,8 @@ export function VxlanFormModal({
               value={port}
               onChange={(e) => setPort(e.target.value)}
               placeholder={mode === "evpn" ? "4789" : "8472"}
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
           <Field label="MTU">
@@ -478,48 +449,40 @@ export function VxlanFormModal({
               value={mtu}
               onChange={(e) => setMtu(e.target.value)}
               placeholder="1500"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={wideMono}
             />
           </Field>
         </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-[6px]">
-            <label className="block text-[12px] text-[var(--qz-fg-3)]">IP Addresses</label>
-            <button
-              type="button"
-              onClick={addAddr}
-              className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0"
-            >
-              <Plus size={13} /> Add address
+        <div className="clr-form-control" style={{ marginTop: 0 }}>
+          <div className="flex items-center justify-between">
+            <label className="clr-control-label" style={{ marginBottom: 0 }}>IP Addresses</label>
+            <button type="button" onClick={addAddr} className="btn btn-sm btn-link-neutral">
+              <Icon shape="plus" size={12} /> Add Address
             </button>
           </div>
           {addresses.length === 0 ? (
-            <p className="text-[12px] text-[var(--qz-fg-4)] m-0">Optional — an L3 VTEP address like 10.0.0.1/24.</p>
+            <div className="clr-subtext">Optional — an L3 VTEP address like 10.0.0.1/24.</div>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
               {addresses.map((a) => (
                 <div key={a.key} className="flex items-center gap-2">
                   <input
                     value={a.value}
                     onChange={(e) => updateAddr(a.key, e.target.value)}
                     placeholder="10.0.0.1/24"
-                    className={inputCls}
-                    style={monoSt}
-                    onFocus={focusBorder}
-                    onBlur={blurBorder}
+                    className="clr-input"
+                    style={wideMono}
                   />
                   <button
                     type="button"
                     onClick={() => removeAddr(a.key)}
                     title="Remove address"
-                    className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent"
-                    style={{ border: "1px solid var(--qz-border)" }}
+                    className="btn btn-sm btn-link-neutral btn-icon"
+                    style={{ flexShrink: 0 }}
                   >
-                    <Trash2 size={14} />
+                    <Icon shape="trash" size={14} />
                   </button>
                 </div>
               ))}
@@ -532,58 +495,52 @@ export function VxlanFormModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Tenant blue L2 segment"
-            className={inputCls}
-            style={inputSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={wide}
           />
         </Field>
 
-        <div className="flex flex-col gap-[10px] rounded-md p-3" style={inputSt}>
-          <span className="text-[12px] text-[var(--qz-fg-3)]">Advanced parameters</span>
-          <label className="flex items-center gap-[10px] cursor-pointer select-none">
+        <div
+          className="flex flex-col"
+          style={{ gap: 10, border: "1px solid var(--cds-alias-object-border-color)", borderRadius: 4, padding: 12 }}
+        >
+          <span className="clr-control-label" style={{ marginBottom: 0 }}>Advanced parameters</span>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
             <Switch on={nolearning} onChange={setNolearning} />
-            <span className="text-[13px] text-[var(--qz-fg-2)]">
-              Disable MAC learning <span className="text-[var(--qz-fg-4)]">(nolearning — recommended for EVPN)</span>
+            <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
+              Disable MAC learning{" "}
+              <span style={{ color: "var(--cds-alias-typography-color-200)" }}>(nolearning — recommended for EVPN)</span>
             </span>
           </label>
-          <label className="flex items-center gap-[10px] cursor-pointer select-none">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
             <Switch on={neighborSuppress} onChange={setNeighborSuppress} />
-            <span className="text-[13px] text-[var(--qz-fg-2)]">
-              ARP/ND suppression <span className="text-[var(--qz-fg-4)]">(neighbor-suppress)</span>
+            <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
+              ARP/ND suppression{" "}
+              <span style={{ color: "var(--cds-alias-typography-color-200)" }}>(neighbor-suppress)</span>
             </span>
           </label>
         </div>
 
-        <label className="flex items-center gap-[10px] cursor-pointer select-none">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
           <Switch on={enabled} onChange={setEnabled} />
-          <span className="text-[13px] text-[var(--qz-fg-2)]">Enabled</span>
+          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Enabled</span>
         </label>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
-            {error}
-          </p>
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create VXLAN"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create VXLAN"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

@@ -1,42 +1,34 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Switch } from "@/components/ui/Switch";
 import { Button } from "@/components/ui/Button";
 import { applyBgpGlobal, BgpGlobal } from "@/lib/bgp";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const inputStyle = { maxWidth: "none", width: "100%" } as const;
+const monoStyle = { ...inputStyle, fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">
-        {label} {required && <span style={{ color: "var(--qz-danger)" }}>*</span>}
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">
+        {label} {required && <span style={{ color: "var(--cds-alias-status-danger)" }}>*</span>}
       </label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg p-5 flex flex-col gap-4" style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}>
-      <div>
-        <h3 className="text-[14px] font-semibold text-[var(--qz-fg-1)] m-0">{title}</h3>
-        {subtitle && <p className="text-[12px] text-[var(--qz-fg-4)] m-0 mt-[2px]">{subtitle}</p>}
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="card-header">{title}</div>
+      <div className="card-block flex flex-col gap-4">
+        {subtitle && <p className="clr-secondary" style={{ margin: 0 }}>{subtitle}</p>}
+        {children}
       </div>
-      {children}
     </div>
   );
 }
@@ -45,9 +37,9 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
   return (
     <label className="flex items-start gap-[10px] cursor-pointer select-none">
       <div className="pt-[1px]"><Switch on={on} onChange={onChange} /></div>
-      <span className="text-[13px] text-[var(--qz-fg-2)]">
+      <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
         {label}
-        {hint && <span className="block text-[11px] text-[var(--qz-fg-4)]">{hint}</span>}
+        {hint && <span className="block clr-subtext" style={{ marginTop: 0 }}>{hint}</span>}
       </span>
     </label>
   );
@@ -94,40 +86,38 @@ export function BgpGlobalPanel({ live, onSaved }: { live: BgpGlobal; onSaved: (m
   };
 
   const netEditor = (rows: ListRow[], setRows: (u: (p: ListRow[]) => ListRow[]) => void, placeholder: string) => (
-    <div>
-      <div className="flex items-center justify-between mb-[6px]">
-        <label className="block text-[12px] text-[var(--qz-fg-3)]">Advertised Networks</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <div className="flex items-center justify-between">
+        <label className="clr-control-label" style={{ marginBottom: 0 }}>Advertised Networks</label>
         <button
           type="button"
           onClick={() => setRows((p) => [...p, { key: nextKey(), value: "" }])}
-          className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0"
+          className="btn btn-sm btn-link-neutral"
         >
-          <Plus size={13} /> Add network
+          <Icon shape="plus" size={12} /> Add Network
         </button>
       </div>
       {rows.length === 0 ? (
-        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">No networks originated into BGP.</p>
+        <p className="clr-subtext" style={{ margin: 0 }}>No networks originated into BGP.</p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
           {rows.map((r) => (
             <div key={r.key} className="flex items-center gap-2">
               <input
                 value={r.value}
                 onChange={(e) => setRows((p) => p.map((x) => (x.key === r.key ? { ...x, value: e.target.value } : x)))}
                 placeholder={placeholder}
-                className={inputCls}
-                style={monoSt}
-                onFocus={focusBorder}
-                onBlur={blurBorder}
+                className="clr-input"
+                style={monoStyle}
               />
               <button
                 type="button"
                 onClick={() => setRows((p) => p.filter((x) => x.key !== r.key))}
                 title="Remove network"
-                className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent"
-                style={{ border: "1px solid var(--qz-border)" }}
+                aria-label="Remove network"
+                className="btn btn-sm btn-link-neutral btn-icon"
               >
-                <Trash2 size={14} />
+                <Icon shape="trash" size={14} />
               </button>
             </div>
           ))}
@@ -176,14 +166,14 @@ export function BgpGlobalPanel({ live, onSaved }: { live: BgpGlobal; onSaved: (m
       <Section title="Router" subtitle="Local autonomous system and identity.">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="System AS" required hint="This router's ASN.">
-            <input value={systemAs} onChange={(e) => setSystemAs(e.target.value)} placeholder="65001" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={systemAs} onChange={(e) => setSystemAs(e.target.value)} placeholder="65001" className="clr-input" style={monoStyle} />
           </Field>
           <Field label="Router ID" hint="Usually a loopback address.">
-            <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
           </Field>
         </div>
         <Field label="Cluster ID" hint="Route-reflector cluster id (only when acting as an RR).">
-          <input value={clusterId} onChange={(e) => setClusterId(e.target.value)} placeholder="192.0.2.1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={clusterId} onChange={(e) => setClusterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
         </Field>
         <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Toggle on={noV4} onChange={setNoV4} label="No IPv4-unicast by default" hint="Peers activate address families explicitly (EVPN fabric norm)." />
@@ -196,12 +186,17 @@ export function BgpGlobalPanel({ live, onSaved }: { live: BgpGlobal; onSaved: (m
       <Section title="IPv4 Unicast" subtitle="Underlay IPv4 origination and redistribution.">
         {netEditor(v4Networks, setV4Networks, "10.0.0.0/24")}
         <Field label="Redistribute">
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-4">
             {REDIST["ipv4-unicast"].map((proto) => (
-              <label key={proto} className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
-                <input type="checkbox" checked={v4Redist.includes(proto)} onChange={() => toggleRedist("ipv4-unicast", proto)} style={{ accentColor: "var(--qz-accent)" }} />
-                <span style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</span>
-              </label>
+              <div key={proto} className="clr-checkbox-wrapper">
+                <input
+                  type="checkbox"
+                  id={`bgp-redist-v4-${proto}`}
+                  checked={v4Redist.includes(proto)}
+                  onChange={() => toggleRedist("ipv4-unicast", proto)}
+                />
+                <label htmlFor={`bgp-redist-v4-${proto}`} style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</label>
+              </div>
             ))}
           </div>
         </Field>
@@ -210,12 +205,17 @@ export function BgpGlobalPanel({ live, onSaved }: { live: BgpGlobal; onSaved: (m
       <Section title="IPv6 Unicast" subtitle="Underlay IPv6 origination and redistribution.">
         {netEditor(v6Networks, setV6Networks, "2001:db8::/64")}
         <Field label="Redistribute">
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-4">
             {REDIST["ipv6-unicast"].map((proto) => (
-              <label key={proto} className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
-                <input type="checkbox" checked={v6Redist.includes(proto)} onChange={() => toggleRedist("ipv6-unicast", proto)} style={{ accentColor: "var(--qz-accent)" }} />
-                <span style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</span>
-              </label>
+              <div key={proto} className="clr-checkbox-wrapper">
+                <input
+                  type="checkbox"
+                  id={`bgp-redist-v6-${proto}`}
+                  checked={v6Redist.includes(proto)}
+                  onChange={() => toggleRedist("ipv6-unicast", proto)}
+                />
+                <label htmlFor={`bgp-redist-v6-${proto}`} style={{ fontFamily: "var(--qz-font-mono)" }}>{proto}</label>
+              </div>
             ))}
           </div>
         </Field>
@@ -227,16 +227,21 @@ export function BgpGlobalPanel({ live, onSaved }: { live: BgpGlobal; onSaved: (m
           <Toggle on={advV4} onChange={setAdvV4} label="Advertise IPv4 unicast" hint="Inject IPv4 routes into EVPN (type-5)." />
           <Toggle on={advV6} onChange={setAdvV6} label="Advertise IPv6 unicast" />
         </div>
-        <p className="text-[11px] text-[var(--qz-fg-4)] m-0">
+        <p className="clr-subtext" style={{ margin: 0 }}>
           Route-distinguisher and route-target are configured per-VNI or per-VRF, not on the global instance.
         </p>
       </Section>
 
-      {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
+      {error && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{error}</div>
+        </div>
+      )}
 
       <div className="flex justify-end">
-        <Button kind="primary" icon={Save} onClick={save} disabled={saving}>
-          {saving ? "Applying…" : "Save BGP settings"}
+        <Button kind="primary" onClick={save} disabled={saving}>
+          {saving ? "Applying…" : "Save BGP Settings"}
         </Button>
       </div>
     </div>

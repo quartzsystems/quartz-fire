@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
+import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { OpenvpnInterface, deleteOpenvpn, fetchOpenvpn } from "@/lib/openvpn";
@@ -95,74 +96,61 @@ export default function OpenvpnPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          OpenVPN
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2>OpenVPN</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           TLS-based tunnels — site-to-site links, remote-access servers, and outbound clients
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading OpenVPN configuration…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading OpenVPN configuration…</div>}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 text-[13px]" style={{ color: "var(--cds-alias-status-danger)" }}>
+            <Icon shape="exclamation-triangle" size={16} />
+            {errorMsg}
           </div>
-        )}
-        {status === "ready" && (
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-1 border-b border-[var(--qz-border)]">
-              {([["config", "Configuration"], ["status", "Status"]] as [Tab, string][]).map(([id, label]) => {
-                const active = tab === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTab(id)}
-                    className={[
-                      "px-3 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
-                      active ? "text-[var(--qz-accent)] border-[var(--qz-accent)]" : "text-[var(--qz-fg-3)] border-transparent hover:text-[var(--qz-fg-1)]",
-                    ].join(" ")}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {tab === "config" && (
-              <DataTable
-                rows={rows}
-                columns={columns()}
-                rowId={(r) => r.name}
-                storageKey="vpn-openvpn"
-                searchPlaceholder="Search interfaces…"
-                emptyMessage="No OpenVPN interfaces configured."
-                onRefresh={() => load("refresh")}
-                toolbar={
-                  <Button kind="primary" size="sm" icon={Plus} onClick={() => setModal({})}>
-                    Add interface
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions label={`OpenVPN ${row.name}`} onEdit={() => setModal({ iface: row })} onDelete={() => remove(row)} />
-                )}
-              />
-            )}
-
-            {tab === "status" && <OpenvpnStatusPanel />}
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      {status === "ready" && (
+        <div className="flex flex-col gap-5">
+          <Tabs
+            items={[
+              { value: "config", label: "Configuration" },
+              { value: "status", label: "Status" },
+            ]}
+            value={tab}
+            onChange={(v) => setTab(v as Tab)}
+          />
+
+          {tab === "config" && (
+            <DataTable
+              rows={rows}
+              columns={columns()}
+              rowId={(r) => r.name}
+              storageKey="vpn-openvpn"
+              searchPlaceholder="Search interfaces…"
+              emptyMessage="No OpenVPN interfaces configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setModal({ iface: row })}
+              toolbar={
+                <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+                  Add Interface
+                </Button>
+              }
+              actions={(row) => (
+                <RowActions label={`OpenVPN ${row.name}`} onEdit={() => setModal({ iface: row })} onDelete={() => remove(row)} />
+              )}
+            />
+          )}
+
+          {tab === "status" && <OpenvpnStatusPanel />}
+        </div>
+      )}
 
       {modal && (
         <OpenvpnFormModal

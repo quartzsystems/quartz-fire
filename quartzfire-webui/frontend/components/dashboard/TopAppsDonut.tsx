@@ -28,9 +28,19 @@ const MAX_SLICES = 5;
 
 // Categorical palette validated for the qz dark surface (#161920) — all-pairs
 // CVD check passes with the 2px surface gaps + legend (see dataviz skill).
-// Assigned per application in fixed order, never cycled.
+// Matches the Clarity reference's app-mix slices (app slices are categorical,
+// so they don't take the traffic greens). Assigned per application in fixed
+// order, never cycled.
 const SLICE_COLORS = ["#3987e5", "#199e70", "#c98500", "#e66767", "#008300"];
 const OTHER_COLOR = "var(--qz-ink-7)";
+
+/// Split a formatted byte figure ("831.20 GB") into value + unit so the donut
+/// center can stack them: the number on one line, the unit label under it.
+function splitBytes(bytes: number): { value: string; unit: string } {
+  const s = formatBytes(bytes);
+  const i = s.indexOf(" ");
+  return i === -1 ? { value: s, unit: "" } : { value: s.slice(0, i), unit: s.slice(i + 1) };
+}
 
 interface Slice {
   key: string;
@@ -111,7 +121,7 @@ function Donut({
             d={arcPath(c, c, rOut, rIn, a0, a1)}
             fill={s.color}
             opacity={hover == null || hover === s.key ? 1 : 0.45}
-            stroke="var(--qz-surface)"
+            stroke="var(--cds-alias-object-container-background)"
             strokeWidth={2}
             strokeLinejoin="round"
             onMouseEnter={() => onHover(s.key)}
@@ -121,13 +131,19 @@ function Donut({
           </path>
         ))}
       </svg>
-      {/* Center readout: hovered slice, or the total. */}
+      {/* Center readout: hovered slice, or the total — value on one line, the
+          unit label under it (e.g. "831" over "GB classified"). */}
       <div className="absolute inset-0 grid place-items-center pointer-events-none">
         <div className="text-center" style={{ maxWidth: rIn * 1.7 }}>
-          <div className="text-[15px] font-bold text-[var(--qz-fg-1)] truncate" style={{ fontFamily: "var(--qz-font-mono)" }}>
-            {hovered ? `${hovered.pct.toFixed(1)}%` : formatBytes(totalBytes)}
+          <div
+            className="text-[15px] font-bold text-[var(--cds-alias-typography-color-450)] truncate"
+            style={{ fontFamily: "var(--qz-font-mono)" }}
+          >
+            {hovered ? `${hovered.pct.toFixed(1)}%` : splitBytes(totalBytes).value}
           </div>
-          <div className="text-[10px] text-[var(--qz-fg-4)] truncate">{hovered ? hovered.name : centerSub}</div>
+          <div className="text-[10px] text-[var(--cds-alias-typography-color-200)] truncate">
+            {hovered ? hovered.name : `${splitBytes(totalBytes).unit} ${centerSub}`.trim()}
+          </div>
         </div>
       </div>
     </div>
@@ -198,25 +214,34 @@ export function TopAppsDonut({
     <div
       className={[
         "flex flex-col justify-center gap-[6px] overflow-y-auto",
-        fill ? "flex-1 min-w-0" : "flex-1 min-w-[160px] max-w-[300px]",
+        fill ? "ml-auto min-w-0 max-w-[60%]" : "flex-1 min-w-[160px] max-w-[300px]",
       ].join(" ")}
     >
       {slices.map((s) => (
         <div
           key={s.key}
           className="flex items-center gap-[7px] text-[12px] rounded-md px-1"
-          style={{ background: hover === s.key ? "color-mix(in oklab, white 5%, transparent)" : undefined }}
+          style={{ background: hover === s.key ? "var(--cds-alias-object-interaction-background-hover)" : undefined }}
           onMouseEnter={() => setHover(s.key)}
           onMouseLeave={() => setHover(null)}
         >
           <span className="flex-shrink-0" style={{ width: 8, height: 8, borderRadius: 999, background: s.color }} />
-          <span className="text-[var(--qz-fg-2)] truncate flex-1" title={s.flows != null ? `${s.name} — ${s.flows} flows` : s.name}>
+          <span
+            className="text-[var(--cds-alias-typography-color-400)] truncate flex-1"
+            title={s.flows != null ? `${s.name} — ${s.flows} flows` : s.name}
+          >
             {s.name}
           </span>
-          <span className="text-[var(--qz-fg-1)] font-semibold flex-shrink-0" style={{ fontFamily: "var(--qz-font-mono)" }}>
+          <span
+            className="text-[var(--cds-alias-typography-color-450)] font-semibold flex-shrink-0"
+            style={{ fontFamily: "var(--qz-font-mono)" }}
+          >
             {s.pct.toFixed(1)}%
           </span>
-          <span className="text-[var(--qz-fg-4)] flex-shrink-0 w-[70px] text-right whitespace-nowrap" style={{ fontFamily: "var(--qz-font-mono)" }}>
+          <span
+            className="text-[var(--cds-alias-typography-color-200)] flex-shrink-0 w-[70px] text-right whitespace-nowrap"
+            style={{ fontFamily: "var(--qz-font-mono)" }}
+          >
             {formatBytes(s.bytes)}
           </span>
         </div>
@@ -225,7 +250,7 @@ export function TopAppsDonut({
   );
 
   // Fill mode (dashboard tile): donut is a square as tall as the card, pinned
-  // left; the legend takes all remaining width and runs to the right edge.
+  // left; the legend hugs the card's right edge (ml-auto).
   if (fill) {
     return (
       <div className="flex items-stretch gap-5 h-full min-h-0">

@@ -1,26 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { applyDhcpRange, DhcpRange, DhcpServer } from "@/lib/services";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const mono = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -115,31 +106,29 @@ export function RangeFormModal({
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Subnet" hint={isEdit ? "Ranges cannot move between subnets." : undefined}>
-            <select
-              value={subnet}
-              onChange={(e) => setSubnet(e.target.value)}
-              disabled={isEdit}
-              className={`${inputCls} cursor-pointer`}
-              style={{ ...monoSt, opacity: isEdit ? 0.5 : 1 }}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              {subnets.map((s) => (
-                <option key={s.subnet} value={s.subnet}>
-                  {s.subnet}
-                </option>
-              ))}
-            </select>
+            <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+              <select
+                value={subnet}
+                onChange={(e) => setSubnet(e.target.value)}
+                disabled={isEdit}
+                className="clr-select"
+                style={mono}
+              >
+                {subnets.map((s) => (
+                  <option key={s.subnet} value={s.subnet}>
+                    {s.subnet}
+                  </option>
+                ))}
+              </select>
+            </div>
           </Field>
           <Field label="Range Name">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="pool-1"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={mono}
             />
           </Field>
         </div>
@@ -150,10 +139,8 @@ export function RangeFormModal({
               value={start}
               onChange={(e) => setStart(e.target.value)}
               placeholder="192.168.1.100"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={mono}
             />
           </Field>
           <Field label="Stop">
@@ -161,38 +148,26 @@ export function RangeFormModal({
               value={stop}
               onChange={(e) => setStop(e.target.value)}
               placeholder="192.168.1.199"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={mono}
             />
           </Field>
         </div>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create range"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Range"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

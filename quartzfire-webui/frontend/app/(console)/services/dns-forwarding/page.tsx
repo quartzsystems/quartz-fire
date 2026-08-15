@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Pencil, Plus, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { deleteDnsDomain, DnsForwardingConfig, DnsForwardingDomain, fetchDnsForwarding } from "@/lib/services";
@@ -24,15 +24,15 @@ const domainColumns: Column<DnsForwardingDomain>[] = [
 /// One label/value line of the settings card.
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-4 py-[9px]" style={{ borderBottom: "1px solid var(--qz-border)" }}>
-      <span className="text-[12px] text-[var(--qz-fg-4)] w-[200px] flex-shrink-0 pt-[1px]">{label}</span>
-      <span className="text-[13px] text-[var(--qz-fg-1)] min-w-0">{children}</span>
-    </div>
+    <>
+      <span style={{ color: "var(--cds-alias-typography-color-200)" }}>{label}</span>
+      <span style={{ color: "var(--cds-alias-typography-color-400)", minWidth: 0 }}>{children}</span>
+    </>
   );
 }
 
 function MonoList({ items }: { items: string[] }) {
-  if (items.length === 0) return <span className="text-[var(--qz-fg-4)]">—</span>;
+  if (items.length === 0) return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
   return (
     <span className="flex flex-wrap gap-x-3 gap-y-1" style={{ fontFamily: "var(--qz-font-mono)" }}>
       {items.map((v) => (
@@ -78,43 +78,41 @@ export default function DnsForwardingPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          DNS Forwarding
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2>DNS Forwarding</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Recursive DNS forwarder / cache configuration
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && (
-          <div className="text-[13px] text-[var(--qz-fg-4)]">Loading DNS forwarding…</div>
-        )}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
-            </div>
+      {status === "loading" && <p className="clr-secondary">Loading DNS forwarding…</p>}
+      {status === "error" && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
+          <div className="alert-actions">
+            <button type="button" className="alert-action" onClick={() => load()}>
+              Retry
+            </button>
           </div>
-        )}
-        {status === "ready" && data && (
-          <div className="flex flex-col gap-7">
-            <section
-              className="rounded-lg px-5 pt-2 pb-3"
-              style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-            >
-              <div className="flex items-center justify-between py-2">
-                <h2 className="text-[15px] font-semibold text-[var(--qz-fg-1)] m-0">Forwarder Settings</h2>
-                <Button kind="secondary" size="sm" icon={Pencil} onClick={() => setSettingsModal(true)}>
-                  Edit settings
+        </div>
+      )}
+      {status === "ready" && data && (
+        <div className="flex flex-col gap-7">
+          <div className="card">
+            <div className="card-header">
+              Forwarder Settings
+              <span style={{ marginLeft: "auto" }}>
+                <Button kind="secondary" size="sm" icon="pencil" onClick={() => setSettingsModal(true)}>
+                  Edit Settings
                 </Button>
-              </div>
+              </span>
+            </div>
+            <div
+              className="card-block"
+              style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 24px", fontSize: 13 }}
+            >
               <InfoRow label="Listen Addresses"><MonoList items={data.listen_addresses} /></InfoRow>
               <InfoRow label="Allow From"><MonoList items={data.allow_from} /></InfoRow>
               <InfoRow label="Upstream Name Servers"><MonoList items={data.name_servers} /></InfoRow>
@@ -127,35 +125,38 @@ export default function DnsForwardingPage() {
               <InfoRow label="DNSSEC">
                 <span style={{ fontFamily: "var(--qz-font-mono)" }}>{data.dnssec ?? "process-no-validate (default)"}</span>
               </InfoRow>
-            </section>
-
-            <section className="flex flex-col gap-3">
-              <h2 className="text-[15px] font-semibold text-[var(--qz-fg-1)] m-0">Conditional Domains</h2>
-              <DataTable
-                rows={data.domains}
-                columns={domainColumns}
-                rowId={(r) => r.name}
-                storageKey="services-dns-domains"
-                searchPlaceholder="Search domains…"
-                emptyMessage="No conditional forwarding domains configured."
-                onRefresh={() => load("refresh")}
-                toolbar={
-                  <Button kind="primary" size="sm" icon={Plus} onClick={() => setDomainModal({})}>
-                    Create domain
-                  </Button>
-                }
-                actions={(row) => (
-                  <RowActions
-                    label={`domain ${row.name}`}
-                    onEdit={() => setDomainModal({ domain: row })}
-                    onDelete={() => removeDomain(row)}
-                  />
-                )}
-              />
-            </section>
+            </div>
           </div>
-        )}
-      </div>
+
+          <section className="flex flex-col gap-3">
+            <h3 className="clr-section" style={{ color: "var(--cds-alias-typography-color-450)" }}>
+              Conditional Domains
+            </h3>
+            <DataTable
+              rows={data.domains}
+              columns={domainColumns}
+              rowId={(r) => r.name}
+              storageKey="services-dns-domains"
+              searchPlaceholder="Search domains…"
+              emptyMessage="No conditional forwarding domains configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setDomainModal({ domain: row })}
+              toolbar={
+                <Button kind="primary" size="sm" icon="plus" onClick={() => setDomainModal({})}>
+                  Create Domain
+                </Button>
+              }
+              actions={(row) => (
+                <RowActions
+                  label={`domain ${row.name}`}
+                  onEdit={() => setDomainModal({ domain: row })}
+                  onDelete={() => removeDomain(row)}
+                />
+              )}
+            />
+          </section>
+        </div>
+      )}
 
       {settingsModal && data && (
         <SettingsFormModal

@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import { IsisConfig, IsisInterface, deleteIsisInterface, fetchIsis } from "@/lib/isis";
@@ -39,7 +40,7 @@ function interfaceColumns(): Column<IsisInterface>[] {
           <span className="inline-flex gap-1 flex-wrap">
             {flags.map((f) => <span key={f} className="badge badge-muted">{f}</span>)}
           </span>
-        ) : <span className="text-[var(--qz-fg-4)]">—</span>;
+        ) : <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
       },
       width: 200,
     },
@@ -98,48 +99,32 @@ export default function IsisPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          IS-IS
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+        <h2 style={{ margin: 0 }}>IS-IS</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Intermediate System to Intermediate System — link-state IGP for the underlay
         </p>
       </div>
 
       <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading IS-IS configuration…</div>}
+        {status === "loading" && <div className="clr-secondary">Loading IS-IS configuration…</div>}
         {status === "error" && (
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
+            <div className="alert alert-danger alert-sm">
+              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+              <div className="alert-text">{errorMsg}</div>
             </div>
             <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
+              <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
             </div>
           </div>
         )}
         {status === "ready" && cfg && (
           <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-1 border-b border-[var(--qz-border)]">
-              {tabs.map(([id, label, count]) => {
-                const active = section === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setSection(id)}
-                    className={[
-                      "px-3 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
-                      active ? "text-[var(--qz-accent)] border-[var(--qz-accent)]" : "text-[var(--qz-fg-3)] border-transparent hover:text-[var(--qz-fg-1)]",
-                    ].join(" ")}
-                  >
-                    {label}
-                    {count !== null && <span className="ml-[6px] text-[12px] text-[var(--qz-fg-4)]">{count}</span>}
-                  </button>
-                );
-              })}
-            </div>
+            <Tabs
+              items={tabs.map(([id, label, count]) => ({ value: id, label, count: count ?? undefined }))}
+              value={section}
+              onChange={(v) => setSection(v as Section)}
+            />
 
             {section === "global" && (
               <IsisGlobalPanel live={cfg.global} onSaved={(msg) => { setToast(msg); load("refresh"); }} />
@@ -156,9 +141,10 @@ export default function IsisPage() {
                 searchPlaceholder="Search interfaces…"
                 emptyMessage="No IS-IS interfaces configured."
                 onRefresh={() => load("refresh")}
+                onRowOpen={(row) => setIfaceModal({ iface: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon={Plus} onClick={() => setIfaceModal({})}>
-                    Add interface
+                  <Button kind="primary" size="sm" icon="plus" onClick={() => setIfaceModal({})}>
+                    Add Interface
                   </Button>
                 }
                 actions={(row) => (

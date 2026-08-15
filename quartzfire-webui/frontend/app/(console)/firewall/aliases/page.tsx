@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import {
@@ -136,7 +136,7 @@ export default function FirewallAliasesPage() {
         r.kind === "user" ? (
           r.alias.description ?? "—"
         ) : (
-          <span className="text-[var(--qz-fg-4)]">Built-in — edit under Interfaces</span>
+          <span className="text-[var(--cds-alias-typography-color-200)]">Built-in — edit under Interfaces</span>
         ),
       sortable: true,
     },
@@ -170,57 +170,56 @@ export default function FirewallAliasesPage() {
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Aliases
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Aliases</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Named hosts, networks, FQDNs, and interface groups used as From/To targets in firewall rules — every
           configured interface and VLAN also gets a built-in alias named by its description
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading aliases…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading aliases…</div>}
+      {status === "error" && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
+          <div className="alert-actions">
+            <Button kind="secondary" size="sm" icon="refresh" onClick={() => load()}>Retry</Button>
           </div>
-        )}
-        {status === "ready" && (
-          <DataTable
-            rows={rows}
-            columns={columns}
-            rowId={(r) => (r.kind === "user" ? `${r.alias.type}:${r.alias.name}` : `iface:${r.alias.iface}`)}
-            filters={filters}
-            storageKey="firewall-aliases"
-            searchPlaceholder="Search aliases…"
-            emptyMessage="No aliases defined."
-            onRefresh={() => load("refresh")}
-            toolbar={
-              <Button kind="primary" size="sm" icon={Plus} onClick={() => setModal({})}>
-                Create alias
-              </Button>
-            }
-            actions={(row) =>
-              row.kind === "user" ? (
-                <RowActions
-                  label={`alias ${row.alias.display}`}
-                  onEdit={() => setModal({ alias: row.alias })}
-                  onDelete={() => remove(row.alias)}
-                />
-              ) : null
-            }
-          />
-        )}
-      </div>
+        </div>
+      )}
+      {status === "ready" && (
+        <DataTable
+          rows={rows}
+          columns={columns}
+          rowId={(r) => (r.kind === "user" ? `${r.alias.type}:${r.alias.name}` : `iface:${r.alias.iface}`)}
+          filters={filters}
+          storageKey="firewall-aliases"
+          searchPlaceholder="Search aliases…"
+          emptyMessage="No aliases defined."
+          onRefresh={() => load("refresh")}
+          onRowOpen={(r) => {
+            // Built-in interface aliases are read-only here — they're edited
+            // under Interfaces, so double-click opens nothing for them.
+            if (r.kind === "user") setModal({ alias: r.alias });
+          }}
+          toolbar={
+            <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+              Create Alias
+            </Button>
+          }
+          actions={(row) =>
+            row.kind === "user" ? (
+              <RowActions
+                label={`alias ${row.alias.display}`}
+                onEdit={() => setModal({ alias: row.alias })}
+                onDelete={() => remove(row.alias)}
+              />
+            ) : null
+          }
+        />
+      )}
 
       {modal && (
         <AliasFormModal

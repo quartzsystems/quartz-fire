@@ -1,27 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { applyDnsForwarding, DnsForwardingConfig } from "@/lib/services";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const mono = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -129,10 +120,8 @@ export function SettingsFormModal({
               onChange={(e) => setListenText(e.target.value)}
               placeholder={"192.168.1.1"}
               rows={3}
-              className={`${inputCls} resize-y`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-textarea"
+              style={mono}
             />
           </Field>
           <Field label="Allow From" hint="One client network (CIDR) per line.">
@@ -141,10 +130,8 @@ export function SettingsFormModal({
               onChange={(e) => setAllowText(e.target.value)}
               placeholder={"192.168.1.0/24"}
               rows={3}
-              className={`${inputCls} resize-y`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-textarea"
+              style={mono}
             />
           </Field>
         </div>
@@ -155,16 +142,16 @@ export function SettingsFormModal({
             onChange={(e) => setServersText(e.target.value)}
             placeholder={"1.1.1.1\n8.8.8.8"}
             rows={3}
-            className={`${inputCls} resize-y`}
-            style={monoSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-textarea"
+            style={mono}
           />
         </Field>
 
-        <label className="flex items-center gap-[10px] cursor-pointer select-none">
+        <label className="clr-toggle-wrapper cursor-pointer select-none">
           <Switch on={system} onChange={setSystem} />
-          <span className="text-[13px] text-[var(--qz-fg-2)]">Also forward to the system name servers</span>
+          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
+            Also forward to the system name servers
+          </span>
         </label>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
@@ -175,54 +162,42 @@ export function SettingsFormModal({
               value={cacheSize}
               onChange={(e) => setCacheSize(e.target.value)}
               placeholder="10000"
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={mono}
             />
           </Field>
           <Field label="DNSSEC">
-            <select
-              value={dnssec}
-              onChange={(e) => setDnssec(e.target.value)}
-              className={`${inputCls} cursor-pointer`}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              {DNSSEC_MODES.map((m) => (
-                <option key={m} value={m}>
-                  {m === "" ? "default (process-no-validate)" : m}
-                </option>
-              ))}
-            </select>
+            <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+              <select
+                value={dnssec}
+                onChange={(e) => setDnssec(e.target.value)}
+                className="clr-select"
+                style={mono}
+              >
+                {DNSSEC_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {m === "" ? "default (process-no-validate)" : m}
+                  </option>
+                ))}
+              </select>
+            </div>
           </Field>
         </div>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : "Apply changes"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : "Apply Changes"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

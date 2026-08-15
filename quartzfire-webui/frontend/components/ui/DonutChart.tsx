@@ -25,18 +25,18 @@ interface DonutChartProps {
   maxSlices?: number;
 }
 
-// Categorical palette — distinct hues that hold up in light and dark themes.
+// Categorical palette — the Clarity viz series tokens (app slices are
+// categorical, so the general viz palette applies; traffic greens are separate).
 const PALETTE = [
-  "#22c55e",
-  "#3b82f6",
-  "#f59e0b",
-  "#a855f7",
-  "#ef4444",
-  "#14b8a6",
-  "#ec4899",
-  "#84cc16",
+  "var(--cds-alias-viz-general-1)",
+  "var(--cds-alias-viz-general-2)",
+  "var(--cds-alias-viz-general-3)",
+  "var(--cds-alias-viz-general-4)",
+  "var(--cds-alias-viz-general-5)",
+  "var(--cds-alias-viz-general-6)",
+  "var(--cds-alias-viz-general-7)",
 ];
-const OTHER_COLOR = "var(--qz-fg-4)";
+const OTHER_COLOR = "var(--cds-alias-viz-general-8)";
 
 function polar(cx: number, cy: number, r: number, deg: number): [number, number] {
   const rad = ((deg - 90) * Math.PI) / 180;
@@ -77,10 +77,10 @@ export function DonutChart({
           style={{
             width: size * 0.5,
             height: size * 0.5,
-            border: "6px solid var(--qz-border)",
+            border: "6px solid var(--cds-alias-object-border-subtle)",
           }}
         />
-        <p className="text-[12px] text-[var(--qz-fg-4)] m-0 max-w-[200px]">
+        <p className="text-[12px] text-[var(--cds-alias-typography-color-200)] m-0 max-w-[200px]">
           {available ? emptyLabel : "App Control isn’t reporting yet."}
         </p>
       </div>
@@ -113,7 +113,7 @@ export function DonutChart({
     <div className="flex items-center gap-4 flex-wrap">
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" className="flex-shrink-0">
         {segments.map((seg, i) => (
-          <path key={i} d={seg.d} fill={seg.color} stroke="var(--qz-bg)" strokeWidth={1}>
+          <path key={i} d={seg.d} fill={seg.color} stroke="var(--cds-alias-object-container-background)" strokeWidth={1}>
             <title>{seg.label}</title>
           </path>
         ))}
@@ -125,11 +125,11 @@ export function DonutChart({
               className="inline-block rounded-[2px] flex-shrink-0"
               style={{ width: 10, height: 10, background: s.color }}
             />
-            <span className="text-[var(--qz-fg-2)] truncate flex-1" title={s.label}>
+            <span className="text-[var(--cds-alias-typography-color-400)] truncate flex-1" title={s.label}>
               {s.label}
             </span>
-            <span className="text-[var(--qz-fg-4)] tabular-nums">{formatBytes(s.value)}</span>
-            <span className="text-[var(--qz-fg-4)] tabular-nums w-[38px] text-right">
+            <span className="text-[var(--cds-alias-typography-color-200)] tabular-nums">{formatBytes(s.value)}</span>
+            <span className="text-[var(--cds-alias-typography-color-200)] tabular-nums w-[38px] text-right">
               {((s.value / total) * 100).toFixed(0)}%
             </span>
           </li>

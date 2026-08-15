@@ -177,11 +177,11 @@ export function UsageChart({ points, windowSecs, nowSecs, bucketSecs = 300, heig
                 x2={W - padR}
                 y1={yy}
                 y2={yy}
-                stroke="var(--qz-border)"
+                stroke="var(--cds-alias-object-border-subtle)"
                 strokeWidth={1}
                 strokeDasharray={f === 0 ? undefined : "3 3"}
               />
-              <text x={padL - LABEL_GAP} y={yy} textAnchor="end" dominantBaseline="middle" fontSize={11} fill="var(--qz-fg-4)">
+              <text x={padL - LABEL_GAP} y={yy} textAnchor="end" dominantBaseline="middle" fontSize={11} fill="var(--cds-alias-typography-color-200)">
                 {label}
               </text>
             </g>
@@ -196,7 +196,7 @@ export function UsageChart({ points, windowSecs, nowSecs, bucketSecs = 300, heig
             y={H - 7}
             textAnchor={i === 0 ? "start" : i === xTicks.length - 1 ? "end" : "middle"}
             fontSize={11}
-            fill="var(--qz-fg-4)"
+            fill="var(--cds-alias-typography-color-200)"
           >
             {tickLabel(ts, windowSecs)}
           </text>
@@ -211,7 +211,7 @@ export function UsageChart({ points, windowSecs, nowSecs, bucketSecs = 300, heig
           </>
         )}
         {!hasData && (
-          <text x={padL + innerW / 2} y={padT + innerH / 2} textAnchor="middle" fontSize={12} fill="var(--qz-fg-4)">
+          <text x={padL + innerW / 2} y={padT + innerH / 2} textAnchor="middle" fontSize={12} fill="var(--cds-alias-typography-color-200)">
             No traffic in this window
           </text>
         )}
@@ -223,7 +223,7 @@ export function UsageChart({ points, windowSecs, nowSecs, bucketSecs = 300, heig
               x2={hoverX}
               y1={padT}
               y2={baseY}
-              stroke="var(--qz-fg-4)"
+              stroke="var(--cds-alias-typography-color-200)"
               strokeWidth={1}
               strokeDasharray="3 3"
             />

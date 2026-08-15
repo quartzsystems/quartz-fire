@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import {
@@ -33,7 +34,7 @@ const dash = (v: string | null) => (v && v.length ? v : "—");
 
 function AfBadges({ peer }: { peer: BgpPeer }) {
   const active = ADDRESS_FAMILIES.filter((af) => peer.afi[af].enabled);
-  if (active.length === 0) return <span className="text-[var(--qz-fg-4)]">—</span>;
+  if (active.length === 0) return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
   return (
     <span className="inline-flex gap-1">
       {active.map((af) => (
@@ -151,48 +152,32 @@ export default function BgpPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          BGP
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+        <h2 style={{ margin: 0 }}>BGP</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Border Gateway Protocol — underlay peering and the L2VPN-EVPN overlay for a spine/leaf fabric
         </p>
       </div>
 
       <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading BGP configuration…</div>}
+        {status === "loading" && <div className="clr-secondary">Loading BGP configuration…</div>}
         {status === "error" && (
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
+            <div className="alert alert-danger alert-sm">
+              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+              <div className="alert-text">{errorMsg}</div>
             </div>
             <div>
-              <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
+              <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
             </div>
           </div>
         )}
         {status === "ready" && cfg && (
           <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-1 border-b border-[var(--qz-border)]">
-              {tabs.map(([id, label, count]) => {
-                const active = section === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setSection(id)}
-                    className={[
-                      "px-3 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
-                      active ? "text-[var(--qz-accent)] border-[var(--qz-accent)]" : "text-[var(--qz-fg-3)] border-transparent hover:text-[var(--qz-fg-1)]",
-                    ].join(" ")}
-                  >
-                    {label}
-                    {count !== null && <span className="ml-[6px] text-[12px] text-[var(--qz-fg-4)]">{count}</span>}
-                  </button>
-                );
-              })}
-            </div>
+            <Tabs
+              items={tabs.map(([id, label, count]) => ({ value: id, label, count: count ?? undefined }))}
+              value={section}
+              onChange={(v) => setSection(v as Section)}
+            />
 
             {section === "global" && (
               <BgpGlobalPanel live={cfg.global} onSaved={(msg) => { setToast(msg); load("refresh"); }} />
@@ -209,9 +194,10 @@ export default function BgpPage() {
                 searchPlaceholder="Search neighbors…"
                 emptyMessage="No BGP neighbors configured."
                 onRefresh={() => load("refresh")}
+                onRowOpen={(row) => setNeighborModal({ peer: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon={Plus} onClick={() => setNeighborModal({})}>
-                    Add neighbor
+                  <Button kind="primary" size="sm" icon="plus" onClick={() => setNeighborModal({})}>
+                    Add Neighbor
                   </Button>
                 }
                 actions={(row) => (
@@ -229,9 +215,10 @@ export default function BgpPage() {
                 searchPlaceholder="Search peer-groups…"
                 emptyMessage="No BGP peer-groups configured."
                 onRefresh={() => load("refresh")}
+                onRowOpen={(row) => setGroupModal({ peer: row })}
                 toolbar={
-                  <Button kind="primary" size="sm" icon={Plus} onClick={() => setGroupModal({})}>
-                    Add peer-group
+                  <Button kind="primary" size="sm" icon="plus" onClick={() => setGroupModal({})}>
+                    Add Peer-Group
                   </Button>
                 }
                 actions={(row) => (

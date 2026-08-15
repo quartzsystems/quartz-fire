@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, X } from "lucide-react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import {
   applyZone,
@@ -15,23 +15,14 @@ import {
   ZoneDefaultAction,
 } from "@/lib/firewall";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const monoFont = { fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -156,10 +147,8 @@ export function ZoneFormModal({
             onChange={(e) => setName(e.target.value)}
             placeholder="LAN"
             disabled={locked}
-            className={inputCls}
-            style={{ ...monoSt, opacity: locked ? 0.5 : 1 }}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={{ maxWidth: "none", ...monoFont }}
           />
         </Field>
 
@@ -172,15 +161,29 @@ export function ZoneFormModal({
                 : "A group of interfaces."
             }
           >
-            <div style={locked ? { opacity: 0.5, pointerEvents: "none" } : undefined}>
-              <Segmented
-                items={[
-                  { value: "network", label: "Network zone" },
-                  { value: "local", label: "Firewall zone" },
-                ]}
-                value={local ? "local" : "network"}
-                onChange={(v) => setLocal(v === "local")}
-              />
+            <div className="flex gap-4">
+              <div className="clr-radio-wrapper">
+                <input
+                  type="radio"
+                  id="zone-kind-network"
+                  name="zone-kind"
+                  checked={!local}
+                  disabled={locked}
+                  onChange={() => setLocal(false)}
+                />
+                <label htmlFor="zone-kind-network">Network zone</label>
+              </div>
+              <div className="clr-radio-wrapper">
+                <input
+                  type="radio"
+                  id="zone-kind-local"
+                  name="zone-kind"
+                  checked={local}
+                  disabled={locked}
+                  onChange={() => setLocal(true)}
+                />
+                <label htmlFor="zone-kind-local">Firewall zone</label>
+              </div>
             </div>
           </Field>
         )}
@@ -191,52 +194,65 @@ export function ZoneFormModal({
             hint="An interface can only belong to one zone — those already claimed aren't listed."
           >
             <div
-              className="rounded-md overflow-y-auto"
-              style={{ ...monoSt, minHeight: 84, maxHeight: 150, padding: members.length ? "4px 0" : 0 }}
+              className="overflow-y-auto"
+              style={{
+                border: "1px solid var(--cds-alias-object-border-color)",
+                borderRadius: 4,
+                ...monoFont,
+                minHeight: 84,
+                maxHeight: 150,
+                padding: members.length ? "4px 0" : 0,
+              }}
             >
               {members.length === 0 ? (
-                <div className="flex items-center justify-center h-[84px] text-[13px] text-[var(--qz-fg-4)]">
+                <div
+                  className="flex items-center justify-center h-[84px]"
+                  style={{ fontSize: 13, color: "var(--cds-alias-typography-color-200)" }}
+                >
                   No interfaces
                 </div>
               ) : (
                 members.map((m) => (
                   <div
                     key={m}
-                    className="flex items-center gap-2 px-3 py-[5px] text-[13px] text-[var(--qz-fg-1)]"
+                    className="flex items-center gap-2 px-3 py-[5px]"
+                    style={{ fontSize: 13, color: "var(--cds-alias-typography-color-450)" }}
                   >
                     <span>{descriptions[m] ?? m}</span>
-                    {descriptions[m] && <span className="text-[11px] text-[var(--qz-fg-4)]">{m}</span>}
+                    {descriptions[m] && (
+                      <span style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}>{m}</span>
+                    )}
                     <button
                       type="button"
                       onClick={() => setMembers(members.filter((x) => x !== m))}
                       title={`Remove ${m}`}
-                      className="ml-auto flex items-center justify-center w-[18px] h-[18px] rounded cursor-pointer border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-fg-1)]"
-                      style={{ background: "transparent" }}
+                      className="btn btn-sm btn-link-neutral btn-icon ml-auto flex-shrink-0"
+                      style={{ margin: "0 0 0 auto" }}
                     >
-                      <X size={12} />
+                      <Icon shape="times" size={12} />
                     </button>
                   </div>
                 ))
               )}
             </div>
-            <select
-              value=""
-              onChange={(e) => e.target.value && setMembers([...members, e.target.value])}
-              disabled={addable.length === 0}
-              className={`${inputCls} cursor-pointer mt-2`}
-              style={{ ...monoSt, opacity: addable.length ? 1 : 0.5 }}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              <option value="" disabled>
-                {addable.length ? "Add interface…" : "No unassigned interfaces left"}
-              </option>
-              {addable.map((n) => (
-                <option key={n} value={n}>
-                  {ifaceLabel(n)}
+            <div className="clr-select-wrapper" style={{ maxWidth: "none", marginTop: 8 }}>
+              <select
+                value=""
+                onChange={(e) => e.target.value && setMembers([...members, e.target.value])}
+                disabled={addable.length === 0}
+                className="clr-select"
+                style={{ maxWidth: "none", width: "100%", ...monoFont }}
+              >
+                <option value="" disabled>
+                  {addable.length ? "Add interface…" : "No unassigned interfaces left"}
                 </option>
-              ))}
-            </select>
+                {addable.map((n) => (
+                  <option key={n} value={n}>
+                    {ifaceLabel(n)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </Field>
         )}
 
@@ -259,63 +275,59 @@ export function ZoneFormModal({
             label="Traffic between this zone's own interfaces"
             hint="VyOS lets members of a zone talk freely unless you filter here."
           >
-            <select
-              value={intraZone}
-              onChange={(e) => setIntraZone(e.target.value as RuleAction | "")}
-              className={`${inputCls} cursor-pointer`}
-              style={inputSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              <option value="">Allow (default)</option>
-              <option value="accept">Allow</option>
-              <option value="drop">Deny</option>
-              <option value="reject">Reject</option>
-            </select>
+            <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+              <select
+                value={intraZone}
+                onChange={(e) => setIntraZone(e.target.value as RuleAction | "")}
+                className="clr-select"
+                style={{ maxWidth: "none", width: "100%" }}
+              >
+                <option value="">Allow (default)</option>
+                <option value="accept">Allow</option>
+                <option value="drop">Deny</option>
+                <option value="reject">Reject</option>
+              </select>
+            </div>
           </Field>
         )}
 
-        <label className="flex items-center gap-2 text-[13px] text-[var(--qz-fg-2)] cursor-pointer">
-          <input type="checkbox" checked={defaultLog} onChange={(e) => setDefaultLog(e.target.checked)} />
-          Log traffic denied by default (shows in the Traffic Monitor)
-        </label>
+        <div className="clr-checkbox-wrapper">
+          <input
+            type="checkbox"
+            id="zone-default-log"
+            checked={defaultLog}
+            onChange={(e) => setDefaultLog(e.target.checked)}
+          />
+          <label htmlFor="zone-default-log">Log traffic denied by default (shows in the Traffic Monitor)</label>
+        </div>
 
         {/* A zone denies everything its pairs don't allow, so creating one with
             no rules yet cuts traffic off. Commit-confirm is the safety net. */}
         {!isEdit && (
-          <div className="flex items-start gap-2 text-[11px] text-[var(--qz-fg-4)]">
-            <AlertTriangle size={13} className="flex-shrink-0 mt-[2px]" />
-            <span>
+          <div className="alert alert-warning alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">
               Traffic to this zone is denied until a rule allows it. The change is applied under commit-confirm, so it
               reverts on its own if it cuts off your session.
-            </span>
+            </div>
           </div>
         )}
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
-            {error}
-          </p>
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create zone"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Zone"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

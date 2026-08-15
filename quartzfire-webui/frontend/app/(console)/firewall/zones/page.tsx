@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Info, Plus, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import {
@@ -114,7 +114,7 @@ export default function FirewallZonesPage() {
       value: (z) => z.interfaces.join(", "),
       render: (z) =>
         z.local ? (
-          <span className="text-[var(--qz-fg-4)]">This device</span>
+          <span className="text-[var(--cds-alias-typography-color-200)]">This device</span>
         ) : z.interfaces.length ? (
           <span title={z.interfaces.join(", ")}>{z.interfaces.map(ifaceLabel).join(", ")}</span>
         ) : (
@@ -135,7 +135,7 @@ export default function FirewallZonesPage() {
       header: "Within zone",
       value: (z) => z.intra_zone ?? "accept",
       render: (z) => {
-        if (z.local) return <span className="text-[var(--qz-fg-4)]">—</span>;
+        if (z.local) return <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;
         if (z.intra_zone === "drop") return <span className="badge badge-crit">Deny</span>;
         if (z.intra_zone === "reject") return <span className="badge badge-warn">Reject</span>;
         return <span className="badge badge-ok">Allow</span>;
@@ -173,74 +173,66 @@ export default function FirewallZonesPage() {
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Zones
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Zones</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Named groups of interfaces. Traffic between two zones is denied unless a rule allows it; traffic inside a
           zone flows freely unless you say otherwise
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading zones…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading zones…</div>}
+      {status === "error" && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
+          <div className="alert-actions">
+            <Button kind="secondary" size="sm" icon="refresh" onClick={() => load()}>Retry</Button>
           </div>
-        )}
-        {status === "ready" && (
-          <div className="flex flex-col gap-3">
-            {/* A zone denies everything its pairs don't allow, so a zone with no
-                rules yet is a black hole — worth saying before it bites. */}
-            {data.zones.length > 0 && data.zone_pairs.length === 0 && (
-              <div
-                className="flex items-start gap-2 rounded-md px-3 py-[9px] text-[12px] text-[var(--qz-fg-3)]"
-                style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-              >
-                <Info size={14} className="flex-shrink-0 mt-[1px] text-[var(--qz-fg-4)]" />
-                <span>
-                  No rules between these zones yet, so traffic between them is denied. Allow some under{" "}
-                  <Link href="/firewall/rules" className="text-[var(--qz-fg-1)] underline">
-                    Rules
-                  </Link>{" "}
-                  by setting a zone as a rule&apos;s From and To.
-                </span>
+        </div>
+      )}
+      {status === "ready" && (
+        <div className="flex flex-col gap-3">
+          {/* A zone denies everything its pairs don't allow, so a zone with no
+              rules yet is a black hole — worth saying before it bites. */}
+          {data.zones.length > 0 && data.zone_pairs.length === 0 && (
+            <div className="alert alert-info alert-sm">
+              <Icon shape="info-circle" size={14} className="alert-icon" />
+              <div className="alert-text">
+                No rules between these zones yet, so traffic between them is denied. Allow some under{" "}
+                <Link href="/firewall/rules" className="text-[var(--cds-alias-typography-color-450)] underline">
+                  Rules
+                </Link>{" "}
+                by setting a zone as a rule&apos;s From and To.
               </div>
+            </div>
+          )}
+          <DataTable
+            rows={data.zones}
+            columns={columns}
+            rowId={(z) => z.name}
+            filters={filters}
+            storageKey="firewall-zones"
+            searchPlaceholder="Search zones…"
+            emptyMessage="No zones defined."
+            onRefresh={() => load("refresh")}
+            onRowOpen={(z) => setModal({ zone: z })}
+            toolbar={
+              <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+                Create Zone
+              </Button>
+            }
+            actions={(z) => (
+              <RowActions
+                label={`zone ${z.display}`}
+                onEdit={() => setModal({ zone: z })}
+                onDelete={() => remove(z)}
+              />
             )}
-            <DataTable
-              rows={data.zones}
-              columns={columns}
-              rowId={(z) => z.name}
-              filters={filters}
-              storageKey="firewall-zones"
-              searchPlaceholder="Search zones…"
-              emptyMessage="No zones defined."
-              onRefresh={() => load("refresh")}
-              toolbar={
-                <Button kind="primary" size="sm" icon={Plus} onClick={() => setModal({})}>
-                  Create zone
-                </Button>
-              }
-              actions={(z) => (
-                <RowActions
-                  label={`zone ${z.display}`}
-                  onEdit={() => setModal({ zone: z })}
-                  onDelete={() => remove(z)}
-                />
-              )}
-            />
-          </div>
-        )}
-      </div>
+          />
+        </div>
+      )}
 
       {modal && (
         <ZoneFormModal

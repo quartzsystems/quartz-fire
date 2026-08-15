@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
@@ -67,49 +67,46 @@ export default function VirtualServersPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Virtual Servers
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2>Virtual Servers</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           L4 load balancing (IPVS) — distribute a service VIP across a pool of real servers
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading virtual servers…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading virtual servers…</div>}
+      {status === "error" && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
+          <div className="alert-actions">
+            <button type="button" className="alert-action" onClick={() => load()}>
+              Retry
+            </button>
           </div>
-        )}
-        {status === "ready" && rows && (
-          <DataTable
-            rows={rows}
-            columns={columns()}
-            rowId={(r) => r.id}
-            storageKey="ha-virtual-servers"
-            searchPlaceholder="Search virtual servers…"
-            emptyMessage="No virtual servers configured."
-            onRefresh={() => load("refresh")}
-            toolbar={
-              <Button kind="primary" size="sm" icon={Plus} onClick={() => setModal({})}>
-                Add virtual server
-              </Button>
-            }
-            actions={(row) => (
-              <RowActions label={`virtual server ${row.id}`} onEdit={() => setModal({ vs: row })} onDelete={() => remove(row)} />
-            )}
-          />
-        )}
-      </div>
+        </div>
+      )}
+      {status === "ready" && rows && (
+        <DataTable
+          rows={rows}
+          columns={columns()}
+          rowId={(r) => r.id}
+          storageKey="ha-virtual-servers"
+          searchPlaceholder="Search virtual servers…"
+          emptyMessage="No virtual servers configured."
+          onRefresh={() => load("refresh")}
+          onRowOpen={(row) => setModal({ vs: row })}
+          toolbar={
+            <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+              Add Virtual Server
+            </Button>
+          }
+          actions={(row) => (
+            <RowActions label={`virtual server ${row.id}`} onEdit={() => setModal({ vs: row })} onDelete={() => remove(row)} />
+          )}
+        />
+      )}
 
       {modal && rows && (
         <VirtualServerFormModal

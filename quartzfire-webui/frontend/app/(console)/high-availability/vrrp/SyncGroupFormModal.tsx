@@ -80,7 +80,7 @@ export function SyncGroupFormModal({
             values={sg.members}
             onChange={(v) => setSg((p) => ({ ...p, members: v }))}
             placeholder="LAN"
-            addLabel="Add member"
+            addLabel="Add Member"
             list="vrrp-group-names"
           />
         </Field>
@@ -117,7 +117,7 @@ export function SyncGroupFormModal({
         </Advanced>
 
         <ErrorText msg={error} />
-        <ModalFooter onCancel={onClose} saving={saving} submitLabel={isEdit ? "Apply changes" : "Add sync-group"} />
+        <ModalFooter onCancel={onClose} saving={saving} submitLabel={isEdit ? "Apply Changes" : "Add Sync Group"} />
       </form>
     </ModalShell>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import {
@@ -114,54 +114,49 @@ export default function FirewallPoliciesPage() {
   ];
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Policies
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Policies</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Named TCP/UDP port sets (HTTP, DNS, …) applied by firewall rules
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading policies…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="clr-secondary">Loading policies…</div>}
+      {status === "error" && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
+          <div className="alert-actions">
+            <Button kind="secondary" size="sm" icon="refresh" onClick={() => load()}>Retry</Button>
           </div>
-        )}
-        {status === "ready" && (
-          <DataTable
-            rows={data.policies}
-            columns={columns}
-            rowId={(p) => p.name}
-            filters={filters}
-            storageKey="firewall-policies"
-            searchPlaceholder="Search policies…"
-            emptyMessage="No policies defined."
-            onRefresh={() => load("refresh")}
-            toolbar={
-              <Button kind="primary" size="sm" icon={Plus} onClick={() => setModal({})}>
-                Create policy
-              </Button>
-            }
-            actions={(row) => (
-              <RowActions
-                label={`policy ${row.name}`}
-                onEdit={() => setModal({ policy: row })}
-                onDelete={() => remove(row)}
-              />
-            )}
-          />
-        )}
-      </div>
+        </div>
+      )}
+      {status === "ready" && (
+        <DataTable
+          rows={data.policies}
+          columns={columns}
+          rowId={(p) => p.name}
+          filters={filters}
+          storageKey="firewall-policies"
+          searchPlaceholder="Search policies…"
+          emptyMessage="No policies defined."
+          onRefresh={() => load("refresh")}
+          onRowOpen={(p) => setModal({ policy: p })}
+          toolbar={
+            <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+              Create Policy
+            </Button>
+          }
+          actions={(row) => (
+            <RowActions
+              label={`policy ${row.name}`}
+              onEdit={() => setModal({ policy: row })}
+              onDelete={() => remove(row)}
+            />
+          )}
+        />
+      )}
 
       {modal && (
         <PolicyFormModal

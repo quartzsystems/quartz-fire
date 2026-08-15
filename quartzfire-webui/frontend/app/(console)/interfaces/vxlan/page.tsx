@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
@@ -36,13 +36,15 @@ const columns: Column<VxlanInterface>[] = [
     header: "VNIs",
     value: (r) => r.vnis.map((m) => m.vni).join(", "),
     render: (r) => {
-      if (r.vnis.length === 0) return <span className="text-[var(--qz-fg-4)]">—</span>;
+      if (r.vnis.length === 0) return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
       const first = r.vnis[0];
       const label = first.vlan != null ? `${first.vni}→v${first.vlan}` : String(first.vni);
       return (
-        <span className="font-mono text-[12px]">
+        <span style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12 }}>
           {label}
-          {r.vnis.length > 1 && <span className="text-[var(--qz-fg-4)]"> +{r.vnis.length - 1}</span>}
+          {r.vnis.length > 1 && (
+            <span style={{ color: "var(--cds-alias-typography-color-200)" }}> +{r.vnis.length - 1}</span>
+          )}
         </span>
       );
     },
@@ -144,56 +146,53 @@ export default function VxlanPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          VXLAN Interfaces
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col" style={{ gap: 16 }}>
+      <div>
+        <h2>VXLAN Interfaces</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Layer 2/3 overlay tunnel endpoints (VTEPs) — EVPN fabric, static unicast, or multicast
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && (
-          <div className="text-[13px] text-[var(--qz-fg-4)]">Loading VXLAN interfaces…</div>
-        )}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
-            </div>
+      {status === "loading" && (
+        <div className="clr-secondary">Loading VXLAN interfaces…</div>
+      )}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">{errorMsg}</div>
           </div>
-        )}
-        {status === "ready" && (
-          <DataTable
-            rows={rows}
-            columns={columns}
-            filters={filters}
-            rowId={(r) => r.name}
-            storageKey="interfaces-vxlan"
-            searchPlaceholder="Search VXLAN…"
-            emptyMessage="No VXLAN interfaces configured."
-            onRefresh={() => load("refresh")}
-            toolbar={
-              <Button kind="primary" size="sm" icon={Plus} onClick={() => setModal({})}>
-                Create VXLAN
-              </Button>
-            }
-            actions={(row) => (
-              <RowActions
-                label={row.name}
-                onEdit={() => setModal({ vxlan: row })}
-                onDelete={() => remove(row)}
-              />
-            )}
-          />
-        )}
-      </div>
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
+          </div>
+        </div>
+      )}
+      {status === "ready" && (
+        <DataTable
+          rows={rows}
+          columns={columns}
+          filters={filters}
+          rowId={(r) => r.name}
+          storageKey="interfaces-vxlan"
+          searchPlaceholder="Search VXLAN…"
+          emptyMessage="No VXLAN interfaces configured."
+          onRefresh={() => load("refresh")}
+          onRowOpen={(row) => setModal({ vxlan: row })}
+          toolbar={
+            <Button kind="primary" size="sm" icon="plus" onClick={() => setModal({})}>
+              Create VXLAN
+            </Button>
+          }
+          actions={(row) => (
+            <RowActions
+              label={row.name}
+              onEdit={() => setModal({ vxlan: row })}
+              onDelete={() => remove(row)}
+            />
+          )}
+        />
+      )}
 
       {modal && (
         <VxlanFormModal

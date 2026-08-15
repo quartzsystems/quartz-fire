@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ShieldCheck, X } from "lucide-react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { Icon } from "@/components/ui/Icon";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
 import {
@@ -40,23 +40,14 @@ import { emptySslInspectionConfig, fetchSslInspection } from "@/lib/ssl-inspecti
 import { emptyGeolocationConfig, fetchGeolocation, GeoDirection } from "@/lib/geolocation";
 import { emptyAcConfig, fetchAcStatus } from "@/lib/appcontrol";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const monoFont = { fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -248,100 +239,118 @@ function EndpointField({
   return (
     <Field label={label}>
       <div
-        className="rounded-md overflow-y-auto"
-        style={{ ...monoSt, minHeight: 96, maxHeight: 160, padding: value.length ? "4px 0" : 0 }}
+        className="overflow-y-auto"
+        style={{
+          border: "1px solid var(--cds-alias-object-border-color)",
+          borderRadius: 4,
+          ...monoFont,
+          minHeight: 96,
+          maxHeight: 160,
+          padding: value.length ? "4px 0" : 0,
+        }}
       >
         {value.length === 0 ? (
-          <div className="flex items-center justify-center h-[96px] text-[13px] text-[var(--qz-fg-4)]">Any</div>
+          <div
+            className="flex items-center justify-center h-[96px]"
+            style={{ fontSize: 13, color: "var(--cds-alias-typography-color-200)" }}
+          >
+            Any
+          </div>
         ) : (
           value.map((e, i) => {
             const { main, sub } = entryLabel(e, descriptions, aliases, zones);
             return (
               <div
                 key={`${e.kind}:${main}:${i}`}
-                className="group flex items-center gap-2 px-3 py-[5px] text-[13px] text-[var(--qz-fg-1)]"
+                className="group flex items-center gap-2 px-3 py-[5px]"
+                style={{ fontSize: 13, color: "var(--cds-alias-typography-color-450)" }}
               >
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{main}</span>
-                <span className="text-[11px] text-[var(--qz-fg-4)] flex-shrink-0">{sub}</span>
+                <span
+                  className="flex-shrink-0"
+                  style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}
+                >
+                  {sub}
+                </span>
                 <button
                   type="button"
                   onClick={() => onChange(value.filter((_, idx) => idx !== i))}
                   title={`Remove ${main}`}
-                  className="ml-auto flex-shrink-0 flex items-center justify-center w-[18px] h-[18px] rounded cursor-pointer border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-fg-1)]"
-                  style={{ background: "transparent" }}
+                  className="btn btn-sm btn-link-neutral btn-icon ml-auto flex-shrink-0"
+                  style={{ margin: "0 0 0 auto" }}
                 >
-                  <X size={12} />
+                  <Icon shape="times" size={12} />
                 </button>
               </div>
             );
           })
         )}
       </div>
-      <select
-        value=""
-        onChange={(e) => add(e.target.value)}
-        disabled={!canAdd}
-        className={`${inputCls} cursor-pointer mt-2`}
-        style={{ ...monoSt, opacity: canAdd ? 1 : 0.5 }}
-        onFocus={focusBorder}
-        onBlur={blurBorder}
-      >
-        <option value="" disabled>
-          {canAdd ? "Add…" : "Nothing more can be added"}
-        </option>
-        {firewallAddable && (
-          <optgroup label="Built-in">
-            <option value={FIREWALL_KEY}>Firewall — this device itself</option>
-          </optgroup>
-        )}
-        {addableZones.length > 0 && (
-          <optgroup label="Zones">
-            {addableZones.map((z) => (
-              <option key={zoneKey(z.name)} value={zoneKey(z.name)}>
-                {z.display}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {addableIfaces.length > 0 && (
-          <optgroup label="Interfaces">
-            {addableIfaces.map((n) => (
-              <option key={ifaceKey(n)} value={ifaceKey(n)}>
-                {descriptions?.[n] ? `${descriptions[n]} (${n})` : n}
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {addableAliases.length > 0 && (
-          <optgroup label="Aliases">
-            {addableAliases.map((a) => (
-              <option key={aliasKey(a.type, a.name)} value={aliasKey(a.type, a.name)}>
-                {a.display} ({ALIAS_GROUP[a.type].label})
-              </option>
-            ))}
-          </optgroup>
-        )}
-      </select>
+      <div className="clr-select-wrapper" style={{ maxWidth: "none", marginTop: 8 }}>
+        <select
+          value=""
+          onChange={(e) => add(e.target.value)}
+          disabled={!canAdd}
+          className="clr-select"
+          style={{ maxWidth: "none", width: "100%", ...monoFont }}
+        >
+          <option value="" disabled>
+            {canAdd ? "Add…" : "Nothing more can be added"}
+          </option>
+          {firewallAddable && (
+            <optgroup label="Built-in">
+              <option value={FIREWALL_KEY}>Firewall — this device itself</option>
+            </optgroup>
+          )}
+          {addableZones.length > 0 && (
+            <optgroup label="Zones">
+              {addableZones.map((z) => (
+                <option key={zoneKey(z.name)} value={zoneKey(z.name)}>
+                  {z.display}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {addableIfaces.length > 0 && (
+            <optgroup label="Interfaces">
+              {addableIfaces.map((n) => (
+                <option key={ifaceKey(n)} value={ifaceKey(n)}>
+                  {descriptions?.[n] ? `${descriptions[n]} (${n})` : n}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {addableAliases.length > 0 && (
+            <optgroup label="Aliases">
+              {addableAliases.map((a) => (
+                <option key={aliasKey(a.type, a.name)} value={aliasKey(a.type, a.name)}>
+                  {a.display} ({ALIAS_GROUP[a.type].label})
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </div>
       {inlineAllowed && (
         <>
           <div className="flex gap-2 mt-2">
-            <select
-              value={effInlineType}
-              onChange={(e) => {
-                setInlineType(e.target.value as AliasType);
-                setInlineError("");
-              }}
-              className={`${inputCls} cursor-pointer`}
-              style={{ ...monoSt, width: 110, flexShrink: 0 }}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
-            >
-              {inlineTypes.map((t) => (
-                <option key={t} value={t}>
-                  {ALIAS_GROUP[t].label}
-                </option>
-              ))}
-            </select>
+            <span className="clr-select-wrapper" style={{ width: 110, maxWidth: 110, flexShrink: 0 }}>
+              <select
+                value={effInlineType}
+                onChange={(e) => {
+                  setInlineType(e.target.value as AliasType);
+                  setInlineError("");
+                }}
+                className="clr-select"
+                style={{ maxWidth: "none", ...monoFont }}
+              >
+                {inlineTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {ALIAS_GROUP[t].label}
+                  </option>
+                ))}
+              </select>
+            </span>
             <input
               value={inlineValue}
               onChange={(e) => setInlineValue(e.target.value)}
@@ -352,28 +361,21 @@ function EndpointField({
                 }
               }}
               placeholder={INLINE_PLACEHOLDER[effInlineType]}
-              className={inputCls}
-              style={monoSt}
-              onFocus={focusBorder}
-              onBlur={blurBorder}
+              className="clr-input"
+              style={{ maxWidth: "none", flex: 1, ...monoFont }}
             />
             <button
               type="button"
               onClick={addInline}
               disabled={!inlineValue.trim()}
-              className="px-3 rounded-md text-[13px] font-medium cursor-pointer flex-shrink-0"
-              style={{
-                background: "transparent",
-                border: "1px solid var(--qz-border)",
-                color: "var(--qz-fg-2)",
-                opacity: inlineValue.trim() ? 1 : 0.5,
-              }}
+              className="btn btn-neutral flex-shrink-0"
+              style={{ margin: 0 }}
             >
               Add
             </button>
           </div>
           {inlineError && (
-            <p className="text-[11px] m-0 mt-[5px]" style={{ color: "var(--qz-danger)" }}>
+            <p className="m-0 mt-[5px]" style={{ fontSize: 11, color: "var(--cds-alias-status-danger)" }}>
               {inlineError}
             </p>
           )}
@@ -572,10 +574,8 @@ export function RuleFormModal({
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Allow LAN to Web"
-            className={inputCls}
-            style={inputSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={{ maxWidth: "none" }}
           />
         </Field>
 
@@ -615,7 +615,7 @@ export function RuleFormModal({
             onChange={setTo}
           />
         </div>
-        <p className="text-[11px] text-[var(--qz-fg-4)] m-0 -mt-2">
+        <p className="m-0 -mt-2" style={{ fontSize: 11, lineHeight: "16px", color: "var(--cds-alias-typography-color-200)" }}>
           Traffic matches any entry in a list; an empty list matches everything. Hosts, networks, and FQDNs can be
           typed in directly or come from aliases, but one list holds a single kind — and interfaces can&apos;t be mixed
           with addresses. The built-in Firewall entry matches this device itself — use it to control management
@@ -626,107 +626,126 @@ export function RuleFormModal({
           label="Policy"
           hint={policies.length === 0 ? "No policies defined yet — create them under Firewall › Policies." : "The ports and protocol this rule matches."}
         >
-          <select
-            value={policyName}
-            onChange={(e) => setPolicyName(e.target.value)}
-            className={`${inputCls} cursor-pointer`}
-            style={monoSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
-          >
-            <option value="">Any</option>
-            <option value={PING_KEY}>Ping</option>
-            {/* Built-ins step aside for a user policy of the same name. */}
-            {Object.entries(BUILTIN_POLICIES)
-              .filter(([n]) => !policies.some((p) => p.name === n))
-              .map(([n, b]) => (
-                <option key={builtinKey(n)} value={builtinKey(n)}>
-                  {n} — {PROTOCOL_LABEL[b.protocol].toLowerCase()}:{b.ports.join(",")}
+          <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+            <select
+              value={policyName}
+              onChange={(e) => setPolicyName(e.target.value)}
+              className="clr-select"
+              style={{ maxWidth: "none", width: "100%", ...monoFont }}
+            >
+              <option value="">Any</option>
+              <option value={PING_KEY}>Ping</option>
+              {/* Built-ins step aside for a user policy of the same name. */}
+              {Object.entries(BUILTIN_POLICIES)
+                .filter(([n]) => !policies.some((p) => p.name === n))
+                .map(([n, b]) => (
+                  <option key={builtinKey(n)} value={builtinKey(n)}>
+                    {n} — {PROTOCOL_LABEL[b.protocol].toLowerCase()}:{b.ports.join(",")}
+                  </option>
+                ))}
+              {policies.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name} — {PROTOCOL_LABEL[p.protocol].toLowerCase()}:{p.ports.join(",")}
                 </option>
               ))}
-            {policies.map((p) => (
-              <option key={p.name} value={p.name}>
-                {p.name} — {PROTOCOL_LABEL[p.protocol].toLowerCase()}:{p.ports.join(",")}
-              </option>
-            ))}
-          </select>
+            </select>
+          </div>
         </Field>
 
         <div className="flex items-center gap-6">
           <label className="flex items-center gap-[10px] cursor-pointer select-none">
             <Switch on={enabled} onChange={setEnabled} />
-            <span className="text-[13px] text-[var(--qz-fg-2)]">Enabled</span>
+            <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Enabled</span>
           </label>
           <label className="flex items-center gap-[10px] cursor-pointer select-none">
             <Switch on={log} onChange={setLog} />
-            <span className="text-[13px] text-[var(--qz-fg-2)]">Log traffic (Traffic Monitor)</span>
+            <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
+              Log traffic (Traffic Monitor)
+            </span>
           </label>
         </div>
 
         {action === "accept" && (
           <div
-            className="flex flex-col gap-3 rounded-md px-4 py-3"
-            style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+            className="flex flex-col gap-3 px-4 py-3"
+            style={{ border: "1px solid var(--cds-alias-object-border-color)", borderRadius: 4 }}
           >
             <div className="flex items-center gap-2">
-              <ShieldCheck size={14} className="text-[var(--qz-fg-3)]" />
-              <span className="text-[12px] font-semibold text-[var(--qz-fg-1)]">Security services</span>
+              <Icon shape="shield-check" size={14} style={{ color: "var(--cds-alias-typography-color-300)" }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: "var(--cds-alias-typography-color-450)" }}>
+                Security services
+              </span>
             </div>
             {/* IPS lives on the rule itself, so it's available on any Allow rule
                 (input/output/forward) — unlike the forward-only siblings below. */}
             <label className="flex items-center gap-3 cursor-pointer select-none">
-              <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">IPS</span>
+              <span
+                className="w-[132px] flex-shrink-0"
+                style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}
+              >
+                IPS
+              </span>
               <Switch on={ips} onChange={setIps} />
             </label>
             {servicesEligible &&
               (!svcLoaded ? (
-                <span className="text-[12px] text-[var(--qz-fg-4)]">Loading…</span>
+                <span style={{ fontSize: 12, color: "var(--cds-alias-typography-color-200)" }}>Loading…</span>
               ) : (
                 <div className="flex flex-col gap-[10px]">
                   {/* SSL Inspection — inspect / splice / off (no named policies). */}
                 {sslEligible && (
                 <div className="flex items-center gap-3">
-                  <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">SSL Inspection</span>
-                  <select
-                    value={svc.ssl}
-                    onChange={(e) => setSvc((s) => ({ ...s, ssl: e.target.value as SslServiceChoice }))}
-                    className="flex-1 rounded-md px-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-                    style={inputSt}
-                    onFocus={focusBorder}
-                    onBlur={blurBorder}
+                  <span
+                    className="w-[132px] flex-shrink-0"
+                    style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}
                   >
-                    <option value="off">Off</option>
-                    <option value="inspect">Inspect</option>
-                    <option value="splice">Splice</option>
-                  </select>
+                    SSL Inspection
+                  </span>
+                  <span className="clr-select-wrapper" style={{ maxWidth: "none", flex: 1 }}>
+                    <select
+                      value={svc.ssl}
+                      onChange={(e) => setSvc((s) => ({ ...s, ssl: e.target.value as SslServiceChoice }))}
+                      className="clr-select"
+                      style={{ maxWidth: "none", width: "100%" }}
+                    >
+                      <option value="off">Off</option>
+                      <option value="inspect">Inspect</option>
+                      <option value="splice">Splice</option>
+                    </select>
+                  </span>
                 </div>
                 )}
 
                 {/* Geolocation — a named action plus a match direction. */}
                 <div className="flex items-center gap-3">
-                  <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">Geolocation</span>
-                  <select
-                    value={svc.geo?.action ?? ""}
-                    onChange={(e) =>
-                      setSvc((s) => ({
-                        ...s,
-                        geo: e.target.value
-                          ? { action: e.target.value, direction: s.geo?.direction ?? "both" }
-                          : null,
-                      }))
-                    }
-                    className="flex-1 rounded-md px-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-                    style={inputSt}
-                    onFocus={focusBorder}
-                    onBlur={blurBorder}
+                  <span
+                    className="w-[132px] flex-shrink-0"
+                    style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}
                   >
-                    <option value="">None</option>
-                    {geoActions.map((a) => (
-                      <option key={a.name} value={a.name}>
-                        {a.name}
-                      </option>
-                    ))}
-                  </select>
+                    Geolocation
+                  </span>
+                  <span className="clr-select-wrapper" style={{ maxWidth: "none", flex: 1 }}>
+                    <select
+                      value={svc.geo?.action ?? ""}
+                      onChange={(e) =>
+                        setSvc((s) => ({
+                          ...s,
+                          geo: e.target.value
+                            ? { action: e.target.value, direction: s.geo?.direction ?? "both" }
+                            : null,
+                        }))
+                      }
+                      className="clr-select"
+                      style={{ maxWidth: "none", width: "100%" }}
+                    >
+                      <option value="">None</option>
+                      {geoActions.map((a) => (
+                        <option key={a.name} value={a.name}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
                   {svc.geo && (
                     <Segmented
                       items={[
@@ -745,36 +764,41 @@ export function RuleFormModal({
                 {/* Application Control — a named action. */}
                 {acEligible && (
                 <div className="flex items-center gap-3">
-                  <span className="text-[12px] text-[var(--qz-fg-3)] w-[132px] flex-shrink-0">Application Control</span>
-                  <select
-                    value={svc.appcontrol ?? ""}
-                    onChange={(e) => setSvc((s) => ({ ...s, appcontrol: e.target.value || null }))}
-                    className="flex-1 rounded-md px-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none cursor-pointer"
-                    style={inputSt}
-                    onFocus={focusBorder}
-                    onBlur={blurBorder}
+                  <span
+                    className="w-[132px] flex-shrink-0"
+                    style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}
                   >
-                    <option value="">None</option>
-                    {acActions.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
+                    Application Control
+                  </span>
+                  <span className="clr-select-wrapper" style={{ maxWidth: "none", flex: 1 }}>
+                    <select
+                      value={svc.appcontrol ?? ""}
+                      onChange={(e) => setSvc((s) => ({ ...s, appcontrol: e.target.value || null }))}
+                      className="clr-select"
+                      style={{ maxWidth: "none", width: "100%" }}
+                    >
+                      <option value="">None</option>
+                      {acActions.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
                 </div>
                 )}
 
                 {/* Say why the forward-only services aren't here, rather than
                     leaving a rule that silently can't carry them. */}
                 {!sslEligible && (
-                  <p className="text-[11px] text-[var(--qz-fg-4)] m-0">
+                  <p className="m-0" style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}>
                     SSL Inspection isn&apos;t offered here: it decides what to decrypt before the route is chosen, so
                     it can&apos;t tell one destination apart from another. It applies to rules between interfaces.
                   </p>
                 )}
 
                 {(geoActions.length === 0 || (acEligible && acActions.length === 0)) && (
-                  <p className="text-[11px] text-[var(--qz-fg-4)] m-0">
+                  <p className="m-0" style={{ fontSize: 11, color: "var(--cds-alias-typography-color-200)" }}>
                     Define actions on the Geolocation and Application Control pages to attach them here.
                   </p>
                 )}
@@ -784,29 +808,20 @@ export function RuleFormModal({
         )}
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
-            {error}
-          </p>
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+            <div className="alert-text">{error}</div>
+          </div>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create rule"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Rule"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Switch } from "@/components/ui/Switch";
 import { Button } from "@/components/ui/Button";
 import {
@@ -12,35 +12,27 @@ import {
   TargetedAf,
 } from "@/lib/mpls";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const inputStyle = { maxWidth: "none", width: "100%" } as const;
+const monoStyle = { ...inputStyle, fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg p-5 flex flex-col gap-4" style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}>
-      <div>
-        <h3 className="text-[14px] font-semibold text-[var(--qz-fg-1)] m-0">{title}</h3>
-        {subtitle && <p className="text-[12px] text-[var(--qz-fg-4)] m-0 mt-[2px]">{subtitle}</p>}
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="card-header">{title}</div>
+      <div className="card-block flex flex-col gap-4">
+        {subtitle && <p className="clr-secondary" style={{ margin: 0 }}>{subtitle}</p>}
+        {children}
       </div>
-      {children}
     </div>
   );
 }
@@ -49,9 +41,9 @@ function Toggle({ on, onChange, label, hint }: { on: boolean; onChange: (v: bool
   return (
     <label className="flex items-start gap-[10px] cursor-pointer select-none">
       <div className="pt-[1px]"><Switch on={on} onChange={onChange} /></div>
-      <span className="text-[13px] text-[var(--qz-fg-2)]">
+      <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
         {label}
-        {hint && <span className="block text-[11px] text-[var(--qz-fg-4)]">{hint}</span>}
+        {hint && <span className="block clr-subtext" style={{ marginTop: 0 }}>{hint}</span>}
       </span>
     </label>
   );
@@ -181,7 +173,7 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
       <Section title="MPLS Forwarding" subtitle="Interfaces that push/pop MPLS labels, and label-header parameters.">
         <ListEditor
           label="MPLS interfaces"
-          addLabel="Add interface"
+          addLabel="Add Interface"
           placeholder="eth1"
           mono
           emptyText="No interfaces have MPLS forwarding enabled."
@@ -192,7 +184,7 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
         />
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Maximum TTL" hint="MPLS header TTL ceiling (1–255, default 255).">
-            <input value={maximumTtl} onChange={(e) => setMaximumTtl(e.target.value)} placeholder="255" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={maximumTtl} onChange={(e) => setMaximumTtl(e.target.value)} placeholder="255" className="clr-input" style={monoStyle} />
           </Field>
           <div className="flex items-end">
             <Toggle on={noPropagateTtl} onChange={setNoPropagateTtl} label="Do not propagate TTL" hint="Hide the LSP hop-count from traceroute (uniform → pipe model)." />
@@ -202,7 +194,7 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
 
       <Section title="LDP Router" subtitle="Label Distribution Protocol identity and protocol behaviour.">
         <Field label="LDP router-id" hint="The LSR-id, usually a loopback address.">
-          <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={routerId} onChange={(e) => setRouterId(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} />
         </Field>
         <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Toggle on={orderedControl} onChange={setOrderedControl} label="Ordered control" hint="Only advertise a label once the downstream label is known." />
@@ -213,24 +205,34 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
 
       <Section title="LDP Interfaces" subtitle="Interfaces that run LDP and form hello adjacencies.">
         <div className="flex items-center justify-between">
-          <span className="text-[12px] text-[var(--qz-fg-3)]">Interfaces</span>
-          <button type="button" onClick={() => setLdpIfs((p) => [...p, { key: nextKey(), name: "", disableHello: false }])} className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0">
-            <Plus size={13} /> Add interface
+          <span className="clr-control-label" style={{ marginBottom: 0 }}>Interfaces</span>
+          <button
+            type="button"
+            onClick={() => setLdpIfs((p) => [...p, { key: nextKey(), name: "", disableHello: false }])}
+            className="btn btn-sm btn-link-neutral"
+          >
+            <Icon shape="plus" size={12} /> Add Interface
           </button>
         </div>
         {ldpIfs.length === 0 ? (
-          <p className="text-[12px] text-[var(--qz-fg-4)] m-0">No interfaces run LDP.</p>
+          <p className="clr-subtext" style={{ margin: 0 }}>No interfaces run LDP.</p>
         ) : (
           <div className="flex flex-col gap-2">
             {ldpIfs.map((r) => (
               <div key={r.key} className="flex items-center gap-3">
-                <input value={r.name} onChange={(e) => setLdpIfs((p) => p.map((x) => (x.key === r.key ? { ...x, name: e.target.value } : x)))} placeholder="eth1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
-                <label className="flex items-center gap-2 whitespace-nowrap text-[12px] text-[var(--qz-fg-3)] cursor-pointer select-none">
+                <input value={r.name} onChange={(e) => setLdpIfs((p) => p.map((x) => (x.key === r.key ? { ...x, name: e.target.value } : x)))} placeholder="eth1" className="clr-input" style={monoStyle} />
+                <label className="flex items-center gap-2 whitespace-nowrap cursor-pointer select-none" style={{ fontSize: 12, color: "var(--cds-alias-typography-color-300)" }}>
                   <Switch on={r.disableHello} onChange={(v) => setLdpIfs((p) => p.map((x) => (x.key === r.key ? { ...x, disableHello: v } : x)))} />
                   No triggered hello
                 </label>
-                <button type="button" onClick={() => setLdpIfs((p) => p.filter((x) => x.key !== r.key))} title="Remove interface" className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent" style={{ border: "1px solid var(--qz-border)" }}>
-                  <Trash2 size={14} />
+                <button
+                  type="button"
+                  onClick={() => setLdpIfs((p) => p.filter((x) => x.key !== r.key))}
+                  title="Remove interface"
+                  aria-label="Remove interface"
+                  className="btn btn-sm btn-link-neutral btn-icon"
+                >
+                  <Icon shape="trash" size={14} />
                 </button>
               </div>
             ))}
@@ -240,41 +242,51 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
 
       <Section title="Discovery" subtitle="Transport addresses and hello / session timers.">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-          <Field label="IPv4 transport address"><input value={transportV4} onChange={(e) => setTransportV4(e.target.value)} placeholder="192.0.2.1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
-          <Field label="IPv6 transport address"><input value={transportV6} onChange={(e) => setTransportV6(e.target.value)} placeholder="2001:db8::1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
+          <Field label="IPv4 transport address"><input value={transportV4} onChange={(e) => setTransportV4(e.target.value)} placeholder="192.0.2.1" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv6 transport address"><input value={transportV6} onChange={(e) => setTransportV6(e.target.value)} placeholder="2001:db8::1" className="clr-input" style={monoStyle} /></Field>
         </div>
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
-          <Field label="IPv4 hello interval"><input value={helloV4Int} onChange={(e) => setHelloV4Int(e.target.value)} placeholder="5" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
-          <Field label="IPv4 hello holdtime"><input value={helloV4Hold} onChange={(e) => setHelloV4Hold(e.target.value)} placeholder="15" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
-          <Field label="IPv4 session holdtime"><input value={sessV4Hold} onChange={(e) => setSessV4Hold(e.target.value)} placeholder="180" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
-          <Field label="IPv6 hello interval"><input value={helloV6Int} onChange={(e) => setHelloV6Int(e.target.value)} placeholder="5" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
-          <Field label="IPv6 hello holdtime"><input value={helloV6Hold} onChange={(e) => setHelloV6Hold(e.target.value)} placeholder="15" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
-          <Field label="IPv6 session holdtime"><input value={sessV6Hold} onChange={(e) => setSessV6Hold(e.target.value)} placeholder="180" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} /></Field>
+          <Field label="IPv4 hello interval"><input value={helloV4Int} onChange={(e) => setHelloV4Int(e.target.value)} placeholder="5" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv4 hello holdtime"><input value={helloV4Hold} onChange={(e) => setHelloV4Hold(e.target.value)} placeholder="15" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv4 session holdtime"><input value={sessV4Hold} onChange={(e) => setSessV4Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv6 hello interval"><input value={helloV6Int} onChange={(e) => setHelloV6Int(e.target.value)} placeholder="5" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv6 hello holdtime"><input value={helloV6Hold} onChange={(e) => setHelloV6Hold(e.target.value)} placeholder="15" className="clr-input" style={monoStyle} /></Field>
+          <Field label="IPv6 session holdtime"><input value={sessV6Hold} onChange={(e) => setSessV6Hold(e.target.value)} placeholder="180" className="clr-input" style={monoStyle} /></Field>
         </div>
       </Section>
 
       <Section title="LDP Neighbors" subtitle="Per-peer authentication and session tuning (keyed by LSR-id).">
         <div className="flex items-center justify-between">
-          <span className="text-[12px] text-[var(--qz-fg-3)]">Neighbors</span>
-          <button type="button" onClick={() => setNeighbors((p) => [...p, { key: nextKey(), address: "", password: "", holdtime: "", ttl: "" }])} className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0">
-            <Plus size={13} /> Add neighbor
+          <span className="clr-control-label" style={{ marginBottom: 0 }}>Neighbors</span>
+          <button
+            type="button"
+            onClick={() => setNeighbors((p) => [...p, { key: nextKey(), address: "", password: "", holdtime: "", ttl: "" }])}
+            className="btn btn-sm btn-link-neutral"
+          >
+            <Icon shape="plus" size={12} /> Add Neighbor
           </button>
         </div>
         {neighbors.length === 0 ? (
-          <p className="text-[12px] text-[var(--qz-fg-4)] m-0">No per-neighbor LDP settings.</p>
+          <p className="clr-subtext" style={{ margin: 0 }}>No per-neighbor LDP settings.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            <div className="grid gap-2 text-[11px] text-[var(--qz-fg-4)]" style={{ gridTemplateColumns: "1.4fr 1.4fr 1fr 1fr 36px" }}>
+            <div className="grid gap-2 clr-subtext" style={{ gridTemplateColumns: "1.4fr 1.4fr 1fr 1fr 36px", marginTop: 0 }}>
               <span>Address</span><span>Password</span><span>Session holdtime</span><span>TTL security</span><span />
             </div>
             {neighbors.map((r) => (
               <div key={r.key} className="grid gap-2 items-center" style={{ gridTemplateColumns: "1.4fr 1.4fr 1fr 1fr 36px" }}>
-                <input value={r.address} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, address: e.target.value } : x)))} placeholder="192.0.2.2" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
-                <input value={r.password} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, password: e.target.value } : x)))} placeholder="secret" type="password" className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder} />
-                <input value={r.holdtime} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, holdtime: e.target.value } : x)))} placeholder="180" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
-                <input value={r.ttl} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, ttl: e.target.value } : x)))} placeholder="disable / 1-254" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
-                <button type="button" onClick={() => setNeighbors((p) => p.filter((x) => x.key !== r.key))} title="Remove neighbor" className="grid place-items-center w-9 h-9 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent" style={{ border: "1px solid var(--qz-border)" }}>
-                  <Trash2 size={14} />
+                <input value={r.address} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, address: e.target.value } : x)))} placeholder="192.0.2.2" className="clr-input" style={monoStyle} />
+                <input value={r.password} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, password: e.target.value } : x)))} placeholder="secret" type="password" className="clr-input" style={inputStyle} />
+                <input value={r.holdtime} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, holdtime: e.target.value } : x)))} placeholder="180" className="clr-input" style={monoStyle} />
+                <input value={r.ttl} onChange={(e) => setNeighbors((p) => p.map((x) => (x.key === r.key ? { ...x, ttl: e.target.value } : x)))} placeholder="disable / 1-254" className="clr-input" style={monoStyle} />
+                <button
+                  type="button"
+                  onClick={() => setNeighbors((p) => p.filter((x) => x.key !== r.key))}
+                  title="Remove neighbor"
+                  aria-label="Remove neighbor"
+                  className="btn btn-sm btn-link-neutral btn-icon"
+                >
+                  <Icon shape="trash" size={14} />
                 </button>
               </div>
             ))}
@@ -286,11 +298,16 @@ export function MplsConfigPanel({ live, onSaved }: { live: MplsConfig; onSaved: 
       <TargetedSection af="IPv6" value={t6} onChange={setT6} placeholder="2001:db8::9" />
       </div>
 
-      {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
+      {error && (
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-circle" size={14} className="alert-icon" />
+          <div className="alert-text">{error}</div>
+        </div>
+      )}
 
       <div className="flex justify-end">
-        <Button kind="primary" icon={Save} onClick={save} disabled={saving}>
-          {saving ? "Applying…" : "Save MPLS settings"}
+        <Button kind="primary" onClick={save} disabled={saving}>
+          {saving ? "Applying…" : "Save MPLS Settings"}
         </Button>
       </div>
     </div>
@@ -313,22 +330,28 @@ function ListEditor({
   onRemove: (key: string) => void;
 }) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-[6px]">
-        <label className="block text-[12px] text-[var(--qz-fg-3)]">{label}</label>
-        <button type="button" onClick={onAdd} className="flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors cursor-pointer bg-transparent border-0 p-0">
-          <Plus size={13} /> {addLabel}
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <div className="flex items-center justify-between">
+        <label className="clr-control-label" style={{ marginBottom: 0 }}>{label}</label>
+        <button type="button" onClick={onAdd} className="btn btn-sm btn-link-neutral">
+          <Icon shape="plus" size={12} /> {addLabel}
         </button>
       </div>
       {rows.length === 0 ? (
-        <p className="text-[12px] text-[var(--qz-fg-4)] m-0">{emptyText}</p>
+        <p className="clr-subtext" style={{ margin: 0 }}>{emptyText}</p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2" style={{ marginTop: 6 }}>
           {rows.map((r) => (
             <div key={r.key} className="flex items-center gap-2">
-              <input value={r.value} onChange={(e) => onChange(r.key, e.target.value)} placeholder={placeholder} className={inputCls} style={mono ? monoSt : inputSt} onFocus={focusBorder} onBlur={blurBorder} />
-              <button type="button" onClick={() => onRemove(r.key)} title="Remove" className="grid place-items-center w-9 h-9 flex-shrink-0 rounded-md text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer bg-transparent" style={{ border: "1px solid var(--qz-border)" }}>
-                <Trash2 size={14} />
+              <input value={r.value} onChange={(e) => onChange(r.key, e.target.value)} placeholder={placeholder} className="clr-input" style={mono ? monoStyle : inputStyle} />
+              <button
+                type="button"
+                onClick={() => onRemove(r.key)}
+                title="Remove"
+                aria-label="Remove"
+                className="btn btn-sm btn-link-neutral btn-icon"
+              >
+                <Icon shape="trash" size={14} />
               </button>
             </div>
           ))}
@@ -348,7 +371,7 @@ function TargetedSection({ af, value, onChange, placeholder }: { af: "IPv4" | "I
       <Toggle on={value.enable} onChange={(v) => set({ enable: v })} label={`Accept targeted ${af} sessions`} />
       <ListEditor
         label="Targeted addresses"
-        addLabel="Add address"
+        addLabel="Add Address"
         placeholder={placeholder}
         mono
         emptyText="No targeted addresses — sessions are accepted only."
@@ -367,10 +390,10 @@ function TargetedSection({ af, value, onChange, placeholder }: { af: "IPv4" | "I
       />
       <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
         <Field label="Hello interval">
-          <input value={numStr(value.hello_interval)} onChange={(e) => set({ hello_interval: numOrNull(e.target.value) })} placeholder="10" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={numStr(value.hello_interval)} onChange={(e) => set({ hello_interval: numOrNull(e.target.value) })} placeholder="10" className="clr-input" style={monoStyle} />
         </Field>
         <Field label="Hello holdtime">
-          <input value={numStr(value.hello_holdtime)} onChange={(e) => set({ hello_holdtime: numOrNull(e.target.value) })} placeholder="30" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={numStr(value.hello_holdtime)} onChange={(e) => set({ hello_holdtime: numOrNull(e.target.value) })} placeholder="30" className="clr-input" style={monoStyle} />
         </Field>
       </div>
     </Section>

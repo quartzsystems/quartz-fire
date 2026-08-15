@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
 import {
@@ -17,31 +17,37 @@ import {
   emptyOpenvpn,
 } from "@/lib/openvpn";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const inputSt = { maxWidth: "none" } as const;
+const monoSt = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">
-        {label} {required && <span style={{ color: "var(--qz-danger)" }}>*</span>}
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">
+        {label} {required && <span className="clr-required">*</span>}
       </label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
+    </div>
+  );
+}
+
+function MonoSelect({ value, onChange, children }: {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+      <select value={value} onChange={onChange} className="clr-select" style={monoSt}>
+        {children}
+      </select>
     </div>
   );
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <span className="text-[12px] font-semibold text-[var(--qz-fg-2)] uppercase tracking-wide mt-1">{children}</span>;
+  return <span className="text-[12px] font-semibold uppercase tracking-wide mt-1" style={{ color: "var(--cds-alias-typography-color-400)" }}>{children}</span>;
 }
 
 const numOrNull = (s: string) => {
@@ -164,7 +170,7 @@ export function OpenvpnFormModal({ initial, existingNames, onClose, onSaved }: {
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Interface" required hint="vtun0, vtun1, …">
-            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="vtun0" className={`${inputCls} disabled:opacity-70`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="vtun0" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Mode">
             <Segmented
@@ -181,28 +187,28 @@ export function OpenvpnFormModal({ initial, existingNames, onClose, onSaved }: {
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
           <Field label="Device type" hint="Default tun (L3).">
-            <select value={deviceType} onChange={(e) => setDeviceType(e.target.value as OpenvpnDeviceType | "")} className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder}>
+            <MonoSelect value={deviceType} onChange={(e) => setDeviceType(e.target.value as OpenvpnDeviceType | "")}>
               <option value="">Default</option>
               {OPENVPN_DEVICE_TYPES.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
+            </MonoSelect>
           </Field>
           <Field label="Protocol">
-            <select value={protocol} onChange={(e) => setProtocol(e.target.value as OpenvpnProtocol | "")} className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder}>
+            <MonoSelect value={protocol} onChange={(e) => setProtocol(e.target.value as OpenvpnProtocol | "")}>
               <option value="">Default (udp)</option>
               {OPENVPN_PROTOCOLS.map((pr) => <option key={pr} value={pr}>{pr}</option>)}
-            </select>
+            </MonoSelect>
           </Field>
           <Field label="Local port" hint="Listen port.">
-            <input value={localPort} onChange={(e) => setLocalPort(e.target.value)} placeholder="1194" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={localPort} onChange={(e) => setLocalPort(e.target.value)} placeholder="1194" className="clr-input" style={monoSt} />
           </Field>
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Local host" hint="Address to bind to (optional).">
-            <input value={localHost} onChange={(e) => setLocalHost(e.target.value)} placeholder="203.0.113.1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={localHost} onChange={(e) => setLocalHost(e.target.value)} placeholder="203.0.113.1" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Description">
-            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Branch office link" className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Branch office link" className="clr-input" style={inputSt} />
           </Field>
         </div>
 
@@ -212,24 +218,24 @@ export function OpenvpnFormModal({ initial, existingNames, onClose, onSaved }: {
             <SectionLabel>Site-to-site</SectionLabel>
             <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
               <Field label="Local tunnel address" hint="This side of the /30 (tun).">
-                <input value={localAddress} onChange={(e) => setLocalAddress(e.target.value)} placeholder="10.255.0.1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={localAddress} onChange={(e) => setLocalAddress(e.target.value)} placeholder="10.255.0.1" className="clr-input" style={monoSt} />
               </Field>
               <Field label="Remote tunnel address">
-                <input value={remoteAddress} onChange={(e) => setRemoteAddress(e.target.value)} placeholder="10.255.0.2" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={remoteAddress} onChange={(e) => setRemoteAddress(e.target.value)} placeholder="10.255.0.2" className="clr-input" style={monoSt} />
               </Field>
               <Field label="Remote host" hint="Peer's public address (TLS initiator).">
-                <input value={remoteHost} onChange={(e) => setRemoteHost(e.target.value)} placeholder="peer.example.com" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={remoteHost} onChange={(e) => setRemoteHost(e.target.value)} placeholder="peer.example.com" className="clr-input" style={monoSt} />
               </Field>
               <Field label="TLS role">
-                <select value={tlsRole} onChange={(e) => setTlsRole(e.target.value as "active" | "passive" | "")} className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder}>
+                <MonoSelect value={tlsRole} onChange={(e) => setTlsRole(e.target.value as "active" | "passive" | "")}>
                   <option value="">None (static key)</option>
                   <option value="active">active</option>
                   <option value="passive">passive</option>
-                </select>
+                </MonoSelect>
               </Field>
             </div>
             <Field label="Shared secret key" hint="PKI static-key name (`generate pki openvpn shared-secret`). Leave blank when using TLS.">
-              <input value={sharedSecretKey} onChange={(e) => setSharedSecretKey(e.target.value)} placeholder="ovpn-key-0" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+              <input value={sharedSecretKey} onChange={(e) => setSharedSecretKey(e.target.value)} placeholder="ovpn-key-0" className="clr-input" style={monoSt} />
             </Field>
           </>
         )}
@@ -239,18 +245,18 @@ export function OpenvpnFormModal({ initial, existingNames, onClose, onSaved }: {
             <SectionLabel>Client</SectionLabel>
             <div className="grid gap-4" style={{ gridTemplateColumns: "2fr 1fr" }}>
               <Field label="Remote host" required hint="Server to connect to.">
-                <input value={remoteHost} onChange={(e) => setRemoteHost(e.target.value)} placeholder="vpn.example.com" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={remoteHost} onChange={(e) => setRemoteHost(e.target.value)} placeholder="vpn.example.com" className="clr-input" style={monoSt} />
               </Field>
               <Field label="Remote port">
-                <input value={remotePort} onChange={(e) => setRemotePort(e.target.value)} placeholder="1194" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={remotePort} onChange={(e) => setRemotePort(e.target.value)} placeholder="1194" className="clr-input" style={monoSt} />
               </Field>
             </div>
             <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
               <Field label="Username" hint="For user/password auth (optional).">
-                <input value={authUser} onChange={(e) => setAuthUser(e.target.value)} placeholder="user" className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={authUser} onChange={(e) => setAuthUser(e.target.value)} placeholder="user" className="clr-input" style={inputSt} />
               </Field>
               <Field label="Password" hint="Leave blank to keep the current one.">
-                <input value={authPass} onChange={(e) => setAuthPass(e.target.value)} type="password" placeholder="••••••" className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={authPass} onChange={(e) => setAuthPass(e.target.value)} type="password" placeholder="••••••" className="clr-input" style={inputSt} />
               </Field>
             </div>
           </>
@@ -261,25 +267,25 @@ export function OpenvpnFormModal({ initial, existingNames, onClose, onSaved }: {
             <SectionLabel>Server</SectionLabel>
             <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
               <Field label="Server subnet" required hint="Pool clients draw from (e.g. 10.8.0.0/24).">
-                <input value={serverSubnet} onChange={(e) => setServerSubnet(e.target.value)} placeholder="10.8.0.0/24" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={serverSubnet} onChange={(e) => setServerSubnet(e.target.value)} placeholder="10.8.0.0/24" className="clr-input" style={monoSt} />
               </Field>
               <Field label="Topology">
-                <select value={serverTopology} onChange={(e) => setServerTopology(e.target.value as OpenvpnTopology | "")} className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder}>
+                <MonoSelect value={serverTopology} onChange={(e) => setServerTopology(e.target.value as OpenvpnTopology | "")}>
                   <option value="">Default (subnet)</option>
                   {OPENVPN_TOPOLOGIES.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
+                </MonoSelect>
               </Field>
             </div>
             <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
               <Field label="Push routes" hint="Routes to push to clients, comma-separated.">
-                <input value={pushRoutes} onChange={(e) => setPushRoutes(e.target.value)} placeholder="192.168.1.0/24" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={pushRoutes} onChange={(e) => setPushRoutes(e.target.value)} placeholder="192.168.1.0/24" className="clr-input" style={monoSt} />
               </Field>
               <Field label="Name servers" hint="DNS pushed to clients, comma-separated.">
-                <input value={nameServers} onChange={(e) => setNameServers(e.target.value)} placeholder="10.8.0.1" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={nameServers} onChange={(e) => setNameServers(e.target.value)} placeholder="10.8.0.1" className="clr-input" style={monoSt} />
               </Field>
             </div>
             <Field label="Max connections" hint="1–4096.">
-              <input value={maxConnections} onChange={(e) => setMaxConnections(e.target.value)} placeholder="unlimited" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+              <input value={maxConnections} onChange={(e) => setMaxConnections(e.target.value)} placeholder="unlimited" className="clr-input" style={monoSt} />
             </Field>
           </>
         )}
@@ -288,49 +294,49 @@ export function OpenvpnFormModal({ initial, existingNames, onClose, onSaved }: {
         <SectionLabel>Encryption &amp; certificates</SectionLabel>
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Cipher" hint="Data-channel cipher (e.g. aes-256-gcm).">
-            <input value={cipher} onChange={(e) => setCipher(e.target.value)} placeholder="aes-256-gcm" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={cipher} onChange={(e) => setCipher(e.target.value)} placeholder="aes-256-gcm" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Hash" hint="HMAC digest (e.g. sha256).">
-            <input value={hash} onChange={(e) => setHash(e.target.value)} placeholder="sha256" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={hash} onChange={(e) => setHash(e.target.value)} placeholder="sha256" className="clr-input" style={monoSt} />
           </Field>
           <Field label="CA certificate" hint="PKI CA name.">
-            <input value={caCert} onChange={(e) => setCaCert(e.target.value)} placeholder="ca-name" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={caCert} onChange={(e) => setCaCert(e.target.value)} placeholder="ca-name" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Certificate" hint="PKI certificate name.">
-            <input value={cert} onChange={(e) => setCert(e.target.value)} placeholder="cert-name" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={cert} onChange={(e) => setCert(e.target.value)} placeholder="cert-name" className="clr-input" style={monoSt} />
           </Field>
         </div>
         {mode !== "site-to-site" && (
           <Field label="DH parameters" hint="PKI dh-params name (server / TLS).">
-            <input value={dhParams} onChange={(e) => setDhParams(e.target.value)} placeholder="dh-name" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={dhParams} onChange={(e) => setDhParams(e.target.value)} placeholder="dh-name" className="clr-input" style={monoSt} />
           </Field>
         )}
 
         <Field label="Extra OpenVPN options" hint="Raw directives, one per line — passed through verbatim.">
-          <textarea value={options} onChange={(e) => setOptions(e.target.value)} rows={2} placeholder="reneg-sec 0" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <textarea value={options} onChange={(e) => setOptions(e.target.value)} rows={2} placeholder="reneg-sec 0" className="clr-textarea" style={monoSt} />
         </Field>
 
         <div className="flex flex-wrap gap-x-6 gap-y-3">
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px]" style={{ color: "var(--cds-alias-typography-color-400)" }}>
             <Switch on={persistent} onChange={setPersistent} />
             Persistent tunnel
           </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px]" style={{ color: "var(--cds-alias-typography-color-400)" }}>
             <Switch on={enabled} onChange={setEnabled} />
             Interface enabled
           </label>
         </div>
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
+        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button type="button" onClick={onClose} className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer" style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}>
+        <ModalFooter>
+          <button type="button" onClick={onClose} className="btn btn-neutral">
             Cancel
           </button>
-          <button type="submit" disabled={saving} className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0" style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Add interface"}
+          <button type="submit" disabled={saving} className="btn btn-primary">
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Add Interface"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

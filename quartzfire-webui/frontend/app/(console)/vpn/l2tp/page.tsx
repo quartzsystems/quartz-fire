@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Plus, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
+import { Tabs } from "@/components/ui/Tabs";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { RowActions } from "@/components/dashboard/RowActions";
 import {
@@ -117,114 +118,97 @@ export default function L2tpPage() {
     }
   };
 
-  const tabs: [Tab, string, number | null][] = [
-    ["general", "General", null],
-    ["users", "Users", cfg?.users.length ?? 0],
-    ["pools", "IP Pools", cfg?.pools.length ?? 0],
-    ["radius", "RADIUS", cfg?.radius_servers.length ?? 0],
-    ["status", "Status", null],
-  ];
-
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          L2TP
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2>L2TP</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           L2TP/IPsec remote-access server — dial-in VPN for roaming clients
         </p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading L2TP configuration…</div>}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
-            </div>
+      {status === "loading" && <div className="text-[13px]" style={{ color: "var(--cds-alias-typography-color-300)" }}>Loading L2TP configuration…</div>}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 text-[13px]" style={{ color: "var(--cds-alias-status-danger)" }}>
+            <Icon shape="exclamation-triangle" size={16} />
+            {errorMsg}
           </div>
-        )}
-        {status === "ready" && cfg && (
-          <div className="flex flex-col gap-5">
-            <div className="flex items-center gap-1 border-b border-[var(--qz-border)]">
-              {tabs.map(([id, label, count]) => {
-                const active = tab === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setTab(id)}
-                    className={[
-                      "px-3 py-2 text-[13px] font-medium border-b-2 -mb-px transition-colors cursor-pointer",
-                      active ? "text-[var(--qz-accent)] border-[var(--qz-accent)]" : "text-[var(--qz-fg-3)] border-transparent hover:text-[var(--qz-fg-1)]",
-                    ].join(" ")}
-                  >
-                    {label}
-                    {count !== null && <span className="ml-[6px] text-[12px] text-[var(--qz-fg-4)]">{count}</span>}
-                  </button>
-                );
-              })}
-            </div>
-
-            {tab === "general" && (
-              <GeneralPanel
-                live={cfg.general}
-                pools={cfg.pools.map((p) => p.name)}
-                onSaved={(msg) => { setToast(msg); load("refresh"); }}
-              />
-            )}
-
-            {tab === "users" && (
-              <DataTable
-                rows={cfg.users}
-                columns={userColumns}
-                rowId={(r) => r.username}
-                storageKey="vpn-l2tp-users"
-                searchPlaceholder="Search users…"
-                emptyMessage="No L2TP users configured."
-                onRefresh={() => load("refresh")}
-                toolbar={<Button kind="primary" size="sm" icon={Plus} onClick={() => setUserModal({})}>Add user</Button>}
-                actions={(row) => <RowActions label={`user ${row.username}`} onEdit={() => setUserModal({ user: row })} onDelete={() => removeUser(row)} />}
-              />
-            )}
-
-            {tab === "pools" && (
-              <DataTable
-                rows={cfg.pools}
-                columns={poolColumns}
-                rowId={(r) => r.name}
-                storageKey="vpn-l2tp-pools"
-                searchPlaceholder="Search pools…"
-                emptyMessage="No IP pools configured."
-                onRefresh={() => load("refresh")}
-                toolbar={<Button kind="primary" size="sm" icon={Plus} onClick={() => setPoolModal({})}>Add pool</Button>}
-                actions={(row) => <RowActions label={`pool ${row.name}`} onEdit={() => setPoolModal({ pool: row })} onDelete={() => removePool(row)} />}
-              />
-            )}
-
-            {tab === "radius" && (
-              <DataTable
-                rows={cfg.radius_servers}
-                columns={radiusColumns}
-                rowId={(r) => r.address}
-                storageKey="vpn-l2tp-radius"
-                searchPlaceholder="Search servers…"
-                emptyMessage="No RADIUS servers configured."
-                onRefresh={() => load("refresh")}
-                toolbar={<Button kind="primary" size="sm" icon={Plus} onClick={() => setRadiusModal({})}>Add server</Button>}
-                actions={(row) => <RowActions label={`RADIUS server ${row.address}`} onEdit={() => setRadiusModal({ server: row })} onDelete={() => removeRadius(row)} />}
-              />
-            )}
-
-            {tab === "status" && <L2tpStatusPanel />}
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      {status === "ready" && cfg && (
+        <div className="flex flex-col gap-5">
+          <Tabs
+            items={[
+              { value: "general", label: "General" },
+              { value: "users", label: "Users", count: cfg.users.length },
+              { value: "pools", label: "IP Pools", count: cfg.pools.length },
+              { value: "radius", label: "RADIUS", count: cfg.radius_servers.length },
+              { value: "status", label: "Status" },
+            ]}
+            value={tab}
+            onChange={(v) => setTab(v as Tab)}
+          />
+
+          {tab === "general" && (
+            <GeneralPanel
+              live={cfg.general}
+              pools={cfg.pools.map((p) => p.name)}
+              onSaved={(msg) => { setToast(msg); load("refresh"); }}
+            />
+          )}
+
+          {tab === "users" && (
+            <DataTable
+              rows={cfg.users}
+              columns={userColumns}
+              rowId={(r) => r.username}
+              storageKey="vpn-l2tp-users"
+              searchPlaceholder="Search users…"
+              emptyMessage="No L2TP users configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setUserModal({ user: row })}
+              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setUserModal({})}>Add User</Button>}
+              actions={(row) => <RowActions label={`user ${row.username}`} onEdit={() => setUserModal({ user: row })} onDelete={() => removeUser(row)} />}
+            />
+          )}
+
+          {tab === "pools" && (
+            <DataTable
+              rows={cfg.pools}
+              columns={poolColumns}
+              rowId={(r) => r.name}
+              storageKey="vpn-l2tp-pools"
+              searchPlaceholder="Search pools…"
+              emptyMessage="No IP pools configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setPoolModal({ pool: row })}
+              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setPoolModal({})}>Add Pool</Button>}
+              actions={(row) => <RowActions label={`pool ${row.name}`} onEdit={() => setPoolModal({ pool: row })} onDelete={() => removePool(row)} />}
+            />
+          )}
+
+          {tab === "radius" && (
+            <DataTable
+              rows={cfg.radius_servers}
+              columns={radiusColumns}
+              rowId={(r) => r.address}
+              storageKey="vpn-l2tp-radius"
+              searchPlaceholder="Search servers…"
+              emptyMessage="No RADIUS servers configured."
+              onRefresh={() => load("refresh")}
+              onRowOpen={(row) => setRadiusModal({ server: row })}
+              toolbar={<Button kind="primary" size="sm" icon="plus" onClick={() => setRadiusModal({})}>Add Server</Button>}
+              actions={(row) => <RowActions label={`RADIUS server ${row.address}`} onEdit={() => setRadiusModal({ server: row })} onDelete={() => removeRadius(row)} />}
+            />
+          )}
+
+          {tab === "status" && <L2tpStatusPanel />}
+        </div>
+      )}
 
       {userModal && cfg && (
         <UserFormModal initial={userModal.user} existingNames={cfg.users.map((u) => u.username)} onClose={() => setUserModal(null)} onSaved={saved} />

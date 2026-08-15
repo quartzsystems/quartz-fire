@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
 import { Segmented } from "@/components/ui/Segmented";
 import { Switch } from "@/components/ui/Switch";
@@ -12,11 +12,8 @@ import {
   ModalFooter,
   StringListEditor,
   TextInput,
-  inputCls,
-  monoSt,
+  monoStyle,
   numOrNull,
-  focusBorder,
-  blurBorder,
 } from "../formkit";
 import {
   AuthType,
@@ -26,16 +23,24 @@ import {
   emptyGroup,
 } from "@/lib/vrrp";
 
+const sectionHead: React.CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--cds-alias-typography-color-450)",
+  marginTop: 4,
+};
+
+const switchLabel = "flex items-center gap-2 cursor-pointer select-none";
+const switchLabelStyle: React.CSSProperties = { fontSize: 13, color: "var(--cds-alias-typography-color-400)" };
+
 /// Editor for the virtual-address rows (each an IP/CIDR with an optional
 /// interface override).
 function VipEditor({
   vips,
   onChange,
-  interfaces,
 }: {
   vips: VrrpVip[];
   onChange: (v: VrrpVip[]) => void;
-  interfaces: string[];
 }) {
   const setAt = (i: number, patch: Partial<VrrpVip>) =>
     onChange(vips.map((v, j) => (j === i ? { ...v, ...patch } : v)));
@@ -47,37 +52,33 @@ function VipEditor({
             value={v.address}
             onChange={(e) => setAt(i, { address: e.target.value })}
             placeholder="10.0.0.1/24"
-            className={inputCls}
-            style={monoSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={{ maxWidth: "none", ...monoStyle }}
           />
           <input
             value={v.interface ?? ""}
             list="vrrp-interfaces"
             onChange={(e) => setAt(i, { interface: e.target.value || null })}
             placeholder="interface (opt.)"
-            className={inputCls}
-            style={monoSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={{ maxWidth: "none", ...monoStyle }}
           />
           <button
             type="button"
             onClick={() => onChange(vips.filter((_, j) => j !== i))}
             aria-label="Remove"
-            className="grid place-items-center w-8 h-8 rounded-md bg-transparent border border-[var(--qz-border)] text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] transition-colors cursor-pointer flex-shrink-0"
+            className="btn btn-sm btn-link-neutral btn-icon flex-shrink-0"
           >
-            <X size={14} />
+            <Icon shape="times" size={14} />
           </button>
         </div>
       ))}
       <button
         type="button"
         onClick={() => onChange([...vips, { address: "", interface: null }])}
-        className="inline-flex items-center gap-[6px] self-start text-[12px] font-medium px-[10px] py-[6px] rounded-md bg-transparent border border-[var(--qz-border)] text-[var(--qz-fg-2)] hover:text-[var(--qz-fg-1)] hover:border-[var(--qz-border-strong)] transition-colors cursor-pointer"
+        className="btn btn-sm btn-neutral self-start"
       >
-        <Plus size={13} /> Add virtual address
+        <Icon shape="plus" size={13} /> Add Virtual Address
       </button>
     </div>
   );
@@ -192,7 +193,7 @@ export function GroupFormModal({
         </Field>
 
         <Field label="Virtual addresses" hint="Floating IP(s) the master owns.">
-          <VipEditor vips={g.addresses} onChange={(v) => set({ addresses: v })} interfaces={interfaces} />
+          <VipEditor vips={g.addresses} onChange={(v) => set({ addresses: v })} />
         </Field>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
@@ -213,15 +214,15 @@ export function GroupFormModal({
         </div>
 
         <div className="flex flex-wrap gap-x-6 gap-y-3">
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className={switchLabel} style={switchLabelStyle}>
             <Switch on={g.enabled} onChange={(v) => set({ enabled: v })} />
             Enabled
           </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className={switchLabel} style={switchLabelStyle}>
             <Switch on={g.no_preempt} onChange={(v) => set({ no_preempt: v })} />
             No preempt
           </label>
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className={switchLabel} style={switchLabelStyle}>
             <Switch on={g.rfc3768_compatibility} onChange={(v) => set({ rfc3768_compatibility: v })} />
             RFC 3768 compatibility
           </label>
@@ -251,18 +252,18 @@ export function GroupFormModal({
           )}
 
           <Field label="Track interfaces" hint="Go to fault state if a tracked interface goes down.">
-            <StringListEditor values={g.track_interfaces} onChange={(v) => set({ track_interfaces: v })} placeholder="eth2" addLabel="Add interface" list="vrrp-interfaces" />
+            <StringListEditor values={g.track_interfaces} onChange={(v) => set({ track_interfaces: v })} placeholder="eth2" addLabel="Add Interface" list="vrrp-interfaces" />
           </Field>
-          <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+          <label className={switchLabel} style={switchLabelStyle}>
             <Switch on={g.track_exclude_vrrp_interface} onChange={(v) => set({ track_exclude_vrrp_interface: v })} />
             Exclude the VRRP interface from tracking
           </label>
 
           <Field label="Excluded addresses" hint="Addresses moved with the group but not advertised.">
-            <StringListEditor values={g.excluded_addresses} onChange={(v) => set({ excluded_addresses: v })} placeholder="10.0.0.9/24" addLabel="Add address" />
+            <StringListEditor values={g.excluded_addresses} onChange={(v) => set({ excluded_addresses: v })} placeholder="10.0.0.9/24" addLabel="Add Address" />
           </Field>
 
-          <div className="text-[12px] font-semibold text-[var(--qz-fg-2)] mt-1">Health check</div>
+          <div style={sectionHead}>Health check</div>
           <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <Field label="Script path">
               <TextInput value={g.health_check.script ?? ""} onChange={(v) => setHc({ script: v || null })} placeholder="/config/scripts/chk.sh" mono />
@@ -278,7 +279,7 @@ export function GroupFormModal({
             </Field>
           </div>
 
-          <div className="text-[12px] font-semibold text-[var(--qz-fg-2)] mt-1">Transition scripts</div>
+          <div style={sectionHead}>Transition scripts</div>
           <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr" }}>
             <Field label="Master">
               <TextInput value={g.transition_script.master ?? ""} onChange={(v) => setTs({ master: v || null })} placeholder="/config/scripts/master.sh" mono />
@@ -294,7 +295,7 @@ export function GroupFormModal({
             </Field>
           </div>
 
-          <div className="text-[12px] font-semibold text-[var(--qz-fg-2)] mt-1">Gratuitous ARP</div>
+          <div style={sectionHead}>Gratuitous ARP</div>
           <div className="grid gap-3" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
             <Field label="Interval (s)">
               <TextInput value={g.garp.interval ?? ""} onChange={(v) => setGarp({ interval: v || null })} placeholder="0.000" mono />
@@ -315,7 +316,7 @@ export function GroupFormModal({
         </Advanced>
 
         <ErrorText msg={error} />
-        <ModalFooter onCancel={onClose} saving={saving} submitLabel={isEdit ? "Apply changes" : "Add group"} />
+        <ModalFooter onCancel={onClose} saving={saving} submitLabel={isEdit ? "Apply Changes" : "Add Group"} />
       </form>
     </ModalShell>
   );

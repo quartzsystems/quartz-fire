@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Gauge, Network } from "lucide-react";
 import { formatRate } from "@/lib/format";
 import { ChartTooltip, DOWN_COLOR, UP_COLOR } from "@/components/ui/ChartTooltip";
 import { useInterfaceStats } from "./useInterfaceStats";
@@ -43,7 +42,7 @@ function formatAge(sec: number): string {
 }
 
 // Shared with Monitoring → Devices' usage chart, so download/upload are the
-// same color everywhere.
+// same color everywhere (Clarity traffic greens).
 const RX_COLOR = DOWN_COLOR;
 const TX_COLOR = UP_COLOR;
 
@@ -113,24 +112,26 @@ function SpeedGraph({ rx, tx }: { rx: number[]; tx: number[] }) {
   return (
     <div ref={wrapRef} className="relative h-full w-full" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
       {!hasData && (
-        <div className="absolute inset-0 grid place-items-center text-[12px] text-[var(--qz-fg-4)]">Measuring…</div>
+        <div className="absolute inset-0 grid place-items-center text-[12px] text-[var(--cds-alias-typography-color-200)]">
+          Measuring…
+        </div>
       )}
       <svg width={w} height={h} style={{ display: "block" }}>
         {yTicks.map((b) => {
           const y = yForVal(b / 8);
           return (
             <g key={`y${b}`}>
-              <line x1={PAD_L} x2={w - PAD_R} y1={y} y2={y} stroke="var(--qz-border)" strokeWidth={1} />
-              <text x={PAD_L - 6} y={y + 3} textAnchor="end" fontSize={9} fill="var(--qz-fg-4)" fontFamily="var(--qz-font-mono)">
+              <line x1={PAD_L} x2={w - PAD_R} y1={y} y2={y} stroke="var(--cds-alias-object-border-subtle)" strokeWidth={1} />
+              <text x={PAD_L - 6} y={y + 3} textAnchor="end" fontSize={9} fill="var(--cds-alias-typography-color-200)" fontFamily="var(--qz-font-mono)">
                 {formatRateShort(b)}
               </text>
             </g>
           );
         })}
         {/* baseline + top max + x labels */}
-        <line x1={PAD_L} x2={w - PAD_R} y1={PAD_T + plotH} y2={PAD_T + plotH} stroke="var(--qz-border)" strokeWidth={1} />
-        <text x={PAD_L - 6} y={PAD_T + plotH + 3} textAnchor="end" fontSize={9} fill="var(--qz-fg-4)" fontFamily="var(--qz-font-mono)">0</text>
-        <text x={PAD_L - 6} y={PAD_T + 3} textAnchor="end" fontSize={9} fill="var(--qz-fg-4)" fontFamily="var(--qz-font-mono)">
+        <line x1={PAD_L} x2={w - PAD_R} y1={PAD_T + plotH} y2={PAD_T + plotH} stroke="var(--cds-alias-object-border-subtle)" strokeWidth={1} />
+        <text x={PAD_L - 6} y={PAD_T + plotH + 3} textAnchor="end" fontSize={9} fill="var(--cds-alias-typography-color-200)" fontFamily="var(--qz-font-mono)">0</text>
+        <text x={PAD_L - 6} y={PAD_T + 3} textAnchor="end" fontSize={9} fill="var(--cds-alias-typography-color-200)" fontFamily="var(--qz-font-mono)">
           {formatRateShort(bitsMax)}
         </text>
         {xTicks.map((a) => (
@@ -140,7 +141,7 @@ function SpeedGraph({ rx, tx }: { rx: number[]; tx: number[] }) {
             y={h - 5}
             textAnchor="middle"
             fontSize={9}
-            fill="var(--qz-fg-4)"
+            fill="var(--cds-alias-typography-color-200)"
             fontFamily="var(--qz-font-mono)"
           >
             {formatAge(a)}
@@ -162,7 +163,7 @@ function SpeedGraph({ rx, tx }: { rx: number[]; tx: number[] }) {
 
         {hover != null && hoverX != null && hasData && (
           <>
-            <line x1={hoverX} x2={hoverX} y1={PAD_T} y2={PAD_T + plotH} stroke="var(--qz-fg-4)" strokeWidth={1} strokeDasharray="3 3" />
+            <line x1={hoverX} x2={hoverX} y1={PAD_T} y2={PAD_T + plotH} stroke="var(--cds-alias-typography-color-200)" strokeWidth={1} strokeDasharray="3 3" />
             {rx[hover] != null && <circle cx={hoverX} cy={yForVal(rx[hover])} r={3} fill={RX_COLOR} />}
             {tx[hover] != null && <circle cx={hoverX} cy={yForVal(tx[hover])} r={3} fill={TX_COLOR} />}
           </>
@@ -226,70 +227,66 @@ export function NetworkSpeedTile() {
   const curTx = tx.length ? tx[tx.length - 1] : null;
 
   return (
-    <div className="p-6 h-full flex flex-col">
-      <div className="flex items-center justify-between gap-2 mb-3 flex-shrink-0">
-        <div className="flex items-center gap-[9px] min-w-0">
-          <Gauge size={18} className="text-[var(--qz-accent)]" />
-          <h2 className="text-[16px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.01em" }}>
-            Network Usage
-          </h2>
-          {names.length > 0 && (
-            <div
-              className="inline-flex items-center gap-[6px] rounded-md px-2 py-[3px]"
-              style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
+    <>
+      <div className="card-header flex-shrink-0">
+        Network Usage
+        {names.length > 0 && (
+          <span className="clr-select-wrapper" style={{ maxWidth: 120, width: "auto" }}>
+            <select
+              value={selected ?? ""}
+              onChange={(e) => setSelected(e.target.value)}
+              className="clr-select"
+              style={{ fontFamily: "var(--qz-font-mono)", fontSize: 12, fontWeight: 400, height: 24 }}
             >
-              <Network size={12} className="text-[var(--qz-fg-4)]" />
-              <select
-                value={selected ?? ""}
-                onChange={(e) => setSelected(e.target.value)}
-                className="bg-transparent outline-none text-[12px] text-[var(--qz-fg-1)] cursor-pointer"
-                style={{ fontFamily: "var(--qz-font-mono)" }}
-              >
-                {names.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+              {names.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-3">
+          <span
+            className="text-[12px] font-semibold"
+            style={{ color: RX_COLOR, fontFamily: "var(--qz-font-mono)" }}
+            title="Download"
+          >
+            ↓ {formatRate(curRx)}
+          </span>
+          <span
+            className="text-[12px] font-semibold"
+            style={{ color: TX_COLOR, fontFamily: "var(--qz-font-mono)" }}
+            title="Upload"
+          >
+            ↑ {formatRate(curTx)}
+          </span>
+          <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
+        </span>
+      </div>
+
+      <div className="card-block flex-1 min-h-0 flex flex-col">
+        {error && rx.length === 0 && (
+          <div className="text-[13px] mb-2" style={{ color: "var(--cds-alias-status-danger)" }}>
+            {error}
+          </div>
+        )}
+
+        <div className="flex-1 min-h-[80px]">
+          <SpeedGraph rx={rx} tx={tx} />
         </div>
-        <LiveButton paused={paused} onToggle={() => setPaused((p) => !p)} />
-      </div>
 
-      {error && rx.length === 0 && <div className="text-[13px] text-[var(--qz-danger)] mb-2">{error}</div>}
-
-      <div className="flex items-center justify-between mb-2 flex-shrink-0">
-        <span className="inline-flex items-center gap-[6px]">
-          <ArrowDown size={16} style={{ color: RX_COLOR }} />
-          <span className="text-[16px] font-bold" style={{ color: RX_COLOR, fontFamily: "var(--qz-font-mono)" }}>
-            {formatRate(curRx)}
+        <div className="flex items-center justify-center gap-5 mt-2 flex-shrink-0 text-[11px] text-[var(--cds-alias-typography-color-300)]">
+          <span className="inline-flex items-center gap-[6px]">
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: RX_COLOR }} />
+            Download (RX)
           </span>
-          <span className="text-[12px] text-[var(--qz-fg-4)]">down</span>
-        </span>
-        <span className="inline-flex items-center gap-[6px]">
-          <span className="text-[12px] text-[var(--qz-fg-4)]">up</span>
-          <span className="text-[16px] font-bold" style={{ color: TX_COLOR, fontFamily: "var(--qz-font-mono)" }}>
-            {formatRate(curTx)}
+          <span className="inline-flex items-center gap-[6px]">
+            <span style={{ width: 8, height: 8, borderRadius: 999, background: TX_COLOR }} />
+            Upload (TX)
           </span>
-          <ArrowUp size={16} style={{ color: TX_COLOR }} />
-        </span>
+        </div>
       </div>
-
-      <div className="flex-1 min-h-[80px]">
-        <SpeedGraph rx={rx} tx={tx} />
-      </div>
-
-      <div className="flex items-center justify-center gap-5 mt-2 flex-shrink-0 text-[11px] text-[var(--qz-fg-3)]">
-        <span className="inline-flex items-center gap-[6px]">
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: RX_COLOR }} />
-          Download (RX)
-        </span>
-        <span className="inline-flex items-center gap-[6px]">
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: TX_COLOR }} />
-          Upload (TX)
-        </span>
-      </div>
-    </div>
+    </>
   );
 }

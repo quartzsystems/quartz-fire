@@ -11,8 +11,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, Eraser, Pause, Pencil, Play, Plus, RotateCw, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/Icon";
 import { ColumnsMenu, useColumnVisibility } from "@/components/dashboard/ColumnsMenu";
 import { useColumnResize } from "@/components/dashboard/ColumnResize";
 
@@ -83,8 +83,7 @@ import { ActionFormModal } from "./ActionFormModal";
 
 type Tab = "actions" | "policies" | "alerts";
 
-const inputStyle = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const dash = <span className="text-[var(--qz-fg-4)]">—</span>;
+const dash = <span className="text-[var(--cds-alias-typography-color-200)]">—</span>;
 
 const time = (ts: number | null | undefined) =>
   ts ? new Date(ts * 1000).toLocaleString(undefined, { hour12: false }) : "never";
@@ -111,14 +110,14 @@ function LookupTool() {
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <div className="relative">
-        <Search size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]" />
+        <Icon shape="search" size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--cds-alias-typography-color-200)]" />
         <input
           value={ip}
           onChange={(e) => setIp(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && run()}
           placeholder="Check an IP…"
-          className="rounded-md pl-8 pr-3 py-[6px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[190px] mono"
-          style={inputStyle}
+          className="clr-input mono"
+          style={{ width: 190, maxWidth: "none", paddingLeft: 30 }}
         />
       </div>
       <Button kind="secondary" size="sm" onClick={run} disabled={busy}>
@@ -126,14 +125,14 @@ function LookupTool() {
       </Button>
       {result &&
         (result.error ? (
-          <span className="text-[12px] text-[var(--qz-danger)]">{result.error}</span>
+          <span className="text-[12px] text-[var(--cds-alias-status-danger)]">{result.error}</span>
         ) : result.country ? (
-          <span className="text-[13px] text-[var(--qz-fg-1)]">
+          <span className="text-[13px] text-[var(--cds-alias-typography-color-450)]">
             {flagEmoji(result.country)} {result.country_name ?? result.country}
-            <span className="text-[var(--qz-fg-4)] mono text-[12px]"> · {result.network}</span>
+            <span className="text-[var(--cds-alias-typography-color-200)] mono text-[12px]"> · {result.network}</span>
           </span>
         ) : (
-          <span className="text-[13px] text-[var(--qz-fg-3)]">
+          <span className="text-[13px] text-[var(--cds-alias-typography-color-300)]">
             Not in the database (unclassified).
           </span>
         ))}
@@ -170,63 +169,64 @@ function StatusCard({
 
   const item = (label: string, value: React.ReactNode) => (
     <div className="flex flex-col gap-[2px]">
-      <span className="text-[11px] uppercase tracking-wide text-[var(--qz-fg-4)]">{label}</span>
-      <span className="text-[13px] text-[var(--qz-fg-1)]">{value}</span>
+      <span className="text-[11px] uppercase tracking-wide text-[var(--cds-alias-typography-color-200)]">{label}</span>
+      <span className="text-[13px] text-[var(--cds-alias-typography-color-450)]">{value}</span>
     </div>
   );
 
   return (
-    <section
-      className="rounded-lg px-5 py-4 flex flex-col gap-3"
-      style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}
-    >
-      <div className="flex items-center gap-5 flex-wrap">
-        {item(
-          "Location database",
-          db?.present ? (
-            <>
-              {time(db.version)}{" "}
-              {db.signature_ok === false ? (
-                <span className="badge badge-crit">Signature invalid</span>
-              ) : (
-                <span className="badge badge-ok">Signed</span>
-              )}
-            </>
-          ) : (
-            <span className="badge badge-warn">Not downloaded yet</span>
-          ),
-        )}
-        {item(
-          "Last update",
-          update ? (
-            update.ok ? (
-              time(update.time)
+    <section className="card">
+      <div className="card-block flex flex-col gap-3">
+        <div className="flex items-center gap-5 flex-wrap">
+          {item(
+            "Location database",
+            db?.present ? (
+              <>
+                {time(db.version)}{" "}
+                {db.signature_ok === false ? (
+                  <span className="badge badge-crit">Signature invalid</span>
+                ) : (
+                  <span className="badge badge-ok">Signed</span>
+                )}
+              </>
             ) : (
-              <span className="text-[var(--qz-danger)]" title={update.message ?? undefined}>
-                failed {time(update.time)}
-              </span>
-            )
-          ) : (
-            "never"
-          ),
+              <span className="badge badge-warn">Not downloaded yet</span>
+            ),
+          )}
+          {item(
+            "Last update",
+            update ? (
+              update.ok ? (
+                time(update.time)
+              ) : (
+                <span className="text-[var(--cds-alias-status-danger)]" title={update.message ?? undefined}>
+                  failed {time(update.time)}
+                </span>
+              )
+            ) : (
+              "never"
+            ),
+          )}
+          {item("Schedule", update?.schedule === "daily" ? "Daily (automatic)" : "Daily after first boot")}
+          <div className="ml-auto flex items-center gap-2">
+            <Button kind="secondary" size="sm" icon="refresh" onClick={onRefresh}>
+              Refresh
+            </Button>
+            <Button kind="primary" size="sm" onClick={updateNow} disabled={updating}>
+              {updating ? "Requesting…" : "Update Now"}
+            </Button>
+          </div>
+        </div>
+        {update && !update.ok && update.message && (
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">
+              {update.message} — the previously downloaded database (if any) keeps enforcing.
+            </div>
+          </div>
         )}
-        {item("Schedule", update?.schedule === "daily" ? "Daily (automatic)" : "Daily after first boot")}
-        <div className="ml-auto flex items-center gap-2">
-          <Button kind="secondary" size="sm" icon={RotateCw} onClick={onRefresh}>
-            Refresh
-          </Button>
-          <Button kind="primary" size="sm" onClick={updateNow} disabled={updating}>
-            {updating ? "Requesting…" : "Update now"}
-          </Button>
-        </div>
+        <LookupTool />
       </div>
-      {update && !update.ok && update.message && (
-        <div className="flex items-center gap-2 text-[12px] text-[var(--qz-danger)]">
-          <AlertTriangle size={13} /> {update.message} — the previously downloaded database (if
-          any) keeps enforcing.
-        </div>
-      )}
-      <LookupTool />
     </section>
   );
 }
@@ -293,24 +293,24 @@ function ActionsTab({
   return (
     <div className="flex flex-col gap-4 max-w-[1050px]">
       <div className="flex items-center gap-3">
-        <p className="text-[13px] text-[var(--qz-fg-4)] m-0 flex-1">
+        <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0 flex-1">
           An action is a reusable country policy — block the listed countries, or only allow
           them. Attach actions to firewall rules on the Policies tab.
         </p>
         <Button
           kind="primary"
           size="sm"
-          icon={Plus}
+          icon="plus"
           onClick={() => {
             setCreating(true);
             setEditing(null);
           }}
         >
-          Add action
+          Add Action
         </Button>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {GEO_ACTION_COLS.map((c) => (
@@ -332,7 +332,7 @@ function ActionsTab({
           <tbody>
             {config.actions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={8} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
                   No actions yet — add one to get started.
                 </td>
               </tr>
@@ -342,9 +342,9 @@ function ActionsTab({
                 const hit = hits[a.name];
                 return (
                   <tr key={a.name} style={{ cursor: "pointer" }} onClick={() => { setCreating(false); setEditing(a); }}>
-                    <td className="font-semibold text-[var(--qz-fg-1)]">{a.name}</td>
-                    <td className="text-[var(--qz-fg-3)]">{a.mode ? GEO_MODE_LABEL[a.mode] : "(mode not set)"}</td>
-                    <td className="text-[var(--qz-fg-3)]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <td className="font-semibold text-[var(--cds-alias-typography-color-450)]">{a.name}</td>
+                    <td className="text-[var(--cds-alias-typography-color-300)]">{a.mode ? GEO_MODE_LABEL[a.mode] : "(mode not set)"}</td>
+                    <td className="text-[var(--cds-alias-typography-color-300)]" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {a.countries.length > 0 ? `${a.countries.length} — ` : ""}{summarize(a)}
                     </td>
                     <td>
@@ -355,34 +355,29 @@ function ActionsTab({
                       )}
                     </td>
                     <td>{a.log ? <span className="badge badge-ok">On</span> : dash}</td>
-                    <td className="mono text-[var(--qz-fg-3)]">{uses > 0 ? uses : dash}</td>
-                    <td className="mono text-[var(--qz-fg-3)]" title={hit ? `${hit.bytes} bytes` : undefined}>
+                    <td className="mono text-[var(--cds-alias-typography-color-300)]">{uses > 0 ? uses : dash}</td>
+                    <td className="mono text-[var(--cds-alias-typography-color-300)]" title={hit ? `${hit.bytes} bytes` : undefined}>
                       {hit && hit.packets > 0 ? `${hit.packets} pkts` : dash}
                     </td>
                     <td onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center gap-1">
                         <button
-                          className="icon-btn"
+                          type="button"
+                          className="btn btn-sm btn-link-neutral btn-icon"
                           title="Edit"
                           onClick={() => { setCreating(false); setEditing(a); }}
-                          style={{ background: "transparent", border: 0, cursor: "pointer", color: "var(--qz-fg-3)" }}
                         >
-                          <Pencil size={15} />
+                          <Icon shape="pencil" size={15} />
                         </button>
                         <button
-                          className="icon-btn"
+                          type="button"
+                          className="btn btn-sm btn-link-neutral btn-icon"
                           title={uses > 0 ? "In use by policies — detach first" : "Delete"}
                           disabled={uses > 0}
                           onClick={() => remove(a)}
-                          style={{
-                            background: "transparent",
-                            border: 0,
-                            cursor: uses > 0 ? "not-allowed" : "pointer",
-                            color: uses > 0 ? "var(--qz-fg-4)" : "var(--qz-danger)",
-                            opacity: uses > 0 ? 0.5 : 1,
-                          }}
+                          style={{ color: uses > 0 ? undefined : "var(--cds-alias-status-danger)" }}
                         >
-                          <Trash2 size={15} />
+                          <Icon shape="trash" size={15} />
                         </button>
                       </div>
                     </td>
@@ -540,16 +535,16 @@ function PoliciesTab({
   };
 
   if (fwState === "loading")
-    return <div className="text-[13px] text-[var(--qz-fg-4)]">Loading firewall rules…</div>;
+    return <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading firewall rules…</div>;
   if (fwState === "error")
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-          <AlertTriangle size={15} />
-          {fwError}
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{fwError}</div>
         </div>
         <div>
-          <Button kind="secondary" icon={RotateCw} onClick={loadFw}>
+          <Button kind="secondary" icon="refresh" onClick={loadFw}>
             Retry
           </Button>
         </div>
@@ -586,17 +581,17 @@ function PoliciesTab({
 
   return (
     <div className="flex flex-col gap-3 max-w-[1050px]">
-      <p className="text-[13px] text-[var(--qz-fg-4)] m-0">
+      <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0">
         Attach a geolocation action to a firewall Allow rule and its traffic is country-filtered
         before the rule sees it. Every Allow rule (forward, input, or output) is eligible
         ({boundCount} enforced). Create rules under{" "}
-        <Link href="/firewall/rules" className="text-[var(--qz-fg-3)]">
+        <Link href="/firewall/rules" className="text-[var(--cds-alias-typography-color-300)]">
           Firewall → Rules
         </Link>
         .
       </p>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={resize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: resize.tableLayout }}>
           <colgroup>
             {GEO_RULE_COLS.map((c) => (
@@ -616,9 +611,9 @@ function PoliciesTab({
           <tbody>
             {eligible.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={7} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
                   No Allow rules yet — create them under{" "}
-                  <Link href="/firewall/rules" className="text-[var(--qz-fg-3)]">
+                  <Link href="/firewall/rules" className="text-[var(--cds-alias-typography-color-300)]">
                     Firewall → Rules
                   </Link>
                   .
@@ -637,9 +632,9 @@ function PoliciesTab({
                 const disabled = !!policy && !policy.enabled;
                 return (
                   <tr key={key} style={{ cursor: "default", opacity: r.enabled ? 1 : 0.55 }}>
-                    <td className="mono text-[var(--qz-fg-3)]">{r.rule}</td>
+                    <td className="mono text-[var(--cds-alias-typography-color-300)]">{r.rule}</td>
                     <td style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {r.name ?? <span className="text-[var(--qz-fg-4)]">Rule {r.rule}</span>}
+                      {r.name ?? <span className="text-[var(--cds-alias-typography-color-200)]">Rule {r.rule}</span>}
                       {r.chain !== "forward" && (
                         <span className="badge badge-muted ml-2" title={`${CHAIN_LABEL[r.chain]} chain`}>
                           {CHAIN_LABEL[r.chain]}
@@ -648,54 +643,58 @@ function PoliciesTab({
                       {disabled && <span className="badge badge-muted ml-2">Disabled</span>}
                       {error && (
                         <span
-                          className="inline-flex items-center gap-1 ml-2 text-[12px] text-[var(--qz-danger)]"
+                          className="inline-flex items-center gap-1 ml-2 text-[12px] text-[var(--cds-alias-status-danger)]"
                           title={error}
                         >
-                          <AlertTriangle size={12} /> not enforced
+                          <Icon shape="exclamation-triangle" size={12} /> not enforced
                         </span>
                       )}
                     </td>
-                    <td className="mono text-[12px] text-[var(--qz-fg-3)]">
+                    <td className="mono text-[12px] text-[var(--cds-alias-typography-color-300)]">
                       {endpoint(r.from)} → {endpoint(r.to)}
                     </td>
                     <td>
                       <span className="badge badge-ok">Allow</span>
                     </td>
                     <td>
-                      <select
-                        value={bound}
-                        disabled={busy || actionNames.length === 0}
-                        onChange={(e) => setRuleAction(r, e.target.value)}
-                        className="rounded-md px-2 py-[6px] text-[13px] outline-none cursor-pointer w-full"
-                        style={{ ...inputStyle, color: bound ? "var(--qz-accent)" : "var(--qz-fg-4)" }}
-                      >
-                        <option value="">None</option>
-                        {actionNames.map((n) => (
-                          <option key={n} value={n}>
-                            {n}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+                        <select
+                          value={bound}
+                          disabled={busy || actionNames.length === 0}
+                          onChange={(e) => setRuleAction(r, e.target.value)}
+                          className="clr-select"
+                          style={{ maxWidth: "none", color: bound ? "var(--cds-alias-interaction-action)" : "var(--cds-alias-typography-color-200)" }}
+                        >
+                          <option value="">None</option>
+                          {actionNames.map((n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </td>
                     <td>
-                      <select
-                        value={policy?.direction ?? "both"}
-                        disabled={busy || !policy}
-                        onChange={(e) => setRuleDirection(r, e.target.value as GeoDirection)}
-                        className="rounded-md px-2 py-[6px] text-[13px] outline-none w-full"
-                        style={{
-                          ...inputStyle,
-                          color: policy ? "var(--qz-fg-1)" : "var(--qz-fg-4)",
-                          cursor: policy ? "pointer" : "not-allowed",
-                        }}
-                        title={policy ? undefined : "Attach an action first"}
-                      >
-                        <option value="source">{GEO_DIRECTION_LABEL.source}</option>
-                        <option value="destination">{GEO_DIRECTION_LABEL.destination}</option>
-                        <option value="both">{GEO_DIRECTION_LABEL.both}</option>
-                      </select>
+                      <div className="clr-select-wrapper" style={{ maxWidth: "none" }}>
+                        <select
+                          value={policy?.direction ?? "both"}
+                          disabled={busy || !policy}
+                          onChange={(e) => setRuleDirection(r, e.target.value as GeoDirection)}
+                          className="clr-select"
+                          style={{
+                            maxWidth: "none",
+                            color: policy ? "var(--cds-alias-typography-color-450)" : "var(--cds-alias-typography-color-200)",
+                            cursor: policy ? "pointer" : "not-allowed",
+                          }}
+                          title={policy ? undefined : "Attach an action first"}
+                        >
+                          <option value="source">{GEO_DIRECTION_LABEL.source}</option>
+                          <option value="destination">{GEO_DIRECTION_LABEL.destination}</option>
+                          <option value="both">{GEO_DIRECTION_LABEL.both}</option>
+                        </select>
+                      </div>
                     </td>
-                    <td className="mono text-[var(--qz-fg-3)]" title="New connections checked against the action">
+                    <td className="mono text-[var(--cds-alias-typography-color-300)]" title="New connections checked against the action">
                       {hit && hit.packets > 0 ? hit.packets : dash}
                     </td>
                   </tr>
@@ -708,16 +707,16 @@ function PoliciesTab({
 
       {orphans.length > 0 && (
         <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[13px] text-[var(--qz-fg-2)]">
-            <AlertTriangle size={14} className="text-[var(--qz-warn)]" />
-            <span>
+          <div className="alert alert-warning alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">
               <b>{orphans.length} orphaned polic{orphans.length === 1 ? "y" : "ies"}.</b> These are
               attached to a firewall rule that is no longer an Allow rule (deleted, disabled, or its
               action changed), so they have no row above — but they still count toward the tab total
               and the device still tries to enforce them. Remove them here.
-            </span>
+            </div>
           </div>
-          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+          <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
             <table ref={orphanResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: orphanResize.tableLayout }}>
               <colgroup>
                 {GEO_ORPHAN_COLS.map((c) => (
@@ -741,32 +740,29 @@ function PoliciesTab({
                   const busy = busyRule === `orphan:${p.id}`;
                   return (
                     <tr key={`orphan:${p.id}`} style={{ cursor: "default" }}>
-                      <td className="mono text-[var(--qz-fg-3)]">{p.rule}</td>
-                      <td className="text-[var(--qz-fg-3)]">{CHAIN_LABEL[p.ruleset] ?? p.ruleset}</td>
+                      <td className="mono text-[var(--cds-alias-typography-color-300)]">{p.rule}</td>
+                      <td className="text-[var(--cds-alias-typography-color-300)]">{CHAIN_LABEL[p.ruleset] ?? p.ruleset}</td>
                       <td>
                         {actionNames.includes(p.action) ? (
-                          <span className="text-[var(--qz-fg-2)]">{p.action}</span>
+                          <span className="text-[var(--cds-alias-typography-color-400)]">{p.action}</span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[var(--qz-danger)]" title="Action no longer exists">
-                            <AlertTriangle size={12} /> {p.action}
+                          <span className="inline-flex items-center gap-1 text-[var(--cds-alias-status-danger)]" title="Action no longer exists">
+                            <Icon shape="exclamation-triangle" size={12} /> {p.action}
                           </span>
                         )}
                         {!p.enabled && <span className="badge badge-muted ml-2">Disabled</span>}
                       </td>
-                      <td className="text-[var(--qz-fg-3)]">{GEO_DIRECTION_LABEL[p.direction]}</td>
+                      <td className="text-[var(--cds-alias-typography-color-300)]">{GEO_DIRECTION_LABEL[p.direction]}</td>
                       <td>
                         <button
-                          className="icon-btn"
+                          type="button"
+                          className="btn btn-sm btn-link-neutral btn-icon"
                           title="Remove orphaned policy"
                           disabled={busy}
                           onClick={() => removeOrphan(p)}
-                          style={{
-                            background: "transparent", border: 0,
-                            cursor: busy ? "wait" : "pointer",
-                            color: "var(--qz-danger)", opacity: busy ? 0.5 : 1,
-                          }}
+                          style={{ color: "var(--cds-alias-status-danger)", cursor: busy ? "wait" : undefined }}
                         >
-                          <Trash2 size={15} />
+                          <Icon shape="trash" size={15} />
                         </button>
                       </td>
                     </tr>
@@ -797,13 +793,13 @@ interface GeoAlertCol {
 }
 
 const GEO_ALERT_COLUMNS: GeoAlertCol[] = [
-  { key: "time", header: "Time", width: 110, className: "mono text-[12px] text-[var(--qz-fg-3)]" },
+  { key: "time", header: "Time", width: 110, className: "mono text-[12px] text-[var(--cds-alias-typography-color-300)]" },
   { key: "action", header: "Action", width: 160 },
-  { key: "country", header: "Country", width: 170, className: "text-[13px] text-[var(--qz-fg-2)]" },
-  { key: "proto", header: "Proto", width: 90, className: "mono text-[12px] text-[var(--qz-fg-3)]" },
-  { key: "src", header: "Source", className: "mono text-[12px] text-[var(--qz-fg-2)]" },
-  { key: "dst", header: "Destination", className: "mono text-[12px] text-[var(--qz-fg-2)]" },
-  { key: "iface", header: "Interfaces", width: 130, className: "mono text-[12px] text-[var(--qz-fg-4)]" },
+  { key: "country", header: "Country", width: 170, className: "text-[13px] text-[var(--cds-alias-typography-color-400)]" },
+  { key: "proto", header: "Proto", width: 90, className: "mono text-[12px] text-[var(--cds-alias-typography-color-300)]" },
+  { key: "src", header: "Source", className: "mono text-[12px] text-[var(--cds-alias-typography-color-400)]" },
+  { key: "dst", header: "Destination", className: "mono text-[12px] text-[var(--cds-alias-typography-color-400)]" },
+  { key: "iface", header: "Interfaces", width: 130, className: "mono text-[12px] text-[var(--cds-alias-typography-color-200)]" },
 ];
 
 function AlertsTab() {
@@ -941,7 +937,7 @@ function AlertsTab() {
         const ip = blockedIp(r);
         if (!ip) return dash;
         const geo = geoByIp[ip];
-        if (geo === undefined) return <span className="text-[var(--qz-fg-4)]">…</span>;
+        if (geo === undefined) return <span className="text-[var(--cds-alias-typography-color-200)]">…</span>;
         if (!geo?.country) return dash;
         return (
           <span className="inline-flex items-center gap-[6px]">
@@ -965,7 +961,7 @@ function AlertsTab() {
 
   return (
     <div className="flex flex-col gap-3 max-w-[1050px]">
-      <p className="text-[13px] text-[var(--qz-fg-4)] m-0">
+      <p className="text-[13px] text-[var(--cds-alias-typography-color-200)] m-0">
         Live country-block events — one row per connection dropped by an action with logging
         enabled (the action&apos;s <span className="mono">Log</span> switch). Turn logging on for
         an action on the Actions tab to see its blocks here.
@@ -973,13 +969,13 @@ function AlertsTab() {
 
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative">
-          <Search size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--qz-fg-4)]" />
+          <Icon shape="search" size={14} className="absolute left-[10px] top-1/2 -translate-y-1/2 text-[var(--cds-alias-typography-color-200)]" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter alerts…"
-            className="rounded-md pl-8 pr-3 py-[7px] text-[13px] text-[var(--qz-fg-1)] outline-none w-[240px]"
-            style={inputStyle}
+            className="clr-input"
+            style={{ width: 240, maxWidth: "none", paddingLeft: 30 }}
           />
         </div>
         <div className="ml-auto flex items-center gap-3">
@@ -987,7 +983,7 @@ function AlertsTab() {
           <Button
             kind="secondary"
             size="sm"
-            icon={RotateCw}
+            icon="refresh"
             onClick={() => {
               clear();
               setStream("connecting");
@@ -996,16 +992,16 @@ function AlertsTab() {
           >
             Refresh
           </Button>
-          <Button kind="secondary" size="sm" icon={paused ? Play : Pause} onClick={togglePause}>
+          <Button kind="secondary" size="sm" icon={paused ? "play" : "pause"} onClick={togglePause}>
             {paused ? "Resume" : "Pause"}
           </Button>
-          <Button kind="secondary" size="sm" icon={Eraser} onClick={clear}>
+          <Button kind="secondary" size="sm" icon="times" onClick={clear}>
             Clear
           </Button>
-          <span className="inline-flex items-center gap-[6px] text-[12px] text-[var(--qz-fg-4)]">
+          <span className="inline-flex items-center gap-[6px] text-[12px] text-[var(--cds-alias-typography-color-200)]">
             <span
               className="inline-block w-[7px] h-[7px] rounded-full"
-              style={{ background: paused ? "var(--qz-fg-4)" : stream === "live" ? "var(--qz-success)" : "var(--qz-warn)" }}
+              style={{ background: paused ? "var(--cds-alias-typography-color-200)" : stream === "live" ? "var(--cds-alias-status-success)" : "var(--cds-alias-status-warning)" }}
             />
             {paused ? "Paused" : stream === "live" ? "Live" : stream === "connecting" ? "Connecting…" : "Reconnecting…"}
             {" · "}
@@ -1014,7 +1010,7 @@ function AlertsTab() {
         </div>
       </div>
 
-      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--qz-border)" }}>
+      <div className="rounded-md overflow-hidden" style={{ border: "1px solid var(--cds-alias-object-border-color)" }}>
         <table ref={alertResize.tableRef} className="qz-table" style={{ width: "100%", tableLayout: alertResize.tableLayout }}>
           <colgroup>
             {cols.map((c) => (
@@ -1034,7 +1030,7 @@ function AlertsTab() {
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={cols.length} className="text-center text-[var(--qz-fg-4)]" style={{ cursor: "default" }}>
+                <td colSpan={cols.length} className="text-center text-[var(--cds-alias-typography-color-200)]" style={{ cursor: "default" }}>
                   {rows.length === 0
                     ? "No block events yet — they appear when an action with logging enabled drops traffic."
                     : "No alerts match the filter."}
@@ -1099,65 +1095,53 @@ export default function GeolocationPage() {
   const applyError = status?.status?.apply?.ok === false ? status.status.apply.error : null;
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Geolocation
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">
+    <div className="flex flex-col gap-3">
+      <div>
+        <h2>Geolocation</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>
           Block or allow traffic by country, per firewall rule — powered by the signed IPFire
           location database
         </p>
       </div>
 
-      <div className="px-[36px] pb-4 flex-shrink-0">
-        <StatusCard status={status} onRefresh={() => load("refresh")} />
-      </div>
+      <StatusCard status={status} onRefresh={() => load("refresh")} />
 
-      <div className="px-[36px] pb-4 flex-shrink-0">
-        <Tabs
-          items={[
-            { value: "actions", label: "Actions", count: config.actions.length },
-            { value: "policies", label: "Policies", count: config.policies.length },
-            { value: "alerts", label: "Alerts" },
-          ]}
-          value={tab}
-          onChange={(v) => setTab(v as Tab)}
-          trailing={
-            status?.status?.active ? (
-              <span className="badge badge-ok">Enforcing</span>
-            ) : config.policies.some((p) => p.enabled) ? (
-              <span className="badge badge-warn">Not enforcing</span>
-            ) : (
-              <span className="badge badge-muted">No enabled policies</span>
-            )
-          }
-        />
-      </div>
+      <Tabs
+        items={[
+          { value: "actions", label: "Actions", count: config.actions.length },
+          { value: "policies", label: "Policies", count: config.policies.length },
+          { value: "alerts", label: "Alerts" },
+        ]}
+        value={tab}
+        onChange={(v) => setTab(v as Tab)}
+        trailing={
+          status?.status?.active ? (
+            <span className="badge badge-ok">Enforcing</span>
+          ) : config.policies.some((p) => p.enabled) ? (
+            <span className="badge badge-warn">Not enforcing</span>
+          ) : (
+            <span className="badge badge-muted">No enabled policies</span>
+          )
+        }
+      />
 
       {applyError && (
-        <div
-          className="mx-[36px] mb-4 flex items-center gap-3 px-3 py-2 rounded-md flex-shrink-0"
-          style={{
-            background: "color-mix(in oklab, var(--qz-danger) 12%, transparent)",
-            border: "1px solid color-mix(in oklab, var(--qz-danger) 35%, transparent)",
-          }}
-        >
-          <AlertTriangle size={15} className="text-[var(--qz-danger)] flex-shrink-0" />
-          <span className="text-[13px] text-[var(--qz-fg-1)]">{applyError}</span>
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{applyError}</div>
         </div>
       )}
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {state === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading Geolocation…</div>}
+      <div>
+        {state === "loading" && <div className="text-[13px] text-[var(--cds-alias-typography-color-200)]">Loading Geolocation…</div>}
         {state === "error" && (
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
+            <div className="alert alert-danger alert-sm">
+              <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+              <div className="alert-text">{errorMsg}</div>
             </div>
             <div>
-              <Button kind="secondary" icon={RotateCw} onClick={() => load()}>
+              <Button kind="secondary" icon="refresh" onClick={() => load()}>
                 Retry
               </Button>
             </div>

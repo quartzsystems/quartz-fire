@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, RotateCw, Info } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable } from "@/components/dashboard/DataTable";
 import { ModalShell, ModalHeader } from "@/components/ui/Modal";
@@ -27,29 +27,36 @@ const AF_LABEL: Record<AddressFamily, string> = {
 const dash = (v: string | number | null | undefined) =>
   v === null || v === undefined || v === "" ? "—" : String(v);
 
-/// State → badge class. Established is healthy; the transient FSM states
+const pillStyle = {
+  fontFamily: "var(--qz-font-mono)",
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+} as const;
+
+/// State → pill class. Established is healthy; the transient FSM states
 /// (Idle/Connect/Active/OpenSent/OpenConfirm) are "working on it"; anything else
 /// is trouble.
-function stateBadge(state: string) {
+function statePill(state: string) {
   const s = state.toLowerCase();
-  if (s === "established") return "badge badge-ok";
-  if (["idle", "connect", "active", "opensent", "openconfirm"].includes(s)) return "badge badge-muted";
-  return "badge badge-crit";
+  if (s === "established") return "label label-success";
+  if (["idle", "connect", "active", "opensent", "openconfirm"].includes(s)) return "label";
+  return "label label-danger";
 }
 
 // ── summary tiles ─────────────────────────────────────────────────────────────
 
 function StatTile({ label, value, sub, subTone = "muted" }: { label: string; value: string; sub?: string; subTone?: "muted" | "warn" }) {
   return (
-    <div
-      className="rounded-lg p-4 flex flex-col gap-1"
-      style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}
-    >
-      <span className="text-[11px] uppercase tracking-wider text-[var(--qz-fg-4)]">{label}</span>
-      <span className="text-[20px] font-semibold text-[var(--qz-fg-1)]" style={{ fontFamily: "var(--qz-font-mono)" }}>
-        {value}
-      </span>
-      {sub && <span className="text-[11px]" style={{ color: subTone === "warn" ? "var(--qz-warn)" : "var(--qz-fg-4)" }}>{sub}</span>}
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="card-block flex flex-col gap-1">
+        <span style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--cds-alias-typography-color-200)" }}>{label}</span>
+        <span style={{ fontSize: 20, fontWeight: 600, fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>
+          {value}
+        </span>
+        {sub && (
+          <span style={{ fontSize: 11, color: subTone === "warn" ? "var(--cds-alias-status-warning)" : "var(--cds-alias-typography-color-200)" }}>{sub}</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -64,7 +71,7 @@ function peerColumns(): Column<PeerSummary>[] {
       key: "state",
       header: "State",
       value: (r) => r.state,
-      render: (r) => <span className={stateBadge(r.state)}>{r.state}</span>,
+      render: (r) => <span className={statePill(r.state)} style={pillStyle}>{r.state}</span>,
       sortable: true,
       width: 130,
     },
@@ -79,8 +86,8 @@ function AfTable({ af, onInspect }: { af: AfSummary; onInspect: (neighbor: strin
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <h3 className="text-[14px] font-semibold text-[var(--qz-fg-1)] m-0">{AF_LABEL[af.af] ?? af.af}</h3>
-        <span className="text-[12px] text-[var(--qz-fg-4)]">
+        <h3 className="clr-section" style={{ margin: 0, color: "var(--cds-alias-typography-color-450)" }}>{AF_LABEL[af.af] ?? af.af}</h3>
+        <span className="clr-secondary">
           {af.established_peers}/{af.total_peers} established
         </span>
       </div>
@@ -91,14 +98,15 @@ function AfTable({ af, onInspect }: { af: AfSummary; onInspect: (neighbor: strin
         storageKey={`routing-bgp-status-${af.af}`}
         searchPlaceholder="Search neighbors…"
         emptyMessage="No neighbors in this address family."
+        onRowOpen={(row) => onInspect(row.neighbor)}
         actions={(row) => (
           <button
             type="button"
             onClick={() => onInspect(row.neighbor)}
             title={`Details for ${row.neighbor}`}
-            className="inline-flex items-center gap-[5px] text-[12px] text-[var(--qz-fg-3)] hover:text-[var(--qz-accent)] transition-colors bg-transparent border-0 p-0 cursor-pointer"
+            className="btn btn-sm btn-link-neutral"
           >
-            <Info size={13} /> Details
+            <Icon shape="info-circle" size={14} /> Details
           </button>
         )}
       />
@@ -110,9 +118,9 @@ function AfTable({ af, onInspect }: { af: AfSummary; onInspect: (neighbor: strin
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-[5px] border-b" style={{ borderColor: "var(--qz-divider)" }}>
-      <span className="text-[12px] text-[var(--qz-fg-4)]">{label}</span>
-      <span className="text-[13px] text-[var(--qz-fg-1)] text-right" style={{ fontFamily: "var(--qz-font-mono)" }}>{value}</span>
+    <div className="flex items-baseline justify-between gap-4 py-[5px] border-b" style={{ borderColor: "var(--cds-alias-object-border-subtle)" }}>
+      <span className="clr-secondary">{label}</span>
+      <span style={{ fontSize: 13, textAlign: "right", fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>{value}</span>
     </div>
   );
 }
@@ -120,9 +128,9 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 function MsgRow({ label, rx, tx }: { label: string; rx: number; tx: number }) {
   return (
     <tr>
-      <td className="text-[12px] text-[var(--qz-fg-3)] py-[3px]">{label}</td>
-      <td className="text-[13px] text-[var(--qz-fg-1)] text-right py-[3px]" style={{ fontFamily: "var(--qz-font-mono)" }}>{rx}</td>
-      <td className="text-[13px] text-[var(--qz-fg-1)] text-right py-[3px]" style={{ fontFamily: "var(--qz-font-mono)" }}>{tx}</td>
+      <td>{label}</td>
+      <td style={{ textAlign: "right", fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>{rx}</td>
+      <td style={{ textAlign: "right", fontFamily: "var(--qz-font-mono)", color: "var(--cds-alias-typography-color-450)" }}>{tx}</td>
     </tr>
   );
 }
@@ -160,16 +168,17 @@ function NeighborDetailModal({ neighbor, onClose }: { neighbor: string; onClose:
         subtitle={detail?.description ?? "BGP neighbor detail"}
         onClose={onClose}
       />
-      {status === "loading" && <div className="text-[13px] text-[var(--qz-fg-4)]">Loading neighbor detail…</div>}
+      {status === "loading" && <div className="clr-secondary">Loading neighbor detail…</div>}
       {status === "error" && (
-        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-          <AlertTriangle size={15} /> {errorMsg}
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
         </div>
       )}
       {status === "ready" && detail && (
         <div className="flex flex-col gap-5">
           <div>
-            <DetailRow label="Session state" value={<span className={stateBadge(detail.state)}>{detail.state}</span>} />
+            <DetailRow label="Session state" value={<span className={statePill(detail.state)} style={pillStyle}>{detail.state}</span>} />
             <DetailRow label="Uptime" value={formatUptime(detail.uptime_secs)} />
             <DetailRow label="Remote AS" value={dash(detail.remote_as)} />
             <DetailRow label="Local AS" value={dash(detail.local_as)} />
@@ -182,7 +191,7 @@ function NeighborDetailModal({ neighbor, onClose }: { neighbor: string; onClose:
 
           {detail.address_families.length > 0 && (
             <div>
-              <h4 className="text-[12px] font-semibold uppercase tracking-wider text-[var(--qz-fg-4)] m-0 mb-2">Prefixes</h4>
+              <h4 className="clr-smallcaption" style={{ margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--cds-alias-typography-color-200)" }}>Prefixes</h4>
               {detail.address_families.map((af) => (
                 <DetailRow
                   key={af.af}
@@ -195,13 +204,13 @@ function NeighborDetailModal({ neighbor, onClose }: { neighbor: string; onClose:
 
           {m && (
             <div>
-              <h4 className="text-[12px] font-semibold uppercase tracking-wider text-[var(--qz-fg-4)] m-0 mb-2">Message counters</h4>
-              <table className="w-full">
+              <h4 className="clr-smallcaption" style={{ margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--cds-alias-typography-color-200)" }}>Message counters</h4>
+              <table className="table table-noborder table-compact" style={{ width: "100%" }}>
                 <thead>
                   <tr>
-                    <th className="text-left text-[11px] text-[var(--qz-fg-4)] font-medium"> </th>
-                    <th className="text-right text-[11px] text-[var(--qz-fg-4)] font-medium">Received</th>
-                    <th className="text-right text-[11px] text-[var(--qz-fg-4)] font-medium">Sent</th>
+                    <th> </th>
+                    <th style={{ textAlign: "right" }}>Received</th>
+                    <th style={{ textAlign: "right" }}>Sent</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -218,12 +227,12 @@ function NeighborDetailModal({ neighbor, onClose }: { neighbor: string; onClose:
 
           {detail.capabilities.length > 0 && (
             <div>
-              <h4 className="text-[12px] font-semibold uppercase tracking-wider text-[var(--qz-fg-4)] m-0 mb-2">Capabilities</h4>
+              <h4 className="clr-smallcaption" style={{ margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.08em", color: "var(--cds-alias-typography-color-200)" }}>Capabilities</h4>
               <div className="flex flex-col gap-[2px]">
                 {detail.capabilities.map((c) => (
-                  <div key={c.name} className="flex items-baseline justify-between gap-4 text-[12px]">
-                    <span className="text-[var(--qz-fg-3)]">{c.name}</span>
-                    <span className="text-[var(--qz-fg-4)]" style={{ fontFamily: "var(--qz-font-mono)" }}>{c.value}</span>
+                  <div key={c.name} className="flex items-baseline justify-between gap-4" style={{ fontSize: 12 }}>
+                    <span style={{ color: "var(--cds-alias-typography-color-300)" }}>{c.name}</span>
+                    <span style={{ color: "var(--cds-alias-typography-color-200)", fontFamily: "var(--qz-font-mono)" }}>{c.value}</span>
                   </div>
                 ))}
               </div>
@@ -290,16 +299,17 @@ export function BgpStatusPanel() {
   }, [load]);
 
   if (status === "loading") {
-    return <div className="text-[13px] text-[var(--qz-fg-4)]">Loading BGP status…</div>;
+    return <div className="clr-secondary">Loading BGP status…</div>;
   }
   if (status === "error") {
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-          <AlertTriangle size={15} /> {errorMsg}
+        <div className="alert alert-danger alert-sm">
+          <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+          <div className="alert-text">{errorMsg}</div>
         </div>
         <div>
-          <Button kind="secondary" icon={RotateCw} onClick={() => load()}>Retry</Button>
+          <Button kind="secondary" icon="refresh" onClick={() => load()}>Retry</Button>
         </div>
       </div>
     );
@@ -339,20 +349,19 @@ export function BgpStatusPanel() {
         </div>
         <div className="flex flex-col items-end gap-2">
           {lastUpdated && (
-            <span className="text-[12px] text-[var(--qz-fg-4)]">
+            <span className="clr-secondary">
               Updated {lastUpdated.toLocaleTimeString()}
             </span>
           )}
-          <Button kind="secondary" size="sm" icon={RotateCw} onClick={() => load("poll")}>Refresh</Button>
+          <Button kind="secondary" size="sm" icon="refresh" onClick={() => load("poll")}>Refresh</Button>
         </div>
       </div>
 
       {!hasPeers ? (
-        <div
-          className="rounded-lg p-6 text-center text-[13px] text-[var(--qz-fg-4)]"
-          style={{ background: "var(--qz-surface)", border: "1px solid var(--qz-border)" }}
-        >
-          BGP is not running, or has no neighbors in any address family.
+        <div className="card" style={{ marginTop: 0 }}>
+          <div className="card-block clr-secondary" style={{ padding: 24, textAlign: "center" }}>
+            BGP is not running, or has no neighbors in any address family.
+          </div>
         </div>
       ) : (
         summary!.address_families.map((af) => (

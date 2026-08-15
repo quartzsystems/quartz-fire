@@ -1,27 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
 import { Switch } from "@/components/ui/Switch";
 import { applyDhcpServer, DhcpFirstSubnet, DhcpServer } from "@/lib/services";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const wide = { maxWidth: "none" } as const;
+const mono = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">{label}</label>
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">{label}</label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -170,10 +162,8 @@ export function ServerFormModal({
             onChange={(e) => setName(e.target.value)}
             placeholder="LAN"
             disabled={isEdit}
-            className={inputCls}
-            style={{ ...monoSt, opacity: isEdit ? 0.5 : 1 }}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={mono}
           />
         </Field>
 
@@ -182,18 +172,18 @@ export function ServerFormModal({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Office LAN pool"
-            className={inputCls}
-            style={inputSt}
-            onFocus={focusBorder}
-            onBlur={blurBorder}
+            className="clr-input"
+            style={wide}
           />
         </Field>
 
         {!isEdit && (
           <>
-            <div className="border-t border-[var(--qz-border)] pt-3">
-              <div className="text-[12px] font-semibold text-[var(--qz-fg-2)]">First subnet</div>
-              <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[3px]">
+            <div style={{ borderTop: "1px solid var(--cds-alias-object-border-subtle)", paddingTop: 12 }}>
+              <div className="text-[12px] font-semibold" style={{ color: "var(--cds-alias-typography-color-450)" }}>
+                First subnet
+              </div>
+              <p className="clr-subtext" style={{ marginTop: 3 }}>
                 A server needs at least one subnet with a lease range to exist. More subnets can be added afterwards.
               </p>
             </div>
@@ -204,10 +194,8 @@ export function ServerFormModal({
                   value={subnet}
                   onChange={(e) => setSubnet(e.target.value)}
                   placeholder="192.168.1.0/24"
-                  className={inputCls}
-                  style={monoSt}
-                  onFocus={focusBorder}
-                  onBlur={blurBorder}
+                  className="clr-input"
+                  style={mono}
                 />
               </Field>
               <Field label="Gateway" hint="Handed to clients as their default router.">
@@ -215,35 +203,29 @@ export function ServerFormModal({
                   value={gateway}
                   onChange={(e) => setGateway(e.target.value)}
                   placeholder="192.168.1.1"
-                  className={inputCls}
-                  style={monoSt}
-                  onFocus={focusBorder}
-                  onBlur={blurBorder}
+                  className="clr-input"
+                  style={mono}
                 />
               </Field>
             </div>
 
             <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
-              <Field label="Range start">
+              <Field label="Range Start">
                 <input
                   value={rangeStart}
                   onChange={(e) => setRangeStart(e.target.value)}
                   placeholder="192.168.1.100"
-                  className={inputCls}
-                  style={monoSt}
-                  onFocus={focusBorder}
-                  onBlur={blurBorder}
+                  className="clr-input"
+                  style={mono}
                 />
               </Field>
-              <Field label="Range stop">
+              <Field label="Range Stop">
                 <input
                   value={rangeStop}
                   onChange={(e) => setRangeStop(e.target.value)}
                   placeholder="192.168.1.200"
-                  className={inputCls}
-                  style={monoSt}
-                  onFocus={focusBorder}
-                  onBlur={blurBorder}
+                  className="clr-input"
+                  style={mono}
                 />
               </Field>
             </div>
@@ -254,49 +236,39 @@ export function ServerFormModal({
                 onChange={(e) => setNameServersText(e.target.value)}
                 placeholder={"192.168.1.1\n1.1.1.1"}
                 rows={2}
-                className={`${inputCls} resize-y`}
-                style={monoSt}
-                onFocus={focusBorder}
-                onBlur={blurBorder}
+                className="clr-textarea"
+                style={{ ...mono, minHeight: 0 }}
               />
             </Field>
           </>
         )}
 
-        <label className="flex items-center gap-[10px] cursor-pointer select-none">
+        <label className="clr-toggle-wrapper cursor-pointer select-none">
           <Switch on={authoritative} onChange={setAuthoritative} />
-          <span className="text-[13px] text-[var(--qz-fg-2)]">Authoritative — answer clients as the definitive server for these subnets</span>
+          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>
+            Authoritative — answer clients as the definitive server for these subnets
+          </span>
         </label>
 
-        <label className="flex items-center gap-[10px] cursor-pointer select-none">
+        <label className="clr-toggle-wrapper cursor-pointer select-none">
           <Switch on={enabled} onChange={setEnabled} />
-          <span className="text-[13px] text-[var(--qz-fg-2)]">Enabled</span>
+          <span style={{ fontSize: 13, color: "var(--cds-alias-typography-color-400)" }}>Enabled</span>
         </label>
 
         {error && (
-          <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>
+          <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>
             {error}
           </p>
         )}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer"
-            style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}
-          >
+        <ModalFooter>
+          <button type="button" className="btn btn-neutral" onClick={onClose}>
             Cancel
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0"
-            style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}
-          >
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Create server"}
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Create Server"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
-import { ModalShell, ModalHeader } from "@/components/ui/Modal";
+import { ModalShell, ModalHeader, ModalFooter } from "@/components/ui/Modal";
+import { Button, IconButton } from "@/components/ui/Button";
 import { Switch } from "@/components/ui/Switch";
 import {
   WireguardInterface,
@@ -11,25 +11,17 @@ import {
   emptyWireguardInterface,
 } from "@/lib/wireguard";
 
-const inputCls = "w-full rounded-md px-3 py-[9px] text-[13px] text-[var(--qz-fg-1)] outline-none";
-const inputSt = { background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" } as const;
-const monoSt = { ...inputSt, fontFamily: "var(--qz-font-mono)" } as const;
-
-function focusBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-accent)";
-}
-function blurBorder(e: React.FocusEvent<HTMLInputElement>) {
-  e.currentTarget.style.borderColor = "var(--qz-border)";
-}
+const inputSt = { maxWidth: "none" } as const;
+const monoSt = { maxWidth: "none", fontFamily: "var(--qz-font-mono)" } as const;
 
 function Field({ label, hint, required, children }: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-[12px] text-[var(--qz-fg-3)] mb-[6px]">
-        {label} {required && <span style={{ color: "var(--qz-danger)" }}>*</span>}
+    <div className="clr-form-control" style={{ marginTop: 0 }}>
+      <label className="clr-control-label">
+        {label} {required && <span className="clr-required">*</span>}
       </label>
       {children}
-      {hint && <p className="text-[11px] text-[var(--qz-fg-4)] m-0 mt-[5px]">{hint}</p>}
+      {hint && <div className="clr-subtext">{hint}</div>}
     </div>
   );
 }
@@ -174,94 +166,90 @@ export function WireguardFormModal({ initial, existingNames, interfaces, onClose
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="Interface" required hint="wg0, wg1, …">
-            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="wg0" className={`${inputCls} disabled:opacity-70`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={name} disabled={isEdit} onChange={(e) => setName(e.target.value)} placeholder="wg0" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Listen port" hint="UDP port this endpoint listens on.">
-            <input value={port} onChange={(e) => setPort(e.target.value)} placeholder="51820" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={port} onChange={(e) => setPort(e.target.value)} placeholder="51820" className="clr-input" style={monoSt} />
           </Field>
         </div>
 
         <Field label="Addresses" hint="Tunnel interface addresses, comma-separated (e.g. 10.0.0.1/24).">
-          <input value={addresses} onChange={(e) => setAddresses(e.target.value)} placeholder="10.0.0.1/24" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={addresses} onChange={(e) => setAddresses(e.target.value)} placeholder="10.0.0.1/24" className="clr-input" style={monoSt} />
         </Field>
 
         <Field label="Private key" required={!isEdit} hint="Base64 key from `generate pki wireguard key-pair`. Leave blank to keep the current key.">
-          <input value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} type="password" placeholder="base64 private key" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+          <input value={privateKey} onChange={(e) => setPrivateKey(e.target.value)} type="password" placeholder="base64 private key" className="clr-input" style={monoSt} />
         </Field>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
           <Field label="MTU" hint="Default 1420.">
-            <input value={mtu} onChange={(e) => setMtu(e.target.value)} placeholder="1420" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={mtu} onChange={(e) => setMtu(e.target.value)} placeholder="1420" className="clr-input" style={monoSt} />
           </Field>
           <Field label="Description">
-            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Site-to-site to HQ" className={inputCls} style={inputSt} onFocus={focusBorder} onBlur={blurBorder} />
+            <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Site-to-site to HQ" className="clr-input" style={inputSt} />
           </Field>
         </div>
 
-        <label className="flex items-center gap-2 cursor-pointer select-none text-[13px] text-[var(--qz-fg-2)]">
+        <label className="flex items-center gap-2 cursor-pointer select-none text-[13px]" style={{ color: "var(--cds-alias-typography-color-400)" }}>
           <Switch on={enabled} onChange={setEnabled} />
           Interface enabled
         </label>
 
         {/* Peers */}
         <div className="flex items-center justify-between mt-1">
-          <span className="text-[12px] font-semibold text-[var(--qz-fg-2)] uppercase tracking-wide">Peers</span>
-          <button type="button" onClick={addPeer} className="inline-flex items-center gap-1 text-[12px] text-[var(--qz-accent)] cursor-pointer bg-transparent border-0 p-0">
-            <Plus size={13} /> Add peer
-          </button>
+          <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--cds-alias-typography-color-400)" }}>Peers</span>
+          <Button kind="ghost" size="sm" icon="plus" onClick={addPeer}>Add Peer</Button>
         </div>
 
         {peers.length === 0 && (
-          <p className="text-[12px] text-[var(--qz-fg-4)] m-0">No peers yet. A tunnel needs at least one peer to pass traffic.</p>
+          <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-typography-color-300)" }}>No peers yet. A tunnel needs at least one peer to pass traffic.</p>
         )}
 
         <div className="flex flex-col gap-3">
           {peers.map((peer) => (
-            <div key={peer.key} className="rounded-lg p-3 flex flex-col gap-3" style={{ background: "var(--qz-input-bg)", border: "1px solid var(--qz-border)" }}>
+            <div key={peer.key} className="flex flex-col gap-3" style={{ border: "1px solid var(--cds-alias-object-border-color)", borderRadius: 4, padding: "12px 16px" }}>
               <div className="flex items-center gap-2">
-                <input value={peer.name} onChange={(e) => updatePeer(peer.key, { name: e.target.value })} placeholder="peer name" className={`${inputCls} flex-1`} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
-                <label className="flex items-center gap-1 text-[12px] text-[var(--qz-fg-3)] whitespace-nowrap">
+                <input value={peer.name} onChange={(e) => updatePeer(peer.key, { name: e.target.value })} placeholder="peer name" className="clr-input flex-1" style={monoSt} />
+                <label className="flex items-center gap-1 text-[12px] whitespace-nowrap" style={{ color: "var(--cds-alias-typography-color-300)" }}>
                   <Switch on={peer.disabled} onChange={(v) => updatePeer(peer.key, { disabled: v })} />
                   Disabled
                 </label>
-                <button type="button" onClick={() => removePeer(peer.key)} className="text-[var(--qz-fg-4)] hover:text-[var(--qz-danger)] cursor-pointer bg-transparent border-0 p-1" title="Remove peer">
-                  <Trash2 size={15} />
-                </button>
+                <IconButton icon="trash" onClick={() => removePeer(peer.key)} label="Remove peer" />
               </div>
               <Field label="Public key" required>
-                <input value={peer.public_key} onChange={(e) => updatePeer(peer.key, { public_key: e.target.value })} placeholder="peer base64 public key" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={peer.public_key} onChange={(e) => updatePeer(peer.key, { public_key: e.target.value })} placeholder="peer base64 public key" className="clr-input" style={monoSt} />
               </Field>
               <Field label="Allowed IPs" hint="Networks routed into the tunnel for this peer, comma-separated.">
-                <input value={peer.allowed_ips} onChange={(e) => updatePeer(peer.key, { allowed_ips: e.target.value })} placeholder="10.0.0.2/32, 192.168.20.0/24" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={peer.allowed_ips} onChange={(e) => updatePeer(peer.key, { allowed_ips: e.target.value })} placeholder="10.0.0.2/32, 192.168.20.0/24" className="clr-input" style={monoSt} />
               </Field>
               <div className="grid gap-3" style={{ gridTemplateColumns: "2fr 1fr 1fr" }}>
                 <Field label="Endpoint host" hint="Remote address (leave blank for roaming).">
-                  <input value={peer.endpoint_address} onChange={(e) => updatePeer(peer.key, { endpoint_address: e.target.value })} placeholder="vpn.example.com" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                  <input value={peer.endpoint_address} onChange={(e) => updatePeer(peer.key, { endpoint_address: e.target.value })} placeholder="vpn.example.com" className="clr-input" style={monoSt} />
                 </Field>
                 <Field label="Port">
-                  <input value={peer.endpoint_port} onChange={(e) => updatePeer(peer.key, { endpoint_port: e.target.value })} placeholder="51820" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                  <input value={peer.endpoint_port} onChange={(e) => updatePeer(peer.key, { endpoint_port: e.target.value })} placeholder="51820" className="clr-input" style={monoSt} />
                 </Field>
                 <Field label="Keepalive" hint="Seconds.">
-                  <input value={peer.persistent_keepalive} onChange={(e) => updatePeer(peer.key, { persistent_keepalive: e.target.value })} placeholder="25" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                  <input value={peer.persistent_keepalive} onChange={(e) => updatePeer(peer.key, { persistent_keepalive: e.target.value })} placeholder="25" className="clr-input" style={monoSt} />
                 </Field>
               </div>
               <Field label="Pre-shared key" hint="Optional symmetric key. Leave blank to keep the current one.">
-                <input value={peer.preshared_key} onChange={(e) => updatePeer(peer.key, { preshared_key: e.target.value })} type="password" placeholder="optional base64 pre-shared key" className={inputCls} style={monoSt} onFocus={focusBorder} onBlur={blurBorder} />
+                <input value={peer.preshared_key} onChange={(e) => updatePeer(peer.key, { preshared_key: e.target.value })} type="password" placeholder="optional base64 pre-shared key" className="clr-input" style={monoSt} />
               </Field>
             </div>
           ))}
         </div>
 
-        {error && <p className="text-[12px] m-0" style={{ color: "var(--qz-danger)" }}>{error}</p>}
+        {error && <p className="text-[12px] m-0" style={{ color: "var(--cds-alias-status-danger)" }}>{error}</p>}
 
-        <div className="flex gap-2 justify-end mt-1">
-          <button type="button" onClick={onClose} className="px-4 py-[9px] rounded-md text-[13px] font-medium cursor-pointer" style={{ background: "transparent", border: "1px solid var(--qz-border)", color: "var(--qz-fg-2)" }}>
+        <ModalFooter>
+          <button type="button" onClick={onClose} className="btn btn-neutral">
             Cancel
           </button>
-          <button type="submit" disabled={saving} className="px-4 py-[9px] rounded-md text-[13px] font-semibold cursor-pointer border-0" style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)", opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Applying…" : isEdit ? "Apply changes" : "Add interface"}
+          <button type="submit" disabled={saving} className="btn btn-primary">
+            {saving ? "Applying…" : isEdit ? "Apply Changes" : "Add Interface"}
           </button>
-        </div>
+        </ModalFooter>
       </form>
     </ModalShell>
   );

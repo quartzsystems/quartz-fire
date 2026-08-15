@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertTriangle, Pencil, Plus, RotateCw } from "lucide-react";
+import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { Column, DataTable, FilterDef } from "@/components/dashboard/DataTable";
 import { MtuCell } from "@/components/dashboard/MtuCell";
@@ -58,7 +58,7 @@ const columns: Column<EthRow>[] = [
     value: (r) => r.phy?.speed_mbps ?? 0,
     render: (r) => {
       const s = formatSpeed(r.phy?.speed_mbps ?? null);
-      if (!s) return <span className="text-[var(--qz-fg-4)]">—</span>;
+      if (!s) return <span style={{ color: "var(--cds-alias-typography-color-200)" }}>—</span>;
       return <span title={r.phy?.duplex ? `${r.phy.duplex} duplex` : undefined}>{s}</span>;
     },
     mono: true,
@@ -149,68 +149,65 @@ export default function EthernetPage() {
   );
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-[36px] pt-[28px] pb-5 flex-shrink-0">
-        <h1 className="text-[28px] font-bold text-[var(--qz-fg-1)] m-0" style={{ letterSpacing: "-0.015em" }}>
-          Ethernet Interfaces
-        </h1>
-        <p className="text-[13px] text-[var(--qz-fg-4)] mt-1">Physical ethernet interfaces</p>
+    <div className="flex flex-col" style={{ gap: 16 }}>
+      <div>
+        <h2>Ethernet Interfaces</h2>
+        <p className="clr-secondary" style={{ marginTop: 4 }}>Physical ethernet interfaces</p>
       </div>
 
-      <div className="flex-1 overflow-auto px-[36px] pb-[28px]">
-        {status === "loading" && (
-          <div className="text-[13px] text-[var(--qz-fg-4)]">Loading interfaces…</div>
-        )}
-        {status === "error" && (
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 text-[13px] text-[var(--qz-danger)]">
-              <AlertTriangle size={15} />
-              {errorMsg}
-            </div>
-            <div>
-              <Button kind="secondary" icon={RotateCw} onClick={load}>Retry</Button>
-            </div>
+      {status === "loading" && (
+        <div className="clr-secondary">Loading interfaces…</div>
+      )}
+      {status === "error" && (
+        <div className="flex flex-col gap-3">
+          <div className="alert alert-danger alert-sm">
+            <Icon shape="exclamation-triangle" size={14} className="alert-icon" />
+            <div className="alert-text">{errorMsg}</div>
           </div>
-        )}
-        {status === "ready" && (
-          <DataTable
-            rows={rows}
-            columns={columns}
-            filters={filters}
-            rowId={(r) => r.name}
-            storageKey="interfaces-ethernet"
-            searchPlaceholder="Search interfaces…"
-            emptyMessage="No ethernet interfaces configured."
-            onRefresh={() => load("refresh")}
-            toolbar={
-              <span title={freeNames.length === 0 ? "No free physical interfaces available" : undefined}>
-                <Button
-                  kind="primary"
-                  size="sm"
-                  icon={Plus}
-                  onClick={() => setModal({})}
-                  disabled={freeNames.length === 0}
-                >
-                  Add interface
-                </Button>
-              </span>
-            }
-            actions={(row) => (
-              <div className="inline-flex items-center justify-end">
-                <button
-                  type="button"
-                  title={`Edit ${row.name}`}
-                  aria-label="Edit"
-                  onClick={() => setModal({ eth: row })}
-                  className="grid place-items-center w-7 h-7 rounded-md bg-transparent border-0 text-[var(--qz-fg-4)] hover:text-[var(--qz-accent)] hover:bg-[color-mix(in_oklab,white_5%,transparent)] transition-colors cursor-pointer"
-                >
-                  <Pencil size={14} />
-                </button>
-              </div>
-            )}
-          />
-        )}
-      </div>
+          <div>
+            <Button kind="secondary" icon="refresh" onClick={load}>Retry</Button>
+          </div>
+        </div>
+      )}
+      {status === "ready" && (
+        <DataTable
+          rows={rows}
+          columns={columns}
+          filters={filters}
+          rowId={(r) => r.name}
+          storageKey="interfaces-ethernet"
+          searchPlaceholder="Search interfaces…"
+          emptyMessage="No ethernet interfaces configured."
+          onRefresh={() => load("refresh")}
+          onRowOpen={(row) => setModal({ eth: row })}
+          toolbar={
+            <span title={freeNames.length === 0 ? "No free physical interfaces available" : undefined}>
+              <Button
+                kind="primary"
+                size="sm"
+                icon="plus"
+                onClick={() => setModal({})}
+                disabled={freeNames.length === 0}
+              >
+                Add Interface
+              </Button>
+            </span>
+          }
+          actions={(row) => (
+            <div className="inline-flex items-center justify-end">
+              <button
+                type="button"
+                title={`Edit ${row.name}`}
+                aria-label="Edit"
+                onClick={() => setModal({ eth: row })}
+                className="btn btn-sm btn-link-neutral btn-icon"
+              >
+                <Icon shape="pencil" size={14} />
+              </button>
+            </div>
+          )}
+        />
+      )}
 
       {modal && (
         <EthernetFormModal

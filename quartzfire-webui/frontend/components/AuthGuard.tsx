@@ -46,18 +46,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return (
       <div
         className="min-h-screen flex flex-col items-center justify-center gap-4"
-        style={{ background: "var(--qz-bg)" }}
+        style={{ background: "var(--cds-alias-object-app-background)" }}
       >
-        <p className="text-[13px] m-0" style={{ color: "var(--qz-danger)" }}>
+        <p style={{ fontSize: 13, margin: 0, color: "var(--cds-alias-status-danger)" }}>
           Cannot reach the QuartzFire backend. It may be restarting.
         </p>
         <button
+          type="button"
+          className="btn btn-primary"
           onClick={() => {
             setState("checking");
             setAttempt((n) => n + 1);
           }}
-          className="rounded-md px-4 py-2 text-[13px] font-semibold cursor-pointer border-0"
-          style={{ background: "var(--qz-accent)", color: "var(--qz-fg-on-accent)" }}
         >
           Retry
         </button>
