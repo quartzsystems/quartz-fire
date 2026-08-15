@@ -372,6 +372,20 @@ def build():
     if os.path.isdir(sb_certs):
         shutil.copytree(sb_certs, f'{lb_config_dir}/includes.chroot/var/lib/shim-signed/mok')
 
+    ## Secure Boot is only viable when the private kernel signing key is
+    ## available (93-sb-sign-kernel.chroot signs the kernel with it). Without
+    ## it live-build's default "auto" mode still installs the signed
+    ## shim+GRUB into the EFI boot path (shim-signed is pulled in via
+    ## vyos-1x), producing an image whose unsigned kernel fails shim
+    ## verification ("bad shim signature") and which loses the custom GRUB
+    ## menu. Explicitly disable it so live-build builds the unsigned,
+    ## branded GRUB image instead.
+    if glob.glob(f'{sb_certs}/*.key'):
+        build_config['uefi_secure_boot'] = 'auto'
+    else:
+        print("I: No Secure Boot kernel signing key found - disabling Secure Boot for this image")
+        build_config['uefi_secure_boot'] = 'disable'
+
     # Switch to the build directory, this is crucial for the live-build work
     # because the effective build config files etc. are there.
     #
@@ -708,6 +722,7 @@ menu clear
                 --mirror-chroot "{{debian_mirror}}" \
                 --mirror-chroot-security "{{debian_security_mirror}}" \
                 --security true \
+                --uefi-secure-boot "{{uefi_secure_boot}}" \
                 --updates true \
                 --utc-time true
                 "${@}"
